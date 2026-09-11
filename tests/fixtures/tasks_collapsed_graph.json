@@ -1,0 +1,176 @@
+[
+  {
+    "name": "empty",
+    "model": {
+      "groups": [],
+      "tasks": [],
+      "group_tree": {},
+      "task_children": {},
+      "dependency_edges": []
+    },
+    "expected": {
+      "nodes": [],
+      "edges": []
+    }
+  },
+  {
+    "name": "nested groups and parallel edges",
+    "model": {
+      "groups": [
+        {
+          "id": "g",
+          "label": "Group"
+        },
+        {
+          "id": "h",
+          "label": "Nested",
+          "parent_group_id": "g"
+        },
+        {
+          "id": "empty",
+          "label": "Empty"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "a",
+          "label": "Alpha",
+          "group_id": "h"
+        },
+        {
+          "id": "b",
+          "label": "Beta",
+          "group_id": "g"
+        },
+        {
+          "id": "z",
+          "label": "Outside",
+          "href": "/posts/outside"
+        }
+      ],
+      "group_tree": {
+        "null": [
+          "g",
+          "empty"
+        ],
+        "g": [
+          "h"
+        ]
+      },
+      "task_children": {
+        "g": [
+          "b"
+        ],
+        "h": [
+          "a"
+        ]
+      },
+      "dependency_edges": [
+        {
+          "id": "inside",
+          "source": "a",
+          "target": "b",
+          "label": "Hidden inside"
+        },
+        {
+          "id": "first",
+          "source": "a",
+          "target": "z",
+          "label": "Visible",
+          "relation": "calls",
+          "custom": "kept"
+        },
+        {
+          "id": "parallel",
+          "source": "b",
+          "target": "z",
+          "relation": "returns"
+        },
+        {
+          "id": "back",
+          "source": "z",
+          "target": "a",
+          "relation": "returns"
+        }
+      ]
+    },
+    "expected": {
+      "nodes": [
+        {
+          "id": "g",
+          "label": "Group",
+          "href": null,
+          "kind": "group",
+          "collapsed": true,
+          "x": 80,
+          "y": 80,
+          "width": 250,
+          "height": 80,
+          "child_group_ids": [
+            "h"
+          ],
+          "child_task_ids": [
+            "b"
+          ]
+        },
+        {
+          "id": "empty",
+          "label": "Empty",
+          "href": null,
+          "kind": "group",
+          "collapsed": true,
+          "x": 360,
+          "y": 80,
+          "width": 250,
+          "height": 80,
+          "child_group_ids": [],
+          "child_task_ids": []
+        },
+        {
+          "id": "h",
+          "label": "Nested",
+          "href": null,
+          "kind": "group",
+          "collapsed": true,
+          "x": 640,
+          "y": 80,
+          "width": 250,
+          "height": 80,
+          "child_group_ids": [],
+          "child_task_ids": [
+            "a"
+          ]
+        },
+        {
+          "id": "z",
+          "label": "Outside",
+          "href": "/posts/outside",
+          "kind": "task",
+          "collapsed": true,
+          "x": 80,
+          "y": 80,
+          "width": 220,
+          "height": 60
+        }
+      ],
+      "edges": [
+        {
+          "id": "first",
+          "source": "g",
+          "target": "z",
+          "label": "Visible",
+          "relation": "calls",
+          "custom": "kept",
+          "kind": "collapsed-proxy"
+        },
+        {
+          "id": "back",
+          "source": "z",
+          "target": "g",
+          "relation": "returns",
+          "kind": "collapsed-proxy"
+        }
+      ]
+    }
+  }
+]

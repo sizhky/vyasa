@@ -136,6 +136,17 @@ function installResizeHandles(popover, raise) {
     }
 }
 
+// One owner decides which element inside a popover scrolls. The wheel handler
+// below and the graph's code mode both ask here, so a change to the preview
+// markup moves one line, not two.
+function scrollPreviewBody(popover, deltaX, deltaY) {
+    const body = popover?.querySelector?.('.vyasa-link-preview-body');
+    if (!body) return false;
+    body.scrollTop += deltaY;
+    body.scrollLeft += deltaX;
+    return true;
+}
+
 function createPreviewView({ point, link, onClose }) {
     const popover = document.createElement('aside');
     const pointer = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -147,6 +158,7 @@ function createPreviewView({ point, link, onClose }) {
     popover.innerHTML = [
         '<div class="vyasa-link-preview-card">',
         '<div class="vyasa-link-preview-bar">',
+        '<span class="vyasa-link-preview-source" data-vyasa-link-preview-source hidden></span>',
         '<a data-vyasa-link-preview-origin></a>',
         '<span class="vyasa-link-preview-actions">',
         '<button type="button" data-vyasa-link-preview-wrap aria-label="Toggle word wrap" aria-pressed="false">↵</button>',
@@ -166,6 +178,7 @@ function createPreviewView({ point, link, onClose }) {
     const content = popover.querySelector('[data-vyasa-link-preview-content]');
     const bar = popover.querySelector('.vyasa-link-preview-bar');
     const sourceLabel = popover.querySelector('[data-vyasa-link-preview-origin]');
+    const sourceOrigin = popover.querySelector('[data-vyasa-link-preview-source]');
     const wrapButton = popover.querySelector('[data-vyasa-link-preview-wrap]');
     let wordWrap = false;
     try { wordWrap = localStorage.getItem(WORD_WRAP_KEY) === '1'; } catch (_) {}
@@ -260,10 +273,35 @@ function createPreviewView({ point, link, onClose }) {
     raise();
     const resizeObserver = new ResizeObserver(schedulePointerRefresh);
     resizeObserver.observe(popover);
+    let pinBloomTimer = 0;
     const view = {
         raise,
         updatePointer,
+        pin: () => {
+            window.clearTimeout(pinBloomTimer);
+            popover.classList.remove('vyasa-link-preview-pin-bloom');
+            void popover.offsetWidth;
+            popover.classList.add('vyasa-link-preview-pin-bloom');
+            pinBloomTimer = window.setTimeout(
+                () => popover.classList.remove('vyasa-link-preview-pin-bloom'),
+                3520,
+            );
+            raise();
+        },
+        scrollBy: (deltaX, deltaY) => scrollPreviewBody(popover, deltaX, deltaY),
+        // Walk the reference's marked blocks. The Prev and Next buttons already
+        // own that walk, so drive them instead of repeating the block maths.
+        // A preview with no marked blocks carries no buttons and reports false.
+        stepCodeBlock: (delta) => {
+            const button = popover.querySelector(delta > 0
+                ? '[data-code-reference-next]'
+                : '[data-code-reference-previous]');
+            if (!button) return false;
+            button.click();
+            return true;
+        },
         remove: () => {
+            window.clearTimeout(pinBloomTimer);
             resizeObserver.disconnect();
             forgetPositionAnchor(popover);
             previewViews.delete(view);
@@ -296,10 +334,18 @@ function createPreviewView({ point, link, onClose }) {
                     announceSwap(content);
                 },
             });
-            const relativePath = content.querySelector('.vyasa-link-preview-shell')?.dataset.relativePath;
+            const shellData = content.querySelector('.vyasa-link-preview-shell')?.dataset;
+            const relativePath = shellData?.relativePath;
             if (relativePath) {
-                sourceLabel.textContent = relativePath;
-                sourceLabel.title = relativePath;
+                // A cached source names its origin once, so the path stays
+                // short. The href keeps the whole address either way.
+                const origin = shellData?.sourceOrigin || '';
+                sourceOrigin.textContent = origin;
+                sourceOrigin.title = origin;
+                sourceOrigin.hidden = !origin;
+                const shown = shellData?.sourcePath || relativePath;
+                sourceLabel.textContent = shown;
+                sourceLabel.title = origin ? `${origin}/${shown}` : shown;
                 sourceLabel.href = link.getAttribute('href')
                     || `/posts/${relativePath.split('/').map(encodeURIComponent).join('/')}`;
             }
@@ -395,6 +441,20 @@ const previews = new LinkPreviewStack({
     fetchPreview,
 });
 
+// A preview normally follows a link the reader can point at. The tasks graph
+// has no such link: its node attributes live in a model, not in the page. This
+// door lets it open a preview from a detached anchor it builds itself, and
+// scroll that preview while the pointer stays on the graph. `link` only has to
+// carry `href`, and may carry `data-vyasa-code-reference` and
+// `data-vyasa-link-preview-current-path`, the same as a link in the page.
+window.vyasaLinkPreview = {
+    open: (link, point) => previews.open(link, point),
+    pin: (entry) => previews.pin(entry),
+    close: (entry) => previews.close(entry),
+    scrollBy: (entry, deltaX, deltaY) => entry?.view?.scrollBy?.(deltaX, deltaY) === true,
+    stepCodeBlock: (entry, delta) => entry?.view?.stepCodeBlock?.(delta) === true,
+};
+
 // `innerHTML` runs no `<script>` tag, so a preview built from a document with
 // a Vega, Mermaid, or D2 block arrives as inert markup. The page-wide swap
 // pipeline in `scripts.js` already loads the bundle assets a subtree asks for
@@ -452,12 +512,7 @@ document.body.addEventListener('pointerout', (event) => {
 }, true);
 document.body.addEventListener('wheel', (event) => {
     const popover = event.target?.closest?.('.vyasa-link-preview-popover');
-    if (!popover) return;
-    const body = event.target?.closest?.('.vyasa-link-preview-body')
-        || popover.querySelector('.vyasa-link-preview-body');
-    if (!body) return;
-    body.scrollTop += event.deltaY;
-    body.scrollLeft += event.deltaX;
+    if (!popover || !scrollPreviewBody(popover, event.deltaX, event.deltaY)) return;
     event.preventDefault();
     event.stopPropagation();
 }, { capture: true, passive: false });

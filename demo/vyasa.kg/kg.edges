@@ -1,37 +1,93 @@
 e1: browser-ui -> content-route resolves
 	note=→ GET the page
-	description=post_detail receives the request and calls render_post_detail, which owns every step below.
+	description=post_detail receives the request and calls render_post_detail.
 	code=[post_detail](vyasa/core.py){show=symbol symbol=post_detail kind=Function focus="match[return render_post_detail(]" context=2}
+e13: content-route -> content-tree resolves
+	pair=p-tree
+	message=sync
+	note=→ resolve_document(slug)
+	description=The first call render_post_detail makes. The content tree indexes every document Vyasa serves, so a slug is resolved there rather than against the disk.
+	code=[render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[document = ContentTree.from_runtime().resolve_document(path)]" context=3}
+e14: content-tree -> content-route returns
+	pair=p-tree
+	note=← a document, or nothing
+	description=A document carries its kind, its path and its slug. Nothing means the content tree has no entry for that slug.
+	code=[ContentTree.resolve_document](vyasa/content_tree.py){show=symbol symbol=ContentTree.resolve_document kind=Method context=4}
 e2: content-route -> path-resolver resolves
 	pair=p-path
+	fragment=opt:tree miss
+	operand=[not in the content tree]
+	operand_note=The content tree indexes only what it has walked. A slug outside that index falls back to content_path_for_slug, which builds a path from the slug and checks the disk directly.
+	message=sync
 	note=→ content_path_for_slug(slug)
 	description=The route calls content_path_for_slug with the requested slug. The helper reads nothing from disk.
 	code=[render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[file_path = content_path_for_slug(path]" context=3}
 e3: path-resolver -> content-route returns
 	pair=p-path
+	fragment=opt:tree miss
+	operand=[not in the content tree]
 	note=← file_path: Path
 	description=A Path under a content root lands in file_path. The call and the return are one statement, so both halves point at the same line.
 	code=[render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[file_path = content_path_for_slug(path]" context=3}
+e15: content-route -> not-found renders
+	pair=p-404
+	fragment=break:no document
+	operand=[no markdown page at that slug]
+	operand_note=Neither the content tree nor the disk held a markdown page, or the slug named a folder. render_post_detail returns 404 and no file is opened.
+	message=sync
+	note=→ not_found(htmx)
+	description=No document, or a folder rather than a page. render_post_detail returns 404 here.
+	code=[render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[if not document or document.kind == \"folder\":]" context=3}
+e16: not-found -> content-route returns
+	pair=p-404
+	fragment=break:no document
+	operand=[no markdown page at that slug]
+	note=← 404 response
+	description=The same shape of value the whole pipeline would have returned, so the caller needs no special case.
+	code=[render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[return not_found(htmx, auth=request.scope.get(\"auth\"))]" context=2}
 e4: content-route -> frontmatter-reader reads
 	pair=p-read
+	message=sync
 	note=→ parse_frontmatter(file_path)
 	description=The route calls parse_frontmatter with that path.
 	code=[render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[metadata, raw_content = parse_frontmatter(file_path]" context=3}
-e5: frontmatter-reader -> content-route returns
-	pair=p-read
-	note=← metadata, raw_content
-	description=The frontmatter becomes metadata and the rest becomes raw_content, the Markdown body.
-	code=[render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[metadata, raw_content = parse_frontmatter(file_path]" context=3}
 e6: frontmatter-reader -> filesystem-backend reads
 	pair=p-ref
+	fragment=alt:page source
+	operand=[a git ref]
+	operand_note=The slug carried a git ref, so the page is a VirtualPath over a blob. parse_frontmatter reads it through the content backend and caches it by commit stamp.
+	message=sync
 	note=→ VirtualPath.read_text()
 	description=A working-tree page is a plain Path and is read directly. A git-ref page arrives as a VirtualPath, so parse_frontmatter reads it through the backend instead.
 	code=[parse_frontmatter](vyasa/helpers.py){show=symbol symbol=parse_frontmatter kind=Function focus='match[if isinstance(file_path, VirtualPath)] match[text = file_path.read_text(encoding="utf-8", errors="replace")]' context=2}
 e7: filesystem-backend -> frontmatter-reader returns
 	pair=p-ref
+	fragment=alt:page source
+	operand=[a git ref]
 	note=← blob as text
 	description=The backend returns the blob as text, and parse_frontmatter splits it the same way it splits a file on disk.
 	code=[parse_frontmatter](vyasa/helpers.py){show=symbol symbol=parse_frontmatter kind=Function focus='match[text = file_path.read_text(encoding="utf-8", errors="replace")]' context=3}
+e17: frontmatter-reader -> worktree-reader reads
+	pair=p-disk
+	fragment=alt:page source
+	operand=[else]
+	operand_note=An ordinary page in the working tree. parse_frontmatter compares the file mtime against its cache, then reads the plain Path from disk.
+	message=sync
+	note=→ Path.read_text()
+	description=An ordinary page on disk is a plain Path and is read directly. This is the other operand of the same branch, and it is the one almost every request takes.
+	code=[parse_frontmatter](vyasa/helpers.py){show=symbol symbol=parse_frontmatter kind=Function focus='match[text = file_path.read_text(encoding="utf-8")]' context=3}
+e18: worktree-reader -> frontmatter-reader returns
+	pair=p-disk
+	fragment=alt:page source
+	operand=[else]
+	note=← file as text
+	description=Both operands end here with the same value, so parse_frontmatter_text splits a git blob and a working-tree file identically.
+	code=[parse_frontmatter_text](vyasa/helpers.py){show=symbol symbol=parse_frontmatter_text kind=Function context=4}
+e5: frontmatter-reader -> content-route returns
+	pair=p-read
+	note=← metadata, raw_content
+	description=The frontmatter becomes metadata and the rest becomes raw_content, the Markdown body.
+	code=[render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[metadata, raw_content = parse_frontmatter(file_path]" context=3}
 e8: content-route -> markdown-renderer renders
 	pair=p-render
 	note=→ from_md(body)
@@ -53,5 +109,6 @@ e11: document-page -> content-route returns
 	description=The finished HTML response lands in result. This is the value the route returns.
 	code=[render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[result = DocumentPage(post_title]" context=3}
 e12: content-route -> browser-ui shows
+	message=async
 	note=→  the response leaves Vyasa
 	description=The route returns the response and it leaves Vyasa. The browser consumes it at the system boundary, so no Vyasa function runs after this point.

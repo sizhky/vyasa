@@ -84,7 +84,7 @@ function renderBookmarksBlock(rootElement = document) {
         const list = block.querySelector('.vyasa-bookmarks-list');
         if (!list) return;
         list.innerHTML = vyasaBookmarks.items.map((item) => `
-            <div class="vyasa-bookmark-row vyasa-action-row inline-flex items-center gap-1 w-max">
+            <div class="vyasa-bookmark-row vyasa-action-row flex items-center gap-1 w-max">
                 <a href="${item.href}" hx-get="${item.href}" hx-target="#main-content" hx-push-url="true" hx-swap="outerHTML show:window:top settle:0.1s" class="vyasa-tree-link vyasa-tree-row vyasa-tree-row-shell post-link vyasa-bookmark-link whitespace-nowrap" data-path="${item.path}" data-bookmark-link="true">
                     <span class="whitespace-nowrap" title="${item.path}">${item.path}</span>
                 </a>
@@ -138,6 +138,9 @@ function bindBookmarkLinks(rootElement = document) {
             if (window.htmx && typeof window.htmx.ajax === 'function') {
                 window.__vyasaPendingRevealPath = path;
                 window.htmx.ajax('GET', href, { target: '#main-content', swap: 'outerHTML show:window:top settle:0.1s', pushURL: true });
+                if (window.location.pathname !== href) {
+                    window.history.pushState(null, '', href);
+                }
                 refreshPostsTreeForPath(path);
                 return;
             }

@@ -1,4 +1,4 @@
-import { createMomentumRunner, documentAbsolutePath, ensureFloatingActions, ensureShortcutHelp, headingMarkdownCopyValue, isEditableShortcutEvent, registerFloatingActionSync, registerMarkdownHydrator, shortcutsSuspended, syncFloatingActions } from '/static/page_shell.js';
+import { showVyasaToast, createMomentumRunner, documentAbsolutePath, ensureFloatingActions, ensureShortcutHelp, headingMarkdownCopyValue, isEditableShortcutEvent, registerFloatingActionSync, registerMarkdownHydrator, shortcutsSuspended, syncFloatingActions } from '/static/page_shell.js';
 
 function switchTab(tabsId, index) {
     const container = document.querySelector(`.tabs-container[data-tabs-id="${tabsId}"]`);
@@ -1022,25 +1022,7 @@ function syncFoldAllButton(button, allOpen) {
         : '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-fold-all-icon"><path d="M6 7h12"/><path d="M6 12h8"/><path d="M6 17h5"/><path d="m15 14 3-3 3 3"/></svg><span>Unfold all</span>';
 }
 
-function showVyasaToast(message, tone = 'info') {
-    let toast = document.getElementById('vyasa-ui-toast');
-    if (!toast) {
-        toast = document.createElement('div');
-        toast.id = 'vyasa-ui-toast';
-        toast.className = 'fixed top-6 right-6 z-[10000] text-xs text-white px-3 py-2 rounded shadow-lg opacity-0 transition-opacity duration-300';
-        document.body.appendChild(toast);
-    }
-    toast.textContent = message;
-    toast.classList.remove('bg-slate-900', 'bg-emerald-700', 'bg-red-700');
-    toast.classList.add(tone === 'error' ? 'bg-red-700' : tone === 'success' ? 'bg-emerald-700' : 'bg-slate-900');
-    toast.classList.remove('opacity-0');
-    toast.classList.add('opacity-100');
-    clearTimeout(toast._vyasaTimer);
-    toast._vyasaTimer = setTimeout(() => {
-        toast.classList.remove('opacity-100');
-        toast.classList.add('opacity-0');
-    }, 1600);
-}
+
 window.__vyasaToast = showVyasaToast;
 
 async function softRefreshPostsSidebar(detail = {}) {

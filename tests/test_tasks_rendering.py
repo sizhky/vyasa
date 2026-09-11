@@ -9,6 +9,20 @@ from textwrap import dedent
 from vyasa.extensions_builtin.markdown.renderer import from_md
 from vyasa.extensions_builtin.tasks.api import _compile_schema_payload
 
+TASKS_STATIC = Path("vyasa/extensions_builtin/tasks/static")
+
+
+def tasks_static_source(*names: str) -> str:
+    """Join the named KG client modules, so each test names the owner of its rule.
+
+    Pro: a moved rule fails here until the test names its new owner.
+    Con: a rule that spans modules needs every owner in the call.
+
+    >>> "export function tasksLogicalNodeId" in tasks_static_source("tasks_graph_model.js")
+    True
+    """
+    return "\n".join((TASKS_STATIC / name).read_text() for name in names)
+
 
 def test_tasks_block_renders_widget_payload_without_summary():
     md = """```tasks
@@ -43,12 +57,12 @@ foundation :: Foundation:
 
 
 def test_tasks_filter_source_hides_rank():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
-    filter_source = source.split("function tasksFilterOptions", 1)[1].split("function tasksColorOptions", 1)[0]
-    color_source = source.split("function tasksColorOptions", 1)[1].split("function tasksGroupByOptions", 1)[0]
+    model_source = tasks_static_source("tasks_graph_model.js")
+    filter_source = model_source.split("function tasksFilterOptions", 1)[1].split("function tasksGroupByOptions", 1)[0]
+    color_source = tasks_static_source("tasks_paint.js").split("function tasksColorOptions", 1)[1].split("function normalizeTasksGradientStops", 1)[0]
 
     assert "tasksIsHiddenNodeMetaKey(key)" in filter_source
-    assert "TASKS_DERIVED_METRIC_KEYS.has(normalized)" in source
+    assert "TASKS_DERIVED_METRIC_KEYS.has(normalized)" in model_source
     assert "TASKS_DERIVED_METRIC_KEYS" not in color_source
 
 
@@ -144,7 +158,7 @@ def test_tasks_filter_panel_uses_projection_dropdown_instead_of_tab_grid():
 
 
 def test_tasks_node_detail_rows_always_stack_values_below_labels():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_cards.js")
     css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
 
     assert "`${entry.label}:`" in source
@@ -275,7 +289,7 @@ def test_card_body_is_drawn_wider_than_the_card_and_pans_sideways():
     it whenever the gesture leans horizontal. A scale of 1 drops the extra
     width, but the body still scrolls when a child cannot wrap.
     """
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_cards.js", "tasks.js")
 
     assert "const TASKS_NODE_CARD_CONTENT_SCALE = 1;" in source
     assert "overflowX: 'auto'," in source
@@ -448,7 +462,7 @@ def test_tasks_query_builder_can_be_disabled_per_projection():
 
 
 def test_tasks_search_can_be_disabled_per_projection():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_panels.js", "tasks.js")
 
     assert "searchEnabled" in source
     assert "searchEnabled ? searchQuery : ''" in source
@@ -459,7 +473,7 @@ def test_tasks_search_can_be_disabled_per_projection():
 
 
 def test_tasks_query_builder_controls_use_filter_panel_css():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_panels.js", "tasks.js")
     css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
 
     assert "const TASKS_FILTER_PANEL_WIDTH = '20%';" in source
@@ -485,7 +499,7 @@ def test_tasks_source_retries_mount_after_swap_when_widget_size_is_zero():
 
 
 def test_tasks_source_uses_projection_scoped_prefs():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_graph_model.js", "tasks_paint.js", "tasks_layouts.js")
 
     assert "function readTasksProjectionPrefs" in source
     assert "projectionPrefs" in source
@@ -493,8 +507,23 @@ def test_tasks_source_uses_projection_scoped_prefs():
     assert "buildTasksViewState" in source
 
 
+def test_tasks_context_and_view_preferences_have_separate_keys():
+    script = """
+        import { readTasksProjectionPrefsForModel, tasksProjectionPrefsKey } from './vyasa/extensions_builtin/tasks/static/tasks_graph_model.js';
+        if (tasksProjectionPrefsKey('', 'day-1') !== 'day-1::__base__') throw new Error('base context key');
+        if (tasksProjectionPrefsKey('flow', 'day-1') !== 'day-1::flow') throw new Error('view context key');
+        if (tasksProjectionPrefsKey('flow', 'day-2') === tasksProjectionPrefsKey('flow', 'day-1')) throw new Error('shared context key');
+        if (tasksProjectionPrefsKey('flow') !== 'flow') throw new Error('plain graph key');
+        const prefs = { projectionPrefs: { 'day-1::flow': { colorBy: 'state', groupByEnabled: true }, 'day-2::flow': { colorBy: 'owner', groupByEnabled: false } } };
+        if (readTasksProjectionPrefsForModel({ kg_context: { id: 'day-1' } }, prefs, 'flow').colorBy !== 'state') throw new Error('day one color');
+        if (readTasksProjectionPrefsForModel({ kg_context: { id: 'day-2' } }, prefs, 'flow').groupByEnabled !== false) throw new Error('day two grouping');
+    """
+
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
 def test_tasks_source_persists_checked_nodes_per_graph():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_graph_model.js", "tasks_preferences.js", "tasks_nodes.js", "tasks.js")
 
     assert "function normalizeTasksCheckedNodeIds" in source
     assert "function tasksCheckedStateKey" in source
@@ -555,7 +584,7 @@ def test_tasks_graph_highlights_use_separate_border_layer():
 
 
 def test_tasks_source_supports_configurable_card_states():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_graph_core.js", "tasks_graph_model.js")
 
     assert "TASKS_DEFAULT_CARD_STATES = ['Not Done', 'Done']" in source
     assert "function normalizeTasksCardStates" in source
@@ -583,7 +612,7 @@ Foundation:
 
 
 def test_tasks_source_supports_local_card_notes():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_graph_model.js", "tasks_paint.js", "tasks_cards.js", "tasks_nodes.js", "tasks_panels.js", "tasks.js")
 
     assert "function normalizeTasksNodeNotes" in source
     assert "function tasksNoteEditorMetrics" in source
@@ -604,7 +633,7 @@ def test_tasks_source_supports_local_card_notes():
 
 
 def test_tasks_node_and_edge_cards_share_note_access_and_rendering():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_graph_model.js", "tasks_cards.js", "tasks_panels.js", "tasks.js")
 
     assert "function updateTasksNote(setNotes, id, note)" in source
     assert "function renderTasksCardNoteEditor(React, options = {})" in source
@@ -622,7 +651,7 @@ def test_tasks_node_and_edge_cards_share_note_access_and_rendering():
 
 
 def test_tasks_node_and_edge_cards_share_node_icon_rendering():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_cards.js", "tasks_panels.js")
     edge_panel = source.split("const SelectedEdgePanel = () =>", 1)[1].split("const FilterPanel = () =>", 1)[0]
 
     assert "function renderTasksCardNodeIcon(React, node, model, options = {})" in source
@@ -634,7 +663,7 @@ def test_tasks_node_and_edge_cards_share_node_icon_rendering():
 
 
 def test_tasks_node_cards_share_the_configured_default_width():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_panels.js", "tasks.js")
     panel_source = source.split("const SelectedNodePanel = (", 1)[1].split("const SelectedEdgePanel = () =>", 1)[0]
 
     assert "const nodeNotesEditor = renderTasksCardNoteEditor(React" in panel_source
@@ -648,10 +677,12 @@ def test_tasks_node_cards_share_the_configured_default_width():
 
 
 def test_tasks_hover_card_reuses_selected_node_panel_on_right_side():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_preferences.js", "tasks_panels.js", "tasks.js")
 
     assert "const TASKS_HOVER_CARD_MODES = ['off', 'rightRail']" in source
-    assert "const SelectedNodePanel = (panelGraphNodeId = selectedNodeId, readOnly = false, hoverCard = null)" in source
+    assert "const SelectedNodePanel = (panelGraphNodeId, readOnly = false, hoverCard = null)" in source
+    # The panel reads state when called, so the default moved into the body.
+    assert "if (panelGraphNodeId === undefined) panelGraphNodeId = selectedNodeId;" in source
     assert "SelectedNodePanel(groupHoverTooltip.nodeId, true, groupHoverTooltip)" in source
     assert "scrollRef: hoverCard ? hoverCardScrollRef : detailCardScrollRef" in source
     assert "tasksActiveHoverAttrs" not in source
@@ -663,7 +694,7 @@ def test_tasks_hover_card_reuses_selected_node_panel_on_right_side():
 
 
 def test_tasks_node_and_edge_cards_keep_notes_below_scrolling_details():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_cards.js", "tasks_panels.js")
     layout = source.split("function renderTasksCardDetailsAndNotes", 1)[1].split("function renderTasksDetailEntries", 1)[0]
     node_panel = source.split("const SelectedNodePanel = (", 1)[1].split("const SelectedEdgePanel = () =>", 1)[0]
     edge_panel = source.split("const SelectedEdgePanel = () =>", 1)[1].split("const FilterPanel = () =>", 1)[0]
@@ -681,7 +712,7 @@ def test_tasks_node_and_edge_cards_keep_notes_below_scrolling_details():
 
 
 def test_enter_selects_hovered_node_and_focuses_the_pinned_card():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_panels.js", "tasks.js")
 
     assert "key !== 'enter' || !current" in source
     assert "selectNodeCard(current.nodeId, current.nodeId, current.group ? 'group' : 'task', true)" in source
@@ -709,7 +740,7 @@ def test_escape_in_card_notes_returns_focus_to_the_pinned_card():
 
 
 def test_pinned_card_enter_focuses_notes_and_shift_enter_navigates():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_cards.js", "tasks_panels.js", "tasks.js")
     textarea = source.split("function renderTasksNoteTextarea", 1)[1].split("function renderTasksCardNoteEditor", 1)[0]
 
     assert "options.onShiftEnter" not in textarea
@@ -723,7 +754,7 @@ def test_pinned_card_enter_focuses_notes_and_shift_enter_navigates():
 
 
 def test_tasks_node_card_attr_values_can_be_copied_from_hover_button():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_cards.js", "tasks_panels.js")
     css_source = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
 
     assert "function renderTasksDetailEntries(React, entries, options = {})" in source
@@ -736,7 +767,7 @@ def test_tasks_node_card_attr_values_can_be_copied_from_hover_button():
 
 
 def test_tasks_selected_panel_renders_title_and_href_links():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_cards.js", "tasks_nodes.js", "tasks_panels.js")
 
     assert "const panelLinkKinds = Array.from(tasksNodeLinkKinds(selectedNode));" in source
     assert "const panelHref = String(selectedNode?.href || '').trim();" in source
@@ -750,7 +781,7 @@ def test_tasks_selected_panel_renders_title_and_href_links():
 
 
 def test_tasks_selected_panel_shows_open_decision_for_open_items():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_cards.js", "tasks_panels.js")
 
     assert "function tasksOpenDecisionEntry(node)" in source
     assert "node?.__checked__ === true" in source
@@ -760,7 +791,7 @@ def test_tasks_selected_panel_shows_open_decision_for_open_items():
 
 
 def test_tasks_source_logs_node_href_navigation_flow():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_cards.js", "tasks.js")
 
     assert "function escapeTasksHtml(value)" in source
     assert "logTasksDebug('nodeHrefOpen:start'" in source
@@ -776,14 +807,14 @@ def test_tasks_source_logs_node_href_navigation_flow():
 
 
 def test_tasks_source_uses_base_view_label_for_default_projection_tab():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_graph_model.js")
 
     assert "const baseViewLabel = String(model?.base_view_label || '').trim() || 'Default';" in source
     assert "{ id: '', label: baseViewLabel, caption: '' }" in source
 
 
 def test_tasks_source_uses_reset_button_label():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_graph_model.js", "tasks_panels.js", "tasks.js")
 
     assert "function tasksProjectionSchemaPrefs(model, projectionId)" in source
     assert "prefs.colorBy = projection.default_color_by" in source
@@ -825,7 +856,7 @@ def test_w_edge_q_temporarily_shows_other_node_card():
 
 
 def test_w_enter_pin_blooms_from_the_edge():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_panels.js", "tasks.js")
     css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
 
     assert "setEdgePinBloom({ edgeId: selectedEdgeIdRef.current, key: bloomKey });" in source
@@ -838,6 +869,7 @@ def test_w_enter_pin_blooms_from_the_edge():
     assert "vyasa-tasks-edge-pin-bloom--late" not in source
     assert "@keyframes vyasa-tasks-edge-pin-bloom" in css
     assert "1720ms" in css
+    assert "window.vyasaLinkPreview?.pin?.(codeModeEntryRef.current);" in source
 
 
 def test_kg_pane_drag_pans_with_a_locked_cursor():
@@ -870,7 +902,7 @@ def test_kg_pane_drag_pans_with_a_locked_cursor():
 
 
 def test_v_toggles_right_side_hover_card_scroll_mode():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_cards.js", "tasks_panels.js", "tasks.js")
     css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
     render_source = Path("vyasa/extensions_builtin/tasks/render.py").read_text()
 
@@ -903,7 +935,7 @@ def test_v_toggles_right_side_hover_card_scroll_mode():
 
 
 def test_tasks_kg_links_use_link_preview_contract():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_cards.js", "tasks_panels.js")
 
     assert "'data-vyasa-link-preview': tasksHrefSupportsPreview(href) ? 'true' : undefined" in source
     assert "'data-vyasa-link-preview-current-path': currentPath || undefined" in source
@@ -912,7 +944,7 @@ def test_tasks_kg_links_use_link_preview_contract():
 
 
 def test_tasks_filter_reset_button_stays_in_filter_card_header():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_panels.js", "tasks.js")
     panel_source = source.split("const FilterPanel = () => {", 1)[1].split("const SlideShow = () => {", 1)[0]
 
     assert "onClick: resetProjectionControls" in panel_source
@@ -930,7 +962,7 @@ def test_tasks_projection_switch_preserves_filter_drawer_when_view_has_no_saved_
 
 
 def test_named_views_keep_grouping_overrides_in_projection_preferences():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_graph_model.js", "tasks_preferences.js", "tasks_panels.js", "tasks.js")
     group_panel = source.split("React.createElement('span', { style: filterKeyStyle }, 'Group by')", 1)[1].split("React.createElement('span', { style: filterKeyStyle }, 'Notes')", 1)[0]
     reset = source.split("const resetProjectionControls = React.useCallback(() => {", 1)[1].split("React.useEffect(() => {", 1)[0]
     prefs_key = source.split("function tasksPrefsKey(model) {", 1)[1].split("function tasksCheckedStateKey", 1)[0]
@@ -951,7 +983,7 @@ def test_named_views_keep_grouping_overrides_in_projection_preferences():
 
 
 def test_tasks_without_next_group_are_laid_out_before_child_groups():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_graph_model.js", "tasks_layouts.js")
     collapsed = source.split("function buildTasksCollapsedGraph", 1)[1].split("function buildTasksGroupedState", 1)[0]
     nested = source.split("async function layoutGroupInternal", 1)[1].split("async function layoutExpandedGroups", 1)[0]
 
@@ -1080,7 +1112,7 @@ def test_tasks_color_swatch_filter_is_independent_and_ands_with_query_filter():
 
 
 def test_tasks_color_picker_uses_cascading_level_dropdowns():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_panels.js")
 
     # Color levels mirror group-by: one <select> per level, each picked value adds the next slot.
     assert "const renderColorLevel = (colorBy, index) => {" in source
@@ -1091,7 +1123,7 @@ def test_tasks_color_picker_uses_cascading_level_dropdowns():
 
 
 def test_tasks_hierarchy_controls_are_drag_reorderable():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_panels.js", "tasks.js")
 
     assert "const reorderTasksHierarchyLevel = React.useCallback((items, fromIndex, toIndex) => {" in source
     assert "const reorderActiveColorLevel = React.useCallback((fromIndex, toIndex) => {" in source
@@ -1105,7 +1137,7 @@ def test_tasks_hierarchy_controls_are_drag_reorderable():
 
 
 def test_tasks_color_picker_groups_special_modes_at_bottom():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_paint.js", "tasks_panels.js")
 
     assert "const TASKS_SPECIAL_COLOR_MODE_KEYS = new Set(['connectivity', 'rank']);" in source
     assert "function tasksIsSpecialColorMode(key)" in source
@@ -1194,6 +1226,24 @@ def test_tasks_edge_cards_keep_field_order_lists_and_stable_cycle_order():
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
 
 
+def test_sequence_edge_card_resolves_the_authored_edge_record():
+    """A drawn row keeps its authored identity when sequence gives it a layout ID."""
+    script = """
+        import { buildSequenceTasksGraph } from './vyasa/extensions_builtin/tasks/static/tasks_layouts.js';
+        import { tasksEdgeRecordId } from './vyasa/extensions_builtin/tasks/static/tasks_paint.js';
+        const authored = { id: 'm20', source: 'loop', target: 'frame', code: '<a>redraw</a>' };
+        const graph = buildSequenceTasksGraph({ tasks: [
+            { id: 'loop', label: 'Turn loop' }, { id: 'frame', label: 'Screen frame' },
+        ], groups: [], dependency_edges: [authored] });
+        const drawn = graph.edges[0];
+        if (drawn.id !== 'seq-0') throw new Error('sequence layout ID changed');
+        if (tasksEdgeRecordId(drawn) !== authored.id) throw new Error('authored edge identity was lost');
+        const record = [authored].find((edge) => tasksEdgeRecordId(edge) === tasksEdgeRecordId(drawn));
+        if (record?.code !== '<a>redraw</a>') throw new Error('edge card metadata did not resolve');
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
 def test_tasks_card_attr_config_orders_and_hides_attrs():
     script = """
         import { tasksEdgeMetaEntries, tasksNodeMetaEntries } from './vyasa/extensions_builtin/tasks/static/tasks_graph_model.js';
@@ -1202,13 +1252,13 @@ def test_tasks_card_attr_config_orders_and_hides_attrs():
         if (tasksEdgeMetaEntries(record, ['owner', 'summary'], ['status']).map(({key}) => key).join(',') !== 'owner,summary') throw new Error('edge card config ignored');
     """
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_panels.js")
     assert "tasksNodeMetaEntries(selectedNode, model.node_attr_order, model.node_hidden_attrs)" in source
     assert "tasksEdgeMetaEntries(selectedEdgeRecord, model.edge_attr_order, model.edge_hidden_attrs)" in source
 
 
 def test_tasks_edge_cards_share_pointer_keyboard_and_deep_link_selection():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_edges.js", "tasks.js")
 
     assert "onEdgeClick: selectGraphEdge" in source
     # An ordinary edge keeps a generous hit target. A paired sequence row draws
@@ -1249,7 +1299,7 @@ def test_tasks_edge_type_filter_is_searchable_persisted_and_applied():
 
 
 def test_tasks_source_supports_continuous_gradient_palettes():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_graph_model.js", "tasks_paint.js", "tasks_panels.js")
 
     assert "function isTasksGradientPalette" in source
     assert "function resolveTasksGradientColor" in source
@@ -1259,7 +1309,7 @@ def test_tasks_source_supports_continuous_gradient_palettes():
 
 
 def test_tasks_projection_group_colors_respect_active_color_by_only():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_paint.js")
     projection_color_source = source.split("function resolveTasksProjectionGroupOwnColor", 1)[1].split("function resolveTasksProjectionGroupDimensionColor", 1)[0]
 
     assert "colorByOverride = null" in projection_color_source
@@ -1268,7 +1318,7 @@ def test_tasks_projection_group_colors_respect_active_color_by_only():
 
 
 def test_tasks_projection_groups_use_their_own_dimension_tone():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_paint.js", "tasks.js")
 
     assert "function resolveTasksProjectionGroupDimensionColor" in source
     assert "const projectionGroupTone = isProjectionGroup ? resolveTasksProjectionGroupDimensionColor(n, model) : '';" in source
@@ -1307,7 +1357,7 @@ def test_tasks_group_hover_tooltip_wraps_long_values_inside_max_width():
 
 
 def test_tasks_group_hover_uses_the_selected_panel_entries():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_panels.js", "tasks.js")
 
     assert "selectedNode?.__kind__ === 'group'" in source
     assert "tasksGroupDetailEntries(sourceNodeId, model)" in source
@@ -1315,7 +1365,7 @@ def test_tasks_group_hover_uses_the_selected_panel_entries():
 
 
 def test_highlighted_edges_and_arrowheads_render_below_node_cards():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_paint.js", "tasks.js")
 
     assert "const TASKS_EDGE_FOCUS_Z = TASKS_TASK_Z - 2;" in source
     assert "zIndex: hit ? TASKS_EDGE_FOCUS_Z : TASKS_EDGE_Z" in source
@@ -1359,7 +1409,7 @@ def test_tasks_ego_views_keep_drag_selection_enabled():
 
 
 def test_tasks_ego_views_preserve_the_supplied_grouping_hierarchy():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_layouts.js", "tasks.js")
 
     assert "if (preserveGrouping) return projectionState;" in source
     assert "buildTasksViewState(viewerState.model, viewerState.graph, activeProjectionId, viewMode, groupByEnabled, activeGroupByHierarchy, initialEgoMode)" in source
@@ -1418,7 +1468,7 @@ def test_slide_ego_reuses_the_existing_react_flow():
 
 
 def test_slides_hide_filters_without_changing_the_saved_filter_state():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_panels.js", "tasks.js")
     filter_panel = source.split("const FilterPanel = () => {", 1)[1].split("const options = tasksFilterOptions", 1)[0]
     guarded_toggle = source.split("const setFiltersCollapsedGuarded = React.useCallback", 1)[1].split("const activeColorLevelSpecs", 1)[0]
 
@@ -1448,7 +1498,7 @@ def test_tasks_wheel_measurements_are_gated_before_dom_reads():
 
 
 def test_tasks_clicking_selected_node_toggles_selection_off():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_nodes.js", "tasks.js")
 
     assert "selectedNodeIdRef.current === sourceNodeId && selectedNodeIdsRef.current.size === 0" in source
     assert "clearSelection('nodeClickToggle');" in source
@@ -1499,7 +1549,7 @@ def test_tasks_filter_sidebar_search_reuses_filter_highlight_path():
 
 
 def test_tasks_notes_support_graph_scoped_text_download_and_upload():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_preferences.js", "tasks_panels.js", "tasks.js")
 
     assert "collectTasksStoredNotes(storage, storageKey, nodeTitles, slideTitles)" in source
     assert "prefs.slideNotes = normalizeTasksNodeNotes(slideNotes);" in source
@@ -1508,10 +1558,11 @@ def test_tasks_notes_support_graph_scoped_text_download_and_upload():
     assert "importTasksStoredNotes(storage, storageKey, backup)" in source
     assert "prefs.nodeStates = normalizeTasksNodeStates(nodeStates, normalizeTasksCardStates(model));" in source
     assert "filename: `vyasa-kg-notes-${graphName}.txt`" in source
-    assert "showTasksToast(`Downloaded ${filename}`)" in source
+    assert "showVyasaToast(`Downloaded ${filename}`)" in source
     assert "buildTasksNodeNotesBackup(sourceModel, latestNodeNotes(), nodeStates, latestSlideNotes()).text" in source
-    assert "showTasksToast('Copied notes')" in source
-    assert "toast.id = 'vyasa-tasks-toast'" in source
+    assert "showVyasaToast('Copied notes')" in source
+    # The shared page shell owns the toast element the KG notes actions use.
+    assert "toast.id = 'vyasa-ui-toast'" in Path("vyasa/static/page_shell.js").read_text()
     assert "input.accept = '.txt,text/plain,application/json'" in source
     assert "nodeStates: normalizeTasksNodeStates(prefs.nodeStates, cardStates)" in source
     assert "setSlideNotes(imported.slideNotes);" in source
@@ -1545,7 +1596,7 @@ def test_tasks_search_normalizes_whitespace_and_wrapping_quotes():
 
 
 def test_tasks_base_view_supports_task_parent_expansion():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_graph_model.js", "tasks_nodes.js", "tasks.js")
 
     assert "function tasksNodeHasChildren(nodeId, model)" in source
     assert "function tasksVisibleGraphStatsLabel(nodes, edges)" in source
@@ -1746,7 +1797,7 @@ def test_tasks_node_reference_navigation_preserves_zoom():
         if (next.x !== 250 || next.y !== 180 || next.zoom !== 0.45) throw new Error(JSON.stringify(next));
     """
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_nodes.js", "tasks_panels.js", "tasks.js")
     css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
     assert "if (!reference || !nodeReferenceKeyHeldRef.current) return false;" in source
     assert "const focusGraphNode = React.useCallback((targetId)" in source
@@ -1768,7 +1819,7 @@ def test_tasks_node_reference_navigation_preserves_zoom():
 
 
 def test_node_title_reference_click_routes_before_node_selection():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_nodes.js", "tasks.js")
     node_capture = source.split("const handleSelectedNodeToggleCapture", 1)[1].split("if (data?.__kind__ === 'ganttHeader')", 1)[0]
     flow_capture = source.split("const flowPointerHandlers", 1)[1].split("const flowWrapperStyle", 1)[0]
 
@@ -1997,14 +2048,14 @@ def test_slide_description_markdown_has_list_styling_contract():
 
 def test_slide_notes_panel_uses_stable_render_helper():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
-    render_source = source.split("return rf.ReactFlowProvider ?", 1)[1].split("const existing = document.getElementById", 1)[0]
+    render_source = source.split("return rf.ReactFlowProvider ?", 1)[1].split("if (window.ReactDOM.createRoot)", 1)[0]
 
     assert "SlideShow()," in render_source
     assert "window.React.createElement(SlideShow)" not in render_source
 
 
 def test_client_stats_label_counts_hierarchy_links_without_edges():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_graph_model.js")
 
     assert "Hierarchy Link" in source
     assert "parent !== 'null'" in source
@@ -2012,7 +2063,7 @@ def test_client_stats_label_counts_hierarchy_links_without_edges():
 
 
 def test_kg_palette_colors_are_contrast_adjusted_in_dark_mode():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_paint.js")
 
     assert "TASKS_DARK_PALETTE_CONTRAST = 3.2" in source
     assert "function tasksDisplayPaletteColor(color)" in source
@@ -2025,7 +2076,7 @@ def test_kg_palette_colors_are_contrast_adjusted_in_dark_mode():
 
 def test_react_flow_component_fills_flow_wrapper():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
-    render_source = source.split("return rf.ReactFlowProvider ?", 1)[1].split("const existing = document.getElementById", 1)[0]
+    render_source = source.split("return rf.ReactFlowProvider ?", 1)[1].split("if (window.ReactDOM.createRoot)", 1)[0]
 
     assert "function applyTasksStandaloneHeight(wrapper)" in source
     assert "wrapper.closest('.vyasa-main-shell')" in source
@@ -2039,8 +2090,8 @@ def test_react_flow_component_fills_flow_wrapper():
 
 
 def test_filter_and_slide_panels_touch_the_graph_canvas():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
-    render_source = source.split("return rf.ReactFlowProvider ?", 1)[1].split("const existing = document.getElementById", 1)[0]
+    source = tasks_static_source("tasks_panels.js", "tasks.js")
+    render_source = source.split("return rf.ReactFlowProvider ?", 1)[1].split("if (window.ReactDOM.createRoot)", 1)[0]
     filter_source = source.split("const FilterPanel = () => {", 1)[1].split("const SlideShow = () => {", 1)[0]
     slide_source = source.split("const SlideShow = () => {", 1)[1].split("const DragSelectionOverlay = () => {", 1)[0]
 
@@ -2074,7 +2125,7 @@ def test_selected_node_panel_stacks_the_title_above_the_id():
     drove the column's min-content width to one glyph, so a title broke one
     character per line.
     """
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_panels.js")
 
     assert "gridTemplateColumns: 'minmax(0, 1fr)'" in source
     assert "panelNodeId ? 'minmax(0, 1fr) minmax(0, 1fr)'" not in source
@@ -2091,7 +2142,7 @@ def test_slide_selection_is_not_reapplied_when_graph_layout_changes():
 
 
 def test_context_graphs_have_day_switch_contract():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    source = tasks_static_source("tasks_panels.js", "tasks.js")
     css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
     api = Path("vyasa/extensions_builtin/tasks/api.py").read_text()
 
@@ -2119,7 +2170,9 @@ def test_context_graphs_have_day_switch_contract():
     assert "onChange: (event) => handleSwitchContext(event.target.value)" in source
     assert "`${context.seq}. ${context.label || context.caption || context.id}`" in source
     assert "const renderColorLevel = (colorBy, index) => {" in source
-    assert "sourceModel?.kg_context?.caption ? React.createElement('div', {" in source
+    # A context caption carries code references, so it renders through the shared
+    # caption helper rather than as a plain string.
+    assert "tasksCaptionElement(sourceModel?.kg_context, {" in source
     assert "React.createElement('span', { style: filterKeyStyle }, 'Intensity')" in source
     assert "React.createElement('span', { style: { opacity: 0.82 } }, 'Edge Intensity')" in source
     assert "React.createElement('span', { style: { opacity: 0.82 } }, 'Null Intensity')" in source

@@ -1,0 +1,54 @@
+g1: extension-boot -> extension-catalog reads
+	pair=g-catalog
+	note=→ load_configured_extensions(config)
+	description=Boot asks for every extension that exists. Built-in ones always load; an external one loads from a module or a path named in the config.
+	code=[build_extension_runtime](vyasa/extensions.py){show=symbol symbol=build_extension_runtime kind=Function focus="match[configured_extensions = load_configured_extensions(config)]" context=3}
+g2: extension-catalog -> extension-boot returns
+	pair=g-catalog
+	note=← every extension, and its metadata
+	description=Each one arrives with an ExtensionMeta naming its id, its category, and the capabilities it is allowed to claim.
+	code=[load_configured_extensions](vyasa/extensions.py){show=symbol symbol=load_configured_extensions kind=Function context=4}
+g3: extension-boot -> extension-plan resolves
+	pair=g-plan
+	note=→ resolve_extension_plan(config, catalog)
+	description=Existing is not enabled. A preset picks a starting set and the config adds to it or replaces it, one category at a time.
+	code=[build_extension_runtime](vyasa/extensions.py){show=symbol symbol=build_extension_runtime kind=Function focus="match[plan = resolve_extension_plan(config, catalog=catalog)]" context=3}
+g4: extension-plan -> extension-boot returns
+	pair=g-plan
+	note=← the enabled ids
+	description=The plan states, for each extension, whether it is enabled. Only enabled extensions enter registration.
+	code=[resolve_extension_plan](vyasa/extensions.py){show=symbol symbol=resolve_extension_plan kind=Function focus="match[return ExtensionPlan(]" context=4}
+g5: extension-boot -> extension-any registers
+	pair=g-register
+	note=→ register(app)
+	description=build_extension_runtime hands the catalog to _configure_extensions, which is the loop shown here. It calls register once per enabled extension, in catalog order, and gives each one a registrars object bound to it. runtime.enabled is the plan being read back.
+	code=[_configure_extensions](vyasa/extensions.py){show=symbol symbol=_configure_extensions kind=Function focus="match[for extension in extensions:] match[extension.register(VyasaExtensionApp(runtime, extension))]" context=3}
+g6: extension-any -> extension-app registers
+	pair=g-claim
+	note=→ app.markdown.fence(name, handler)
+	description=One claim. A fence is the example here, but a route, a document renderer, an asset bundle or the layout are claimed the same way.
+	code=[TasksExtension.register](vyasa/extensions_builtin/tasks/__init__.py){show=symbol symbol=TasksExtension.register kind=Method focus='match[app.markdown.fence("items", items_handler)]' context=3}
+g7: extension-app -> registration-guard resolves
+	pair=g-guard
+	note=→ require_capability("cap:markdown:fence:items")
+	description=Before the slot is touched, the registrar asks whether this extension declared this capability in its own metadata.
+	code=[_MarkdownRegistrar.fence](vyasa/extensions.py){show=symbol symbol=_MarkdownRegistrar.fence kind=Method focus="match[self.guard.require_capability(f\"cap:markdown:fence:{name}\")]" context=2}
+g8: registration-guard -> extension-app returns
+	pair=g-guard
+	note=← allowed, or ExtensionConfigError
+	description=An undeclared claim raises and boot fails. The metadata is therefore the whole list of what an extension can reach, readable without running it.
+	code=[_RegistrationGuard.require_capability](vyasa/extensions.py){show=symbol symbol=_RegistrationGuard.require_capability kind=Method focus="match[raise ExtensionConfigError]" context=4}
+g9: extension-app -> extension-runtime registers
+	note=→ runtime slot = handler
+	description=Only now is the slot written. Every claim goes through a registrar, so no extension ever writes to the runtime itself.
+	code=[_MarkdownRegistrar.fence](vyasa/extensions.py){show=symbol symbol=_MarkdownRegistrar.fence kind=Method focus="match[self.runtime.markdown_fences[name] = handler]" context=2}
+g10: extension-app -> extension-any returns
+	pair=g-claim
+	note=← slot claimed
+	description=The claim returns nothing. An extension that wants several slots simply makes several calls.
+	code=[TasksExtension.register](vyasa/extensions_builtin/tasks/__init__.py){show=symbol symbol=TasksExtension.register kind=Method context=6}
+g11: extension-any -> extension-boot returns
+	pair=g-register
+	note=← registered
+	description=When the last enabled extension returns, the runtime is complete and never changes again. Every request reads the slots this pass filled.
+	code=[build_extension_runtime](vyasa/extensions.py){show=symbol symbol=build_extension_runtime kind=Function focus="match[return runtime]" context=3}

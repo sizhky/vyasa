@@ -1,37 +1,8 @@
-const CDN = {
-  react: 'https://unpkg.com/react@18/umd/react.production.min.js',
-  reactDom: 'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
-  babel: 'https://unpkg.com/@babel/standalone/babel.min.js',
-};
-
-const loadedScripts = new Map();
-
-function loadScript(src) {
-  if (loadedScripts.has(src)) return loadedScripts.get(src);
-  const promise = new Promise((resolve, reject) => {
-    const existing = document.querySelector(`script[src="${src}"]`);
-    if (existing) {
-      existing.addEventListener('load', resolve, { once: true });
-      resolve();
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = src;
-    script.onload = resolve;
-    script.onerror = () => reject(new Error(`Failed to load ${src}`));
-    document.head.appendChild(script);
-  });
-  loadedScripts.set(src, promise);
-  return promise;
-}
+import { ensureReact, loadScript } from '../../../static/page_shell.js';
 
 async function ensureRuntime() {
-  await loadScript(CDN.react);
-  await loadScript(CDN.reactDom);
-  await loadScript(CDN.babel);
-  if (!window.React || !window.ReactDOM || !window.Babel) {
-    throw new Error('MDX runtime missing React, ReactDOM, or Babel');
-  }
+  await ensureReact();
+  await loadScript('https://unpkg.com/@babel/standalone/babel.min.js', () => Boolean(window.Babel));
 }
 
 function transform(source) {

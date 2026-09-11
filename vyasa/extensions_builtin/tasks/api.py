@@ -12,7 +12,7 @@ from .layout import build_collapsed_graph
 from .items_pack import _tmp_view_sidecar_dir
 from .model import parse_tasks_text
 from .query import KnowledgeGraphQuery
-from .render import _attach_rendered_node_attrs, _attach_rendered_slide_attrs
+from .render import _attach_rendered_node_attrs, _attach_rendered_prose_attrs
 
 ALNUM = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
@@ -69,7 +69,7 @@ def _compile_schema_payload(schema_path: Path, current_path: str = "", context_i
     model = parse_tasks_text(source, current_path=current_path or schema_path)
     link_path = items_link_base_path(model, current_path or str(schema_path))
     _attach_rendered_node_attrs(model, link_path, items_code_source(model))
-    _attach_rendered_slide_attrs(model, link_path)
+    _attach_rendered_prose_attrs(model, link_path, items_code_source(model))
     return model, build_collapsed_graph(model)
 
 

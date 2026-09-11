@@ -1,29 +1,53 @@
-window.__vyasaTasksDebug = window.__vyasaTasksDebug || { events: [] };
-window.__vyasaTasksDebug.enabled = window.__vyasaTasksDebug.enabled === true || new URLSearchParams(window.location.search).has('tasks_debug');
-window.__vyasaTasksDebug.verbose = window.__vyasaTasksDebug.verbose === true || new URLSearchParams(window.location.search).has('tasks_debug_verbose');
-window.__vyasaTasksDebug.edgeLabelRenderCount = Number(window.__vyasaTasksDebug.edgeLabelRenderCount || 0);
-// Its own flag, not tasks_debug. This records every key the page sees, so it stays
-// off during ordinary debugging and is opted into only while chasing a stray key.
-window.__vyasaTasksDebug.keyLog = window.__vyasaTasksDebug.keyLog === true || new URLSearchParams(window.location.search).has('tasks_keylog');
-window.__vyasaTasksPerf = window.__vyasaTasksPerf || {};
-window.__vyasaTasksPerf.enabled = window.__vyasaTasksPerf.enabled === true || new URLSearchParams(window.location.search).has('tasks_perf');
-window.__vyasaTasksPerf.pendingFrames = window.__vyasaTasksPerf.pendingFrames || new Set();
-window.__vyasaTasksPerf.frameProbes = window.__vyasaTasksPerf.frameProbes || new Map();
-window.__vyasaTasksPerf.fileLogReset = window.__vyasaTasksPerf.fileLogReset || new Set();
-window.__vyasaTasksPerf.loggedShell = window.__vyasaTasksPerf.loggedShell || new Set();
-window.__vyasaTasksPerf.loggedSurface = window.__vyasaTasksPerf.loggedSurface || new Set();
-window.__vyasaTasksPerf.loggedGraphDom = window.__vyasaTasksPerf.loggedGraphDom || new Set();
-if (!Array.isArray(window.__vyasaTasksDebug.watch) || window.__vyasaTasksDebug.watch.length === 0) {
-    const rawWatch = new URLSearchParams(window.location.search).getAll('tasks_watch');
-    window.__vyasaTasksDebug.watch = rawWatch
-        .flatMap((value) => String(value || '').split(','))
-        .map((value) => value.trim())
-        .filter(Boolean)
-        .map((value) => {
-            const [source, target] = value.split('->').map((part) => part.trim());
-            return source && target ? { source, target } : null;
-        })
-        .filter(Boolean);
+
+export function initializeTasksDiagnostics() {
+    window.__vyasaTasksDebug = window.__vyasaTasksDebug || { events: [] };
+    window.__vyasaTasksDebug.enabled = window.__vyasaTasksDebug.enabled === true || new URLSearchParams(window.location.search).has('tasks_debug');
+    window.__vyasaTasksDebug.verbose = window.__vyasaTasksDebug.verbose === true || new URLSearchParams(window.location.search).has('tasks_debug_verbose');
+    window.__vyasaTasksDebug.edgeLabelRenderCount = Number(window.__vyasaTasksDebug.edgeLabelRenderCount || 0);
+    // Its own flag, not tasks_debug. This records every key the page sees, so it stays
+    // off during ordinary debugging and is opted into only while chasing a stray key.
+    window.__vyasaTasksDebug.keyLog = window.__vyasaTasksDebug.keyLog === true || new URLSearchParams(window.location.search).has('tasks_keylog');
+    window.__vyasaTasksPerf = window.__vyasaTasksPerf || {};
+    window.__vyasaTasksPerf.enabled = window.__vyasaTasksPerf.enabled === true || new URLSearchParams(window.location.search).has('tasks_perf');
+    window.__vyasaTasksPerf.pendingFrames = window.__vyasaTasksPerf.pendingFrames || new Set();
+    window.__vyasaTasksPerf.frameProbes = window.__vyasaTasksPerf.frameProbes || new Map();
+    window.__vyasaTasksPerf.fileLogReset = window.__vyasaTasksPerf.fileLogReset || new Set();
+    window.__vyasaTasksPerf.loggedShell = window.__vyasaTasksPerf.loggedShell || new Set();
+    window.__vyasaTasksPerf.loggedSurface = window.__vyasaTasksPerf.loggedSurface || new Set();
+    window.__vyasaTasksPerf.loggedGraphDom = window.__vyasaTasksPerf.loggedGraphDom || new Set();
+    if (!Array.isArray(window.__vyasaTasksDebug.watch) || window.__vyasaTasksDebug.watch.length === 0) {
+        const rawWatch = new URLSearchParams(window.location.search).getAll('tasks_watch');
+        window.__vyasaTasksDebug.watch = rawWatch
+            .flatMap((value) => String(value || '').split(','))
+            .map((value) => value.trim())
+            .filter(Boolean)
+            .map((value) => {
+                const [source, target] = value.split('->').map((part) => part.trim());
+                return source && target ? { source, target } : null;
+            })
+            .filter(Boolean);
+    }
+    if (typeof window !== 'undefined' && window.__vyasaTasksDebug.keyLog && !window.__vyasaTasksDebug.keyProbeBound) {
+        window.__vyasaTasksDebug.keyProbeBound = true;
+        window.addEventListener('keydown', (event) => {
+            const target = event.target instanceof Element ? event.target : null;
+            const wasEnabled = window.__vyasaTasksDebug.enabled;
+            window.__vyasaTasksDebug.enabled = true;
+            logTasksDebug('rawKeydown', {
+                key: event.key,
+                code: event.code,
+                trusted: event.isTrusted,
+                repeat: event.repeat,
+                shift: event.shiftKey,
+                meta: event.metaKey,
+                ctrl: event.ctrlKey,
+                alt: event.altKey,
+                target: target ? `${target.tagName}${target.id ? `#${target.id}` : ''}` : '',
+                stack: event.isTrusted ? '' : String(new Error().stack || '').split('\n').slice(2, 9).map((line) => line.trim()).join(' | '),
+            });
+            window.__vyasaTasksDebug.enabled = wasEnabled;
+        }, true);
+    }
 }
 
 export function renderTasksDebugOverlay() {
@@ -32,7 +56,7 @@ export function renderTasksDebugOverlay() {
 }
 
 export function logTasksDebug(label, payload = {}) {
-    if (!window.__vyasaTasksDebug.enabled) return null;
+    if (typeof window === 'undefined' || !window.__vyasaTasksDebug?.enabled) return null;
     const event = {
         label,
         at: new Date().toISOString(),
@@ -50,30 +74,8 @@ export function logTasksDebug(label, payload = {}) {
 // that nobody pressed, this records whether the event came from the OS (isTrusted).
 // A synthetic event runs its listeners on the dispatcher's own stack, so the frames
 // captured here name whatever code dispatched it.
-if (typeof window !== 'undefined' && window.__vyasaTasksDebug.keyLog && !window.__vyasaTasksDebug.keyProbeBound) {
-    window.__vyasaTasksDebug.keyProbeBound = true;
-    window.addEventListener('keydown', (event) => {
-        const target = event.target instanceof Element ? event.target : null;
-        const wasEnabled = window.__vyasaTasksDebug.enabled;
-        window.__vyasaTasksDebug.enabled = true;
-        logTasksDebug('rawKeydown', {
-            key: event.key,
-            code: event.code,
-            trusted: event.isTrusted,
-            repeat: event.repeat,
-            shift: event.shiftKey,
-            meta: event.metaKey,
-            ctrl: event.ctrlKey,
-            alt: event.altKey,
-            target: target ? `${target.tagName}${target.id ? `#${target.id}` : ''}` : '',
-            stack: event.isTrusted ? '' : String(new Error().stack || '').split('\n').slice(2, 9).map((line) => line.trim()).join(' | '),
-        });
-        window.__vyasaTasksDebug.enabled = wasEnabled;
-    }, true);
-}
-
 export function logTasksDebugVerbose(label, payload = {}) {
-    if (!window.__vyasaTasksDebug.verbose) return null;
+    if (typeof window === 'undefined' || !window.__vyasaTasksDebug?.verbose) return null;
     return logTasksDebug(label, payload);
 }
 
@@ -101,7 +103,7 @@ function tasksPostFileLog(label, at, payload = {}) {
 }
 
 export function logTasksPerf(label, payload = {}) {
-    if (!window.__vyasaTasksPerf.enabled) return null;
+    if (typeof window === 'undefined' || !window.__vyasaTasksPerf?.enabled) return null;
     if (
         !String(label || '').startsWith('hover-cycle:')
         &&
@@ -557,4 +559,29 @@ export function markTasksFrameProbe(widgetId, wrapper, model, graphBase, reason,
     }
     probe.lastInputAt = now;
     probe.inputs[reason || 'input'] = (probe.inputs[reason || 'input'] || 0) + 1;
+}
+
+function shouldTraceTasksEdge(edge) {
+    if (typeof window === 'undefined' || !window.__vyasaTasksDebug?.enabled) return false;
+    const watch = Array.isArray(window.__vyasaTasksDebug.watch) ? window.__vyasaTasksDebug.watch : [];
+    if (!watch.length) return false;
+    return watch.some((item) => item && item.source === edge.source && item.target === edge.target);
+}
+
+export function traceTasksEdge(stage, edge, payload = {}) {
+    if (!shouldTraceTasksEdge(edge)) return null;
+    return logTasksDebug(`edgeTrace:${stage}`, {
+        raw: { source: edge.source, target: edge.target, label: edge.label || '' },
+        ...payload,
+    });
+}
+
+export function rectSummary(rect) {
+    if (!rect) return null;
+    return {
+        x: Math.round(rect.x || 0),
+        y: Math.round(rect.y || 0),
+        width: Math.round(rect.width || 0),
+        height: Math.round(rect.height || 0),
+    };
 }

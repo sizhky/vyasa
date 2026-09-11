@@ -6,6 +6,7 @@ from vyasa.extensions_builtin.tasks.layouts import LAYOUT_KEYS, layout_keys, unk
 from vyasa.extensions_builtin.tasks.projections import (
     PROJECTION_DISPLAY_KEYS,
     attach_projection_models,
+    build_projection_model,
     normalize_projections,
 )
 
@@ -134,3 +135,46 @@ def test_pair_by_can_be_set_on_the_graph_so_the_base_view_pairs_too():
     assert source.count("activeProjection?.pair_by || model?.pair_by") == 2, (
         "both edge-building paths must fall back to the graph-level key"
     )
+
+
+def test_a_view_draws_only_the_edges_of_the_source_it_names():
+    """A second story must not appear in the first story's view.
+
+    `base` used to mean the whole pack rather than the source called base, so
+    adding `kg.fence.edges` beside `kg.edges` put the fence lanes into the flow
+    view. Every declared name scopes now, and `all` is the only wildcard.
+    """
+    model = read_kg_pack(Path("demo/vyasa.kg/kg.schema"))
+    views = {view["id"]: view for view in normalize_projections(model["view_projections"])}
+    built = attach_projection_models(model)["projection_models"]
+
+    flow = built["flow"]["model"]
+    fence = built["fence"]["model"]
+    assert [task["id"] for task in flow["tasks"]] == [
+        "browser-ui", "content-route", "path-resolver", "frontmatter-reader",
+        "filesystem-backend", "markdown-renderer", "document-page",
+        "content-tree", "not-found", "worktree-reader",
+    ]
+    assert {edge["id"] for edge in fence["dependency_edges"]}.isdisjoint(
+        {edge["id"] for edge in flow["dependency_edges"]}
+    )
+
+    whole_pack = build_projection_model(model, {**views["flow"], "source": "all"})
+    assert len(whole_pack["dependency_edges"]) == len(model["dependency_edges"])
+
+
+def test_an_edge_that_names_no_declared_source_belongs_to_every_view():
+    """A context id lives in the same field as a source name but is not one.
+
+    A context pack switches with `kg_context_id`, never with a view, so scoping
+    on its tags would empty every view it has.
+    """
+    model = read_kg_pack(Path("demo/birdhouse/birdhouse.kg/kg.schema"))
+    declared = set(model.get("kg_sources") or {})
+    tags = {tag for edge in model["dependency_edges"] for tag in edge.get("__kg_sources") or []}
+    assert tags and tags.isdisjoint(declared)
+    for built in attach_projection_models(model)["projection_models"].values():
+        if built["model"]["dependency_edges"]:
+            break
+    else:
+        raise AssertionError("scoping emptied every view of a context pack")

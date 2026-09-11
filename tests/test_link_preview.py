@@ -18,6 +18,22 @@ from vyasa.extensions_builtin.link_preview.code_reference_markdown import (
 )
 
 
+def _resolved_markdown_diff(tmp_path, before, after, *, context):
+    repo = _git_repo(tmp_path)
+    source = repo / "table.md"
+    source.write_text(before, encoding="utf-8")
+    base = _commit(repo, "base")
+    source.write_text(after, encoding="utf-8")
+    head = _commit(repo, "head")
+    return resolve_code_reference(
+        source,
+        CodeReference.parse({
+            "change": f"{base}..{head}", "show": "file", "view": "split",
+            "side": "both", "focus": "changed", "context": str(context),
+        }),
+    )
+
+
 def test_code_reference_normalizes_defaults():
     reference = CodeReference.parse(
         {
@@ -109,6 +125,128 @@ def test_link_preview_renders_code_reference_metadata(tmp_path, monkeypatch):
     assert result is not None
     assert 'data-code-reference-role="test"' in result
     assert 'data-code-highlight-lines="1-2"' in result
+    assert "Open full file" not in result
+
+
+def test_markdown_code_reference_uses_document_rendering(tmp_path, monkeypatch):
+    source = tmp_path / "SKILL.md"
+    source.write_text("---\nname: daksh\n---\n# Daksh\n\n**Rendered body.**\n")
+    monkeypatch.setattr(routes, "_resolve_preview_file", lambda _slug: source)
+    monkeypatch.setattr(routes, "content_slug_for_path", lambda _path, strip_suffix=True: "skills/daksh/SKILL.md")
+
+    result = routes.render_link_preview_html(
+        href="skills/daksh/SKILL.md",
+        code_ref=json.dumps({"show": "file", "focus": "all", "role": "implementation"}),
+    )
+
+    assert result is not None
+    assert "<strong>Rendered body.</strong>" in result
+    assert 'class="language-markdown"' not in result
+    assert "data-code-reference-role" not in result
+    assert "name: daksh" not in result
+
+
+def test_markdown_code_reference_renders_revision_diff_as_documents(tmp_path, monkeypatch):
+    repo = _git_repo(tmp_path)
+    source = repo / "SKILL.md"
+    source.write_text("---\nname: daksh\n---\n# Daksh\n\nThe **old stage** runs.\n\n- Keep\n")
+    base = _commit(repo, "base")
+    source.write_text("---\nname: daksh\n---\n# Daksh\n\nThe **new phase** runs.\n\n- Keep\n- Added\n")
+    head = _commit(repo, "head")
+    monkeypatch.setattr(routes, "_resolve_preview_file", lambda _slug: source)
+    monkeypatch.setattr(routes, "content_slug_for_path", lambda _path, strip_suffix=True: "skills/daksh/SKILL.md")
+
+    result = routes.render_link_preview_html(
+        href="skills/daksh/SKILL.md",
+        code_ref=json.dumps({
+            "change": f"{base}..{head}", "show": "file", "view": "split",
+            "side": "both", "focus": "changed", "context": "0", "role": "implementation",
+        }),
+    )
+
+    assert result is not None
+    assert 'data-code-reference-view="markdown-diff"' in result
+    assert 'data-markdown-diff-state="deleted"' in result
+    assert 'data-markdown-diff-state="added"' in result
+    assert '<del class="vyasa-markdown-diff-word">old</del>' in result
+    assert '<ins class="vyasa-markdown-diff-word">new</ins>' in result
+    assert "<strong>" in result and "<ul" in result
+    assert 'class="language-markdown"' not in result
+    assert "name: daksh" not in result
+    assert 'data-vyasa-open-editor="true"' in result
+    assert 'href="/posts/skills/daksh/SKILL"' in result
+    assert "Open full file" in result
+    assert "Unchanged content omitted" in result
+
+
+def test_markdown_diff_keeps_fenced_blocks_whole():
+    before = "# Doc\n\n```text\none\n\ntwo\n```"
+    after = "# Doc\n\n```text\none\n\nthree\n```"
+
+    old_blocks = code_reference_render._markdown_blocks(before)
+    new_blocks = code_reference_render._markdown_blocks(after)
+    assert len(old_blocks) == 2
+    old, new = code_reference_render._marked_words(old_blocks[1], new_blocks[1])
+    assert old == old_blocks[1] and new == new_blocks[1]
+
+
+def test_markdown_diff_does_not_put_marks_inside_link_syntax():
+    before = "Read [the guide](old-guide)."
+    after = "Read [the guide](new-guide)."
+
+    assert code_reference_render._marked_words(before, after) == (before, after)
+
+
+def test_markdown_diff_does_not_put_marks_inside_table_syntax():
+    before = "| Stage | Path |\n|---|---|\n| Architecture | old |"
+    after = "| Stage | Path |\n|---|---|\n| Architecture | new |"
+
+    assert code_reference_render._marked_words(before, after) == (before, after)
+
+
+def test_markdown_diff_renders_one_collapsed_table_with_changed_cells(tmp_path):
+    before = """| Name | Stage |
+|---|---|
+| Alpha | Ready |
+| Beta | Old |
+| Gamma | Ready |
+| Delta | Ready |
+| Epsilon | Ready |"""
+    after = before.replace("| Beta | Old |", "| Beta | New |")
+    resolved = _resolved_markdown_diff(tmp_path, before, after, context=0)
+
+    result = code_reference_render.render_markdown_diff_reference(
+        resolved, "table.md", current_path="table"
+    )
+
+    assert result.count("<table") == 1
+    assert 'class="vyasa-markdown-table-diff"' in result
+    assert '<span class="vyasa-markdown-table-state is-changed">Changed</span>' in result
+    assert '<del class="vyasa-markdown-table-cell-old">Old</del>' in result
+    assert '<ins class="vyasa-markdown-table-word">' not in result
+    assert '<ins class="vyasa-markdown-table-cell-new">New</ins>' in result
+    assert "Unchanged rows omitted" in result
+    assert "Alpha" not in result and "Gamma" not in result
+
+
+def test_markdown_diff_unifies_changed_table_headers(tmp_path):
+    before = """| Input Signal | Command |
+|---|---|
+| vision | vision |"""
+    after = """| Load | Input Signal |
+|---|---|
+| stages/10 | vision |"""
+    resolved = _resolved_markdown_diff(tmp_path, before, after, context=3)
+
+    result = code_reference_render.render_markdown_diff_reference(
+        resolved, "table.md", current_path="table"
+    )
+
+    assert result.count("<table") == 1
+    assert ">Load</th>" in result
+    assert ">Input Signal</th>" in result
+    assert ">Command (removed)</th>" in result
+    assert "stages/10" in result and "vision" in result
 
 
 def test_link_preview_renders_disjoint_changed_blocks_for_symbol(tmp_path, monkeypatch):
@@ -291,7 +429,10 @@ def test_link_preview_shadow_is_on_unclipped_outer_popup():
     assert ".vyasa-link-preview-plain-text.vyasa-code-wrap" in css
     assert ".vyasa-link-preview-body > .code-block:only-child pre.vyasa-code-wrap { width: 100%;" in css
     assert "event.shiftKey ? shell?.dataset.absolutePath : shell?.dataset.relativePath" in source
-    assert "sourceLabel.title = relativePath;" in source
+    # A cached source shows its origin separately, so the label holds the
+    # short path and the tooltip rejoins the two.
+    assert "sourceLabel.textContent = shown;" in source
+    assert "sourceLabel.title = origin ? `${origin}/${shown}` : shown;" in source
     assert "sourceLabel.href = link.getAttribute('href')" in source
     assert "event.target.closest('button,a')" in source
     assert "cursor: pointer;" in css.split("[data-vyasa-link-preview-origin]", 1)[1].split("}", 1)[0]
@@ -577,6 +718,21 @@ def test_link_preview_renders_full_markdown_for_symbol_position(tmp_path, monkey
     assert "Run the target." in result
 
 
+def test_link_preview_renders_markdown_line_target_through_markdown_pipeline(tmp_path, monkeypatch):
+    source = tmp_path / "sample.md"
+    source.write_text("---\ntitle: Sample\n---\n# Start\n\n**Rendered body.**\n")
+    monkeypatch.setattr(routes, "_resolve_preview_file", lambda _slug: source)
+    monkeypatch.setattr(routes, "content_slug_for_path", lambda _path, strip_suffix=True: "sample.md")
+
+    result = routes.render_link_preview_html(href="/posts/sample.md:6")
+
+    assert result is not None
+    assert "<strong>Rendered body.</strong>" in result
+    assert 'class="language-markdown"' not in result
+    assert "title: Sample" not in result
+    assert "data-target-line=6" in result
+
+
 def test_link_preview_fragment_match_ignores_heading_case(tmp_path, monkeypatch):
     source = tmp_path / "sample.md"
     source.write_text("# First\n\nopening\n\n## Likely changes\n\ntarget\n\n## Later\n\nignore\n")
@@ -642,6 +798,37 @@ def test_link_preview_stack_keeps_nested_previews_until_each_is_closed():
         }
     """
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
+def test_link_preview_stack_pins_only_open_entries():
+    script = """
+        import { LinkPreviewStack } from './vyasa/extensions_builtin/link_preview/static/link_preview_stack.js';
+
+        let pins = 0;
+        const stack = new LinkPreviewStack({
+            createView: () => ({ pin: () => { pins += 1; }, remove() {}, setContent() {}, setMessage() {} }),
+            fetchPreview: async () => '<p>preview</p>',
+        });
+        const link = { getAttribute: () => '/doc', dataset: {} };
+        const entry = stack.open(link, { clientX: 0, clientY: 0 });
+        if (!stack.pin(entry) || pins !== 1) throw new Error('open preview did not pin');
+        stack.close(entry);
+        if (stack.pin(entry) || pins !== 1) throw new Error('closed preview pinned');
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
+def test_link_preview_pin_uses_the_edge_pin_bloom_timing():
+    source = Path("vyasa/extensions_builtin/link_preview/static/link_preview.js").read_text()
+    css = Path("vyasa/extensions_builtin/link_preview/static/link_preview.css").read_text()
+
+    assert "pin: (entry) => previews.pin(entry)" in source
+    assert "popover.classList.add('vyasa-link-preview-pin-bloom')" in source
+    assert "@keyframes vyasa-link-preview-pin-bloom" in css
+    assert "7440ms cubic-bezier(0.16, 1, 0.3, 1)" in css
+    assert "0 0 0 54px" not in css
+    assert "0 0 192px 84px" in css
+    assert "prefers-reduced-motion: reduce" in css
 
 
 # --- code reference: parser, resolver, selection, render, build ---------
@@ -934,7 +1121,7 @@ def test_code_reference_render_carries_header_badges_and_line_states(tmp_path, m
     assert 'data-code-line-states="1-1:context,2-2:added"' in result
     assert 'data-code-source-start="1"' in result
     assert 'data-code-reference-blocks="2-2"' in result
-    assert "Open in editor" in result and "Open full file" in result
+    assert "Open in editor" in result and "Open full file" not in result
 
 
 def test_code_reference_render_escapes_source_and_diagnostics(tmp_path, monkeypatch):

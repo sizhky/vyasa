@@ -1,6 +1,6 @@
-export function clampScale(value, maxScale = 55) {
-    return Math.min(Math.max(0.1, value), maxScale);
-}
+
+// The shared viewport owns the gesture binder; KG re-exports only what it uses.
+export { clampScale, nextWheelState } from '../../../static/viewport_core.js';
 
 export function tasksReviewTarget(data, id, widgetId) {
     const sourceNodeId = data?.__kind__ === 'groupTitle' ? data?.sourceGroupId : id;
@@ -19,133 +19,6 @@ export function tasksCenteredViewport(viewport, canvasRect, nodeRect) {
         y: viewport.y + canvasRect.top + canvasRect.height / 2 - nodeRect.top - nodeRect.height / 2,
         zoom: viewport.zoom,
     };
-}
-
-export function nextWheelState(state, rect, point, deltaY, maxScale = 55) {
-    const mouseX = point.x - rect.left - rect.width / 2;
-    const mouseY = point.y - rect.top - rect.height / 2;
-    const oversizeFactor = Math.max(rect.width / Math.max(window.innerWidth || 1, 1), rect.height / Math.max(window.innerHeight || 1, 1), 1);
-    const zoomIntensity = Math.min(0.01 * oversizeFactor, 0.04);
-    const delta = deltaY > 0 ? 1 - zoomIntensity : 1 + zoomIntensity;
-    const scale = clampScale(state.scale * delta, maxScale);
-    const scaleFactor = scale / state.scale - 1;
-    return {
-        ...state,
-        scale,
-        translateX: state.translateX - mouseX * scaleFactor,
-        translateY: state.translateY - mouseY * scaleFactor,
-    };
-}
-
-export function bindPanZoomGestures(wrapper, state, { getTarget, applyState, maxScale = 55 }) {
-    const pointers = new Map();
-    const pointerCenter = () => {
-        const values = Array.from(pointers.values());
-        return {
-            x: values.reduce((sum, pointer) => sum + pointer.clientX, 0) / values.length,
-            y: values.reduce((sum, pointer) => sum + pointer.clientY, 0) / values.length,
-        };
-    };
-    const pointerDistance = () => {
-        const values = Array.from(pointers.values());
-        if (values.length < 2) return 0;
-        return Math.hypot(values[0].clientX - values[1].clientX, values[0].clientY - values[1].clientY);
-    };
-    const resetPinch = () => {
-        state.pinchDistance = 0;
-        state.pinchLastCenter = null;
-    };
-    const beginPanFromPointer = (pointer) => {
-        state.isPanning = true;
-        state.startX = pointer.clientX - state.translateX;
-        state.startY = pointer.clientY - state.translateY;
-        resetPinch();
-        wrapper.style.cursor = 'grabbing';
-    };
-    const beginPinch = () => {
-        state.isPanning = false;
-        state.pinchDistance = pointerDistance();
-        state.pinchLastCenter = pointerCenter();
-        wrapper.style.cursor = 'grabbing';
-    };
-
-    wrapper.addEventListener('wheel', (event) => {
-        event.preventDefault();
-        const target = getTarget();
-        if (!target) return;
-        Object.assign(state, nextWheelState(state, target.getBoundingClientRect(), { x: event.clientX, y: event.clientY }, event.deltaY, maxScale));
-        applyState();
-    }, { passive: false });
-
-    wrapper.addEventListener('pointerdown', (event) => {
-        if (event.pointerType === 'mouse' && event.button !== 0) return;
-        pointers.set(event.pointerId, { clientX: event.clientX, clientY: event.clientY });
-        try {
-            wrapper.setPointerCapture(event.pointerId);
-        } catch {}
-        if (pointers.size >= 2) beginPinch();
-        else beginPanFromPointer({ clientX: event.clientX, clientY: event.clientY });
-        event.preventDefault();
-    });
-
-    wrapper.addEventListener('pointermove', (event) => {
-        if (!pointers.has(event.pointerId)) return;
-        pointers.set(event.pointerId, { clientX: event.clientX, clientY: event.clientY });
-        if (pointers.size >= 2) {
-            const target = getTarget();
-            if (!target) return;
-            const distance = pointerDistance();
-            const center = pointerCenter();
-            if (!state.pinchDistance || !state.pinchLastCenter) {
-                beginPinch();
-                return;
-            }
-            const rect = target.getBoundingClientRect();
-            const centerX = center.x - rect.left - rect.width / 2;
-            const centerY = center.y - rect.top - rect.height / 2;
-            const newScale = clampScale(state.scale * (distance / Math.max(state.pinchDistance, 1)), maxScale);
-            const scaleFactor = newScale / state.scale - 1;
-            state.translateX += center.x - state.pinchLastCenter.x;
-            state.translateY += center.y - state.pinchLastCenter.y;
-            state.translateX -= centerX * scaleFactor;
-            state.translateY -= centerY * scaleFactor;
-            state.scale = newScale;
-            state.pinchDistance = distance;
-            state.pinchLastCenter = center;
-            applyState();
-            event.preventDefault();
-            return;
-        }
-        if (!state.isPanning) return;
-        state.translateX = event.clientX - state.startX;
-        state.translateY = event.clientY - state.startY;
-        applyState();
-        event.preventDefault();
-    });
-
-    const stopPointer = (event) => {
-        pointers.delete(event.pointerId);
-        try {
-            wrapper.releasePointerCapture(event.pointerId);
-        } catch {}
-        if (pointers.size >= 2) {
-            beginPinch();
-            return;
-        }
-        if (pointers.size === 1) {
-            beginPanFromPointer(Array.from(pointers.values())[0]);
-            return;
-        }
-        state.isPanning = false;
-        resetPinch();
-        wrapper.style.cursor = 'grab';
-    };
-
-    wrapper.addEventListener('pointerup', stopPointer);
-    wrapper.addEventListener('pointercancel', stopPointer);
-    wrapper.addEventListener('pointerleave', (event) => {
-        if (state.isPanning || pointers.has(event.pointerId)) stopPointer(event);
-    });
 }
 
 export function tasksGraphDynamicMinZoom(nodes, viewportRect, options = {}) {
@@ -220,10 +93,7 @@ export function sizeTaskNode(label, kind = 'task', widthOverride = null, options
 }
 
 export function isTasksGraphNodeSelectable(kind, isExpanded = false) {
-    if (kind === 'task') return true;
-    if (kind === 'group') return true;
-    if (kind === 'groupTitle') return true;
-    return false;
+    return tasksGraphNodeHitArea(kind, isExpanded) !== 'passive';
 }
 
 export function tasksGraphNodeAllowsHover(node, allowDimmed = false) {
@@ -234,6 +104,7 @@ export function tasksGraphNodeHitArea(kind, isExpanded = false) {
     if (kind === 'task') return 'selectable';
     if (kind === 'groupTitle') return 'control';
     if (kind === 'group') return 'selectable';
+    if (kind === 'sequenceFragment' || kind === 'sequenceActivation') return 'selectable';
     return 'passive';
 }
 
@@ -254,7 +125,7 @@ export function tasksExpandedRootRect(baseRect, expandedSize = {}) {
     };
 }
 
-function tasksGraphNodeAbsoluteRect(node, byId) {
+export function tasksGraphNodeAbsoluteRect(node, byId) {
     let x = Number(node?.position?.x) || 0;
     let y = Number(node?.position?.y) || 0;
     let parent = node?.parentId ? byId[node.parentId] : null;
@@ -263,7 +134,9 @@ function tasksGraphNodeAbsoluteRect(node, byId) {
         y += Number(parent?.position?.y) || 0;
         parent = parent?.parentId ? byId[parent.parentId] : null;
     }
-    return { left: x, right: x + (Number(node?.style?.width ?? node?.width) || 0), top: y, bottom: y + (Number(node?.style?.height ?? node?.height) || 0) };
+    const width = Number(node?.style?.width ?? node?.width) || 0;
+    const height = Number(node?.style?.height ?? node?.height) || 0;
+    return { x, y, width, height, left: x, right: x + width, top: y, bottom: y + height };
 }
 
 function tasksGraphSelectionNodeRect(node, byId) {
@@ -1078,4 +951,27 @@ export function tasksReuseGraphElements(prev, next) {
         return element;
     });
     return unchanged ? prev : merged;
+}
+
+// Hit bounds restrict interaction without changing paint or selection bounds.
+export function tasksGraphNodeHitRect(node, byId) {
+    const rect = tasksGraphNodeAbsoluteRect(node, byId);
+    const hit = node.data?.__hit_rect__;
+    return hit ? { x: rect.x + (hit.dx || 0), y: rect.y + (hit.dy || 0), width: hit.width, height: hit.height } : rect;
+}
+
+// Authored drawing order belongs to layout, including during focus and selection.
+// The node renderer owns its fill; the shared overlay owns its focus outline.
+export function tasksGraphPaint(node) {
+    const zIndex = node.data?.__z__;
+    if (!Number.isFinite(zIndex)) return node;
+    return { ...node, zIndex, style: { ...node.style, zIndex,
+        ...(!node.source && !node.target ? { background: 'transparent', boxShadow: 'none' } : {}),
+    } };
+}
+
+// One closed path paints the corner, including its diagonal border.
+export function tasksGraphCornerPath(width, height, radius = 6) {
+    const cut = height / 2;
+    return `M ${radius} 0 H ${width} V ${height - cut} L ${width - cut} ${height} H 0 V ${radius} Q 0 0 ${radius} 0 Z`;
 }

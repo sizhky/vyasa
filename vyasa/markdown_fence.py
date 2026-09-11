@@ -45,7 +45,9 @@ def slug_for_resolved_path(resolved, current_path, strip_suffix=True):
     try:
         rel = resolved.relative_to(get_root_folder().resolve())
     except ValueError:
-        return None
+        # A file outside the root folder is still addressable when it sits
+        # under a mount or an unlisted root, such as the `code_source` cache.
+        return content_slug_for_path(resolved, strip_suffix=strip_suffix)
     return rel.with_suffix("").as_posix() if strip_suffix else rel.as_posix()
 
 
@@ -145,13 +147,24 @@ def resolve_items_inline_links(value: object, current_path: object, code_source:
 
 @lru_cache(maxsize=256)
 def _pack_code_source(schema_path: str, stamp: float) -> str:
-    """Read `code_source` from one `kg.schema`, cached by the file's mtime."""
+    """Read `code_source` from one `kg.schema`, cached by the file's mtime.
+
+    A remote value becomes the absolute path of its shallow clone. Every later
+    step then sees a folder, and `resolve_items_node_href` needs no remote case
+    because an absolute part replaces the page directory it joins onto.
+    """
+    from .code_source import ensure_shallow_clone, parse_remote_code_source
     from .extensions_builtin.tasks.items_pack import read_schema
 
     try:
-        return str(read_schema(Path(schema_path)).code_source or "").strip()
+        spec = str(read_schema(Path(schema_path)).code_source or "").strip()
     except Exception:
         return ""
+    remote = parse_remote_code_source(spec)
+    if not remote:
+        return spec
+    clone = ensure_shallow_clone(*remote)
+    return clone.as_posix() if clone else ""
 
 
 def items_code_source(model: dict[str, Any]) -> str:

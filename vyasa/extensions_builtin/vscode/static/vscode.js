@@ -31,6 +31,13 @@ export function codePathFromHref(href, baseHref, codeSuffixes) {
     return codeReferenceFromHref(href, baseHref, codeSuffixes)?.path || null;
 }
 
+export function editorReferenceFromAnchor(anchor, baseHref, codeSuffixes) {
+    if (!anchor || anchor.hasAttribute('download')) return null;
+    const suffixes = new Set(codeSuffixes);
+    if (anchor.dataset?.vyasaOpenEditor === 'true') suffixes.add('.md');
+    return codeReferenceFromHref(anchor.getAttribute('href'), baseHref, suffixes);
+}
+
 async function openCodeReference(reference) {
     const response = await fetch('/api/vscode/open', {
         method: 'POST',
@@ -49,9 +56,11 @@ if (typeof document !== 'undefined' && !window.__vyasaVSCodeBound) {
     document.addEventListener('click', (event) => {
         if (event.button !== 0) return;
         const anchor = event.target.closest?.('a[href]');
-        const reference = anchor && !anchor.hasAttribute('download')
-            ? codeReferenceFromHref(anchor.getAttribute('href'), window.location.href, configuredCodeSuffixes())
-            : null;
+        const reference = editorReferenceFromAnchor(
+            anchor,
+            window.location.href,
+            configuredCodeSuffixes(),
+        );
         if (!reference) return;
         event.preventDefault();
         event.stopImmediatePropagation();

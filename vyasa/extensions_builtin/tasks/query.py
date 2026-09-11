@@ -216,13 +216,30 @@ class KnowledgeGraphQuery:
     def _snapshot(self, context_id: str) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
         graph = self._graph(context_id)
         nodes = {str(node["id"]): node for node in self._nodes(graph)}
-        edges = {}
+        edges: dict[tuple[Any, ...], dict[str, Any]] = {}
+        seen_ids: set[str] = set()
         for edge in self._edges(graph):
             edge_id = str(edge.get("id") or "")
-            if edge_id in edges:
+            if edge_id in seen_ids:
                 raise QueryError(f"Duplicate KG edge id: {edge_id}")
-            edges[edge_id] = {key: value for key, value in edge.items() if not key.startswith("__")}
+            seen_ids.add(edge_id)
+            body = {key: value for key, value in edge.items() if not key.startswith("__")}
+            key = self._edge_identity(body)
+            while key in edges:
+                key = (*key, ("__nth", str(len(edges))))
+            edges[key] = body
         return nodes, edges
+
+    @staticmethod
+    def _edge_identity(edge: dict[str, Any]) -> tuple[Any, ...]:
+        """Key an edge by what it says, not by the id its context generated.
+
+        A context writes `a -> b relation` with no id, so the reader numbers the
+        rows by position. Two contexts then give one unchanged edge two ids, and
+        a diff reports it as removed and added. Every field except the id is the
+        edge's real identity.
+        """
+        return tuple(sorted((key, repr(value)) for key, value in edge.items() if key != "id"))
 
     def _diff(self, before_id: str, after_id: str) -> list[dict[str, Any]]:
         before_nodes, before_edges = self._snapshot(before_id)
@@ -248,17 +265,17 @@ class KnowledgeGraphQuery:
                         "after": after.get(field),
                     }
                 )
-        for edge_id in sorted(after_edges.keys() - before_edges.keys()):
-            edge = after_edges[edge_id]
+        for edge_key in sorted(after_edges.keys() - before_edges.keys()):
+            edge = after_edges[edge_key]
             rows.append({
-                "change": "added", "kind": "edge", "id": edge_id,
+                "change": "added", "kind": "edge", "id": edge.get("id", ""),
                 "source": edge.get("source"), "relation": edge.get("relation") or edge.get("label", ""),
                 "target": edge.get("target"),
             })
-        for edge_id in sorted(before_edges.keys() - after_edges.keys()):
-            edge = before_edges[edge_id]
+        for edge_key in sorted(before_edges.keys() - after_edges.keys()):
+            edge = before_edges[edge_key]
             rows.append({
-                "change": "removed", "kind": "edge", "id": edge_id,
+                "change": "removed", "kind": "edge", "id": edge.get("id", ""),
                 "source": edge.get("source"), "relation": edge.get("relation") or edge.get("label", ""),
                 "target": edge.get("target"),
             })

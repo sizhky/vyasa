@@ -1,31 +1,41 @@
 @node_attrs
 layer:
-  core: content-route path-resolver frontmatter-reader filesystem-backend
-  pipeline: markdown-renderer
-  surface: document-page browser-ui
+  core: content-route path-resolver frontmatter-reader filesystem-backend extension-runtime extension-boot extension-catalog extension-plan extension-app registration-guard content-tree not-found worktree-reader
+  pipeline: markdown-renderer fence-dispatch code-shell
+  extension: tasks-extension items-handler pack-loader graph-builder extension-any context-pack pack-files kg-cache
+  surface: document-page browser-ui items-widget
 
 @edge_attrs
 role:
-  call: e1 e2 e4 e8 e10
-  reply: e3 e5 e9 e11
-  branch: e6 e7
-  boundary: e12
+  call: e1 e2 e4 e6 e8 e10 e13 e15 e17 f2 f3 f5 f6 f12 f14 f16 f18 g1 g3 g5 g6 g7
+  reply: e3 e5 e7 e9 e11 e14 e16 e18 f4 f7 f9 f10 f13 f15 f17 f19 g2 g4 g8 g10 g11
+  boundary: e12 f1 f11 g9
 phase:
   request: e1
-  resolve: e2 e3
-  read: e4 e5 e6 e7
+  resolve: e2 e3 e13 e14 e15 e16
+  read: e4 e5 e6 e7 e17 e18
   render: e8 e9 e10 e11
   show: e12
+  register: f1
+  dispatch: f2 f3 f4 f12 f13
+  handle: f5 f10
+  load: f6 f7 f14 f15 f16 f17 f18 f19
+  build: f8 f9
+  emit: f11
+  catalog: g1 g2
+  select: g3 g4
+  register: g5 g11
+  claim: g6 g10
+  guard: g7 g8
+  write: g9
 step:
   s1: e1
-  s2: e2
-  s3: e3
-  s4: e4
-  s5: e5
-  s6: e6
-  s7: e7
-  s8: e8
-  s9: e9
-  s10: e10
-  s11: e11
-  s12: e12
+  s2: e13 e14
+  s3: e2 e3
+  s4: e15 e16
+  s5: e4 e5
+  s6: e6 e7
+  s7: e17 e18
+  s8: e8 e9
+  s9: e10 e11
+  s10: e12

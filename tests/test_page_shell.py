@@ -225,6 +225,8 @@ def test_bookmark_js_uses_tree_row_shell_contract():
     script = Path("vyasa/extensions_builtin/bookmarks/static/bookmarks.js").read_text(encoding="utf-8")
 
     assert "vyasa-tree-row-shell post-link vyasa-bookmark-link" in script
+    assert "vyasa-bookmark-row vyasa-action-row flex items-center gap-1 w-max" in script
+    assert "window.history.pushState(null, '', href);" in script
     assert "py-1 px-2" not in script
 
 

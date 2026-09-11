@@ -1,3 +1,15 @@
+import { logTasksDebug, logTasksDebugVerbose, rectSummary } from './tasks_diagnostics.js';
+import {
+    layoutDisconnectedTaskNodes, packTaskChildRects, resolveTasksNodeImage, sizeTaskNode,
+    tasksExpandedRootRect,
+} from './tasks_graph_core.js';
+import {
+    TASKS_LAYOUT_ERROR_MODE, appendProjectedEdge, buildGanttTasksGraph, buildLayoutErrorGraph,
+    buildTasksGroupedState, buildTasksUngroupedState, buildVisibleTasksGraph, reduceTransitiveEdges,
+    selectTasksProjectionState, tasksGroupByPrefsDifferFromSchema, tasksModelNodeLabels, tasksProjectionById,
+    tasksProjectionLayout, tasksReferenceEdges,
+} from './tasks_graph_model.js';
+
 // Fixed layouts. A layout places every node itself and skips ELK entirely.
 //
 // Each layout owns its own keys and validates them. There is deliberately no
@@ -11,7 +23,6 @@
 // working on the logical node. The matrix layout relies on this.
 
 // Relative, so the same specifier resolves in the browser and under node --test.
-import { sizeTaskNode } from './tasks_graph_core.js';
 
 // A fixed layout still has to make room for the words. Rather than guess, ask
 // the same sizer the ordinary graph uses, pinning the width the layout owns and
@@ -27,6 +38,154 @@ const TASKS_SEQUENCE_LEFT = 148;
 const TASKS_SEQUENCE_LIFELINE_TOP = 40;
 const TASKS_SEQUENCE_FIRST_ROW = 136;
 const TASKS_SEQUENCE_ROW_HEIGHT = 46;
+// The bar is as wide as the lane, so an arrow leaving or arriving at that lane
+// lands on the bar's own edge. A hairline bar down the middle touched no arrow
+// and read as an artifact rather than as an open frame.
+// An activation bar opened while another is still open on the same lane insets
+// by this much per side, which is the only way to nest without leaving the lane.
+const TASKS_SEQUENCE_ACTIVATION_INSET = 7;
+// An activation bar is UML's ExecutionSpecification: the stretch of a lifeline
+// during which one call is still running. It clears its opening arrow by this
+// many pixels, so that arrow reads as a row inside the bar rather than as its
+// border. Flush on the row, the arrow and the border were one line.
+const TASKS_SEQUENCE_ACTIVATION_PAD = 9;
+// The reply that closes a bar keeps a row of its own so the bar has height, but
+// it draws no line: its label sits back beside its call and the bar's own bottom
+// border is where the reply leaves.
+//
+// So this gap IS the bar's bottom padding, measured from the last arrow the
+// reader can actually see. It has to equal the top pad, or the bar looks
+// bottom-heavy against an edge that is not drawn.
+const TASKS_SEQUENCE_REPLY_GAP = TASKS_SEQUENCE_ACTIVATION_PAD;
+// An activation bar sits above the lifeline column and below the arrows: the
+// sequence layout draws edges over nodes, so nothing is hidden.
+const TASKS_SEQUENCE_ACTIVATION_Z = 1001;
+
+// A combined fragment is UML's box for anything that is not one straight run of
+// rows: `alt` a branch, `opt` a single guarded branch, `loop`, `par`, `break`,
+// and `ref` a pointer at another interaction drawn elsewhere.
+//
+// The operator is the text before the colon, so `fragment=alt:cache` reads as
+// the alt named cache, and two alts written back to back stay two boxes instead
+// of merging. A box covers a CONTIGUOUS run of rows, which is the same rule the
+// phase bands already use, so no row ever has to name where a box ends.
+//
+// Nesting is a `/` path written outer first, `alt:auth/loop:retry`. Depth insets
+// the box on all four sides, the same trick the activation bars use, so an inner
+// frame is visibly inside its parent rather than merely overlapping it.
+const TASKS_SEQUENCE_FRAGMENT_PAD = 22;
+const TASKS_SEQUENCE_FRAGMENT_INSET = 9;
+// Every box gets a header line of its own above its first arrow, and a row that
+// opens three boxes gets three of them. Sharing the half-row above an arrow was
+// what made a stack of one-row fragments read as a pile of chips: the tag, the
+// guard and the arrow were all fighting for the same 23 pixels.
+const TASKS_SEQUENCE_FRAGMENT_HEADER = 22;
+// Over the activation bars. The box is transparent, so only its border and its
+// corner tag land on a bar, and that tag is the one thing that must stay
+// readable: a bar drawn over it hid which operator the box was.
+const TASKS_SEQUENCE_FRAGMENT_Z = 1002;
+
+// Where the boxes go, worked out BEFORE the rows are placed, because a box needs
+// vertical room that the rows themselves have to make.
+//
+// A box covers a contiguous run of rows. It opens when its path appears and
+// closes when that run ends, so no row states where a box stops. Nesting is a
+// `/` path written outer first, and a header line is claimed per level, ordered
+// outermost first, so a parent's tag always sits above its child's.
+// What each operator promises. A fragment has no node in the pack to hang a
+// description on, so the card states the rule the operator carries in UML rather
+// than leaving the reader to recognise a three-letter tag.
+const TASKS_SEQUENCE_FRAGMENT_MEANING = {
+    alt: 'Exactly one operand runs. The guards decide which, and an unguarded operand is the else.',
+    opt: 'One operand that runs only when its guard holds. Nothing runs otherwise.',
+    loop: 'The rows inside repeat while the guard holds.',
+    par: 'The operands run concurrently. Order between them is not stated.',
+    break: 'The rows inside run instead of the rest of the enclosing interaction, which is abandoned.',
+    ref: 'A pointer at an interaction told in full somewhere else.',
+    critical: 'The rows inside run without interleaving.',
+    neg: 'The rows inside describe a trace that must not happen.',
+    assert: 'The rows inside are the only valid continuation.',
+};
+
+// The corner tag is the only part of a fragment the pointer can hit. Its width
+// has to be known here as well as in the renderer, because the hit rect is
+// geometry and the layout owns geometry.
+const TASKS_SEQUENCE_FRAGMENT_TAG_HEIGHT = 20;
+function sequenceFragmentTagWidth(operator) {
+    return 22 + String(operator || '').length * 7;
+}
+
+function planSequenceFragments(rowCount, rowFragment, rowOperand, rowLanes, rowOperandNote = []) {
+    const boxes = [];
+    const headerRows = Array.from({ length: rowCount }, () => []);
+    let open = [];
+    for (let row = 0; row < rowCount; row += 1) {
+        const path = tasksSequenceFragmentPath(rowFragment[row]);
+        let shared = 0;
+        while (shared < open.length && shared < path.length && open[shared].key === path[shared].key) shared += 1;
+        open = open.slice(0, shared);
+        for (let depth = shared; depth < path.length; depth += 1) {
+            const box = { ...path[depth], depth, top: row, bottom: row, lanes: [], operands: [], header: null };
+            box.header = { box, row, guard: '' };
+            boxes.push(box);
+            open.push(box);
+            headerRows[row].push(box.header);
+        }
+        // A guard that changes inside one box starts the next operand. An `alt`
+        // with no guards is still one operand, so the box draws no separator
+        // rather than a line per row.
+        //
+        // The guard belongs to the OUTERMOST box that carries it. A nested box
+        // sits inside ONE operand of its parent, so repeating the text there
+        // printed the same `[else]` once per level.
+        const guard = rowOperand[row];
+        let claimed = false;
+        for (const box of open) {
+            box.bottom = row;
+            box.lanes.push(...rowLanes[row]);
+            const owns = Boolean(guard) && !claimed;
+            const last = box.operands[box.operands.length - 1];
+            if (last && last.guard === (owns ? guard : '')) {
+                // An operand runs over several rows and the note may be written
+                // on any of them, so the first one that carries it wins.
+                if (owns && !last.note) last.note = rowOperandNote[row] || '';
+                claimed = claimed || owns;
+                continue;
+            }
+            const operand = { guard: owns ? guard : '', note: owns ? (rowOperandNote[row] || '') : '', row, header: null };
+            box.operands.push(operand);
+            claimed = claimed || owns;
+            if (!owns) continue;
+            if (box.top === row) {
+                // The first operand shares the line the box opened on.
+                box.header.guard = guard;
+                operand.header = box.header;
+            } else {
+                operand.header = { box, row, guard };
+                headerRows[row].push(operand.header);
+            }
+        }
+    }
+    // Outermost first, so a parent header never lands under its own child's.
+    headerRows.forEach((list) => {
+        list.sort((left, right) => left.box.depth - right.box.depth);
+        list.forEach((header, index) => { header.slot = index; });
+    });
+    return { boxes, headerCounts: headerRows.map((list) => list.length) };
+}
+
+export function tasksSequenceFragmentPath(value) {
+    return String(value || '')
+        .split('/')
+        .map((segment) => segment.trim())
+        .filter(Boolean)
+        .map((segment) => {
+            const at = segment.indexOf(':');
+            const operator = (at < 0 ? segment : segment.slice(0, at)).trim().toLowerCase();
+            const name = at < 0 ? '' : segment.slice(at + 1).trim();
+            return { key: `${operator}:${name}`, operator, name };
+        });
+}
 
 const TASKS_LAYERED_BAND_PAD = 148;
 const TASKS_LAYERED_NODE_WIDTH = 168;
@@ -141,6 +300,11 @@ function requireLayoutAttr(layoutId, view, key) {
 // written in the view's edge source -- the pack states no step number, so
 // declaration order is the only ordering the author gives.
 export function buildSequenceTasksGraph(model, projection = {}) {
+    // Lane order is otherwise the order nodes are written in the pack, which is
+    // one global fact that two stories can need differently: a node introduced
+    // by an earlier story lands far left in a later one, and every arrow to it
+    // then runs backwards. A view states its own order instead.
+    const authoredLanes = layoutAttrList(projection.sequence_lanes);
     const tasks = model.tasks || [];
     const byId = Object.fromEntries(tasks.map((task) => [task.id, task]));
     const taskOrder = Object.fromEntries(tasks.map((task, index) => [task.id, index]));
@@ -151,6 +315,22 @@ export function buildSequenceTasksGraph(model, projection = {}) {
     const roleAttr = String(projection.sequence_role || '').trim();
     const phaseAttr = String(projection.sequence_phase || '').trim();
     const pairAttr = String(projection.pair_by || model.pair_by || '').trim();
+    // UML message kinds. Declaring the attribute is the opt-in: a view that names
+    // one asks for UML arrowheads, where a reply is dashed with an open head and
+    // `async` gets an open head on a solid line. A view that names none keeps the
+    // double harpoon every existing pack was authored against.
+    const messageAttr = String(projection.sequence_message || '').trim();
+    const fragmentAttr = String(projection.sequence_fragment || '').trim();
+    const operandAttr = String(projection.sequence_operand || '').trim();
+    // A guard is short by design -- it has to fit beside the corner tag. The
+    // sentence saying what this branch actually does in the system has nowhere
+    // to go on the box, so it is authored separately and read on the card.
+    const operandNoteAttr = String(projection.sequence_operand_note || '').trim();
+    // UML carries call nesting in the activation bar, not in the step number.
+    // Opt-in, because a bar needs the reply placed below whatever the call
+    // opened, and a pair drawn on one row is the compact reading every existing
+    // view was authored for.
+    const activation = ['1', 'true', 'yes', 'on'].includes(String(projection.sequence_activation || '').trim().toLowerCase());
 
     const stageOf = (nodeId) => {
         let group = byId[nodeId]?.group_id || null;
@@ -161,7 +341,20 @@ export function buildSequenceTasksGraph(model, projection = {}) {
     const rows = (model.dependency_edges || []).filter((edge) => byId[edge.source] && byId[edge.target]);
     // One lane per participant, in authored order: stage first, then the order
     // the nodes are written inside that stage.
-    const lanes = Array.from(new Set(rows.flatMap((edge) => [edge.source, edge.target]))).sort((left, right) => {
+    const participants = Array.from(new Set(rows.flatMap((edge) => [edge.source, edge.target])));
+    const strayLanes = authoredLanes.filter((id) => !participants.includes(id));
+    if (strayLanes.length) {
+        throw new Error(`layout=sequence has no lane for sequence_lanes=${strayLanes.join(', ')}`);
+    }
+    // An authored lane keeps its stated position; anything unnamed follows in
+    // the order it was already in, so naming one lane does not reorder the rest.
+    const authoredAt = new Map(authoredLanes.map((id, index) => [id, index]));
+    const lanes = participants.sort((left, right) => {
+        const leftAt = authoredAt.get(left);
+        const rightAt = authoredAt.get(right);
+        if (leftAt !== undefined || rightAt !== undefined) {
+            return (leftAt ?? Number.MAX_SAFE_INTEGER) - (rightAt ?? Number.MAX_SAFE_INTEGER);
+        }
         const leftStage = groupOrder[stageOf(left)] ?? Number.MAX_SAFE_INTEGER;
         const rightStage = groupOrder[stageOf(right)] ?? Number.MAX_SAFE_INTEGER;
         return (leftStage - rightStage) || ((taskOrder[left] || 0) - (taskOrder[right] || 0));
@@ -174,13 +367,26 @@ export function buildSequenceTasksGraph(model, projection = {}) {
     const rowOf = [];
     const isReply = [];
     const rowOfEdgeId = new Map();
+    const replyRowOfCallId = new Map();
+    // Both halves of a pair whose reply left the call's row. They stop hugging,
+    // because a lift only reads as one exchange when the two lines are adjacent.
+    const detached = new Set();
     let rowCount = 0;
     rows.forEach((edge, index) => {
         const half = halves.get(edge.id);
         const callRow = half?.half === 'reply' ? rowOfEdgeId.get(half.mate) : undefined;
         if (callRow !== undefined) {
-            rowOf[index] = callRow;
             isReply[index] = true;
+            // A reply that closes over nested rows has to sit below them, or the
+            // bar for the still-open call would have no height to occupy.
+            const nested = activation && rowCount - 1 > callRow;
+            rowOf[index] = nested ? rowCount : callRow;
+            if (nested) {
+                rowCount += 1;
+                detached.add(edge.id);
+                detached.add(half.mate);
+            }
+            replyRowOfCallId.set(half.mate, rowOf[index]);
             return;
         }
         rowOf[index] = rowCount;
@@ -189,14 +395,59 @@ export function buildSequenceTasksGraph(model, projection = {}) {
         rowCount += 1;
     });
 
+    // A fragment is a property of the ROW, not of one arrow: everything drawn on
+    // that row is inside the same branch or loop. Collect the row's value from
+    // whichever half wrote one, so an author can put `fragment=` on the call and
+    // leave the reply bare.
+    const rowFragment = Array.from({ length: rowCount }, () => '');
+    const rowOperand = Array.from({ length: rowCount }, () => '');
+    const rowOperandNote = Array.from({ length: rowCount }, () => '');
+    const rowLanes = Array.from({ length: rowCount }, () => []);
+    rows.forEach((edge, index) => {
+        const row = rowOf[index];
+        if (fragmentAttr && !rowFragment[row]) rowFragment[row] = String(edge[fragmentAttr] ?? '').trim();
+        if (operandAttr && !rowOperand[row]) rowOperand[row] = String(edge[operandAttr] ?? '').trim();
+        if (operandNoteAttr && !rowOperandNote[row]) rowOperandNote[row] = String(edge[operandNoteAttr] ?? '').trim();
+        rowLanes[row].push(laneIndex[edge.source] ?? 0, laneIndex[edge.target] ?? 0);
+    });
+    const plan = fragmentAttr ? planSequenceFragments(rowCount, rowFragment, rowOperand, rowLanes, rowOperandNote) : null;
+    const headerCounts = plan ? plan.headerCounts : Array.from({ length: rowCount }, () => 0);
+
     const bodyTop = TASKS_SEQUENCE_LIFELINE_TOP;
     const capWidth = TASKS_SEQUENCE_LANE_WIDTH - TASKS_SEQUENCE_LANE_GAP;
     // The first row starts below the deepest cap, so a three-line participant
     // name never sits on top of step one.
     const capHeight = Math.max(0, ...lanes.map((id) => labelHeight(byId[id].label || id, capWidth, 'groupTitle')));
     const firstRow = Math.max(TASKS_SEQUENCE_FIRST_ROW, bodyTop + capHeight + 34);
-    const bodyHeight = (firstRow - bodyTop) + (rowCount + 1) * TASKS_SEQUENCE_ROW_HEIGHT;
-    const rowY = (index) => firstRow + index * TASKS_SEQUENCE_ROW_HEIGHT;
+    // Rows are no longer evenly spaced: one that opens a fragment carries that
+    // box's header band on top of its own height. Everything downstream reads a
+    // row's y through rowY, so the table is the only thing that had to change.
+    // A row carrying only detached replies holds no text of its own, so it takes
+    // a gap rather than a row.
+    const rowBare = Array.from({ length: rowCount }, () => true);
+    rows.forEach((edge, index) => {
+        if (!(isReply[index] && detached.has(edge.id))) rowBare[rowOf[index]] = false;
+    });
+    const bandTops = [];
+    const arrowYs = [];
+    let cursor = firstRow - TASKS_SEQUENCE_ROW_HEIGHT / 2;
+    for (let row = 0; row < rowCount; row += 1) {
+        const header = headerCounts[row] * TASKS_SEQUENCE_FRAGMENT_HEADER;
+        if (rowBare[row] && row > 0 && !header) {
+            arrowYs.push(arrowYs[row - 1] + TASKS_SEQUENCE_REPLY_GAP);
+            bandTops.push(arrowYs[row] - TASKS_SEQUENCE_REPLY_GAP / 2);
+        } else {
+            bandTops.push(cursor);
+            arrowYs.push(cursor + header + TASKS_SEQUENCE_ROW_HEIGHT / 2);
+        }
+        cursor = arrowYs[row] + TASKS_SEQUENCE_ROW_HEIGHT / 2;
+    }
+    const rowY = (index) => arrowYs[index] ?? firstRow;
+    const bandTop = (index) => bandTops[index] ?? (firstRow - TASKS_SEQUENCE_ROW_HEIGHT / 2);
+    const slotY = (header) => bandTop(header.row) + header.slot * TASKS_SEQUENCE_FRAGMENT_HEADER;
+    const bodyHeight = rowCount
+        ? (rowY(rowCount - 1) + 2 * TASKS_SEQUENCE_ROW_HEIGHT) - bodyTop
+        : (firstRow - bodyTop) + TASKS_SEQUENCE_ROW_HEIGHT;
     const offsetPct = (index) => ((rowY(index) - bodyTop) / bodyHeight) * 100;
 
     const handles = {};
@@ -233,12 +484,28 @@ export function buildSequenceTasksGraph(model, projection = {}) {
         return {
             ...edge,
             id: `seq-${index}`,
+            __source_edge_id: edge.__source_edge_id || edge.id,
             sourceHandle,
             targetHandle,
             __sequence_step__: standing || reply ? '' : String(step),
             __sequence_standing__: standing,
             __pair_half__: half,
-            __pair_lift__: half ? TASKS_PAIR_LIFT : 0,
+            __pair_lift__: half && !detached.has(edge.id) ? TASKS_PAIR_LIFT : 0,
+            // A detached reply keeps its LINE below the rows its frame contains,
+            // because the frame needs that height. Its TEXT belongs beside the
+            // call it answers: left on its own line, the label sat between two
+            // rows and read as belonging to neither of them.
+            // The frame's own bottom border is where the reply leaves, which is
+            // what UML draws. A second line under it stated the same fact twice,
+            // and carried no words of its own to justify the row.
+            __sequence_line_off__: half === 'reply' && detached.has(edge.id),
+            __sequence_label_dy__: half === 'reply' && detached.has(edge.id)
+                ? rowY(rowOfEdgeId.get(halves.get(edge.id).mate) ?? row) - rowY(row)
+                : 0,
+            __sequence_uml__: Boolean(messageAttr),
+            // A reply is already known from the pair, so the attribute only has
+            // to separate a blocking call from a fire-and-forget one.
+            __sequence_message__: messageAttr ? String(edge[messageAttr] ?? '').trim().toLowerCase() : '',
         };
     });
 
@@ -271,6 +538,174 @@ export function buildSequenceTasksGraph(model, projection = {}) {
             height: (band.bottom - band.top) + TASKS_SEQUENCE_ROW_HEIGHT,
         });
     });
+    // The steps a run of rows covers. A fragment card names the steps inside its
+    // box and a bar card names the steps its frame stays open for: one fact, two
+    // readers, so it is derived once here rather than twice below.
+    const stepsByRow = Array.from({ length: rowCount }, () => []);
+    rows.forEach((edge, index) => {
+        const step = edges[index].__sequence_step__;
+        if (step) stepsByRow[rowOf[index]].push(step);
+    });
+    const stepSpan = (fromRow, toRow) => {
+        const covered = stepsByRow.slice(fromRow, toRow + 1).flat();
+        if (!covered.length) return '';
+        const first = covered[0];
+        const last = covered[covered.length - 1];
+        return first === last ? first : `${first} to ${last}`;
+    };
+    // A card names a participant the way the reader sees it on the lane cap, not
+    // by the id the pack happens to use.
+    const laneLabel = (id) => byId[id]?.label || id;
+    // What an arrow says on the page. `edge_label_from` is the pack's own choice
+    // of which attribute is the label, so a card must not hard-code `note`.
+    const labelAttr = String(projection.edge_label_from || model.edge_label_from || '').trim();
+    const edgeById = new Map(rows.map((edge) => [edge.id, edge]));
+    const edgeNote = (edgeId) => {
+        const edge = edgeById.get(edgeId);
+        return (labelAttr && edge ? String(edge[labelAttr] ?? '').trim() : '') || edgeId;
+    };
+    // Chrome is never an edge endpoint, so a bar and a box cannot be found by the
+    // usual source/target test. Each names the drawn edges it stands for, and the
+    // hover pass and the edge-preview key read that list instead.
+    const drawnIdOf = new Map(rows.map((edge, index) => [edge.id, edges[index].id]));
+    const drawnIdsInRows = (fromRow, toRow, laneId = '') => rows
+        .filter((edge, index) => rowOf[index] >= fromRow && rowOf[index] <= toRow
+            && (!laneId || edge.source === laneId || edge.target === laneId))
+        .map((edge) => drawnIdOf.get(edge.id))
+        .filter(Boolean);
+    if (plan) {
+        plan.boxes.forEach((box, index) => {
+            // The box covers the lanes its own rows touch. Spanning every lane
+            // would claim participants the branch never speaks to.
+            const minLane = Math.min(...box.lanes);
+            const maxLane = Math.max(...box.lanes);
+            const pad = Math.max(6, TASKS_SEQUENCE_FRAGMENT_PAD - box.depth * TASKS_SEQUENCE_FRAGMENT_INSET);
+            const left = TASKS_SEQUENCE_LEFT + minLane * TASKS_SEQUENCE_LANE_WIDTH - pad;
+            const right = TASKS_SEQUENCE_LEFT + maxLane * TASKS_SEQUENCE_LANE_WIDTH + capWidth + pad;
+            // The top is the box's own header line. The bottom clears its last
+            // arrow, tightening by depth so a child that ends on the same row as
+            // its parent still closes inside it.
+            const top = slotY(box.header);
+            const bottom = rowY(box.bottom) + Math.max(10, (TASKS_SEQUENCE_ROW_HEIGHT / 2) - box.depth * 5);
+            // One card row per operand, because the card collapses newlines and a
+            // joined string would run two branches into one paragraph. The guard
+            // leads, then the sentence saying what that branch does here.
+            const guarded = box.operands.filter((operand) => operand.guard);
+            const operandRows = Object.fromEntries(guarded.map((operand, position) => [
+                `operand_${position + 1}`,
+                operand.note ? `${operand.guard} — ${operand.note}` : operand.guard,
+            ]));
+            const steps = stepSpan(box.top, box.bottom);
+            // The participants the box claims. The border alone says which lanes
+            // it spans; the card says which ones it is actually about.
+            const covers = lanes.slice(minLane, maxLane + 1).map(laneLabel).join(', ');
+            nodes.push({
+                id: `__seq_fragment_${index}`,
+                // The name after the colon, which is what `ref` and a named loop
+                // carry. It is not drawn on the box: `fragment=` sits on every
+                // arrow inside, so the hover and click cards already show it.
+                label: box.name ? `${box.operator} · ${box.name}` : box.operator,
+                __kind__: 'sequenceFragment',
+                __sequence_fragment_op__: box.operator,
+                __sequence_fragment_depth__: box.depth,
+                // Plain keys, so the same card that shows a node's attributes
+                // shows a fragment's without knowing what a fragment is.
+                operator: box.operator,
+                ...(box.name ? { name: box.name } : {}),
+                ...operandRows,
+                ...(steps ? { steps } : {}),
+                ...(covers ? { covers } : {}),
+                description: TASKS_SEQUENCE_FRAGMENT_MEANING[box.operator]
+                    || 'A combined fragment: the rows inside it are read as one unit.',
+                // Only the corner tag answers the pointer. The box covers whole
+                // rows, so a full-area hit rect would shadow every lifeline and
+                // arrow it is drawn around.
+                __hit_rect__: {
+                    dx: 0,
+                    dy: 0,
+                    width: sequenceFragmentTagWidth(box.operator),
+                    height: TASKS_SEQUENCE_FRAGMENT_TAG_HEIGHT,
+                },
+                // Offsets from the box's own top, so the renderer places a rule
+                // and a guard without knowing which row either came from.
+                __edge_ids__: drawnIdsInRows(box.top, box.bottom),
+                __sequence_operands__: box.operands.map((operand, position) => ({
+                    guard: operand.guard,
+                    // The first operand needs no rule: the box's top edge is
+                    // already its boundary.
+                    rule: position === 0 ? -1 : bandTop(operand.row) - top,
+                    // An operand with no header of its own carries no guard to
+                    // draw, but never let it resolve above the box it belongs to.
+                    top: Math.max(0, (operand.header ? slotY(operand.header) : bandTop(operand.row)) - top),
+                })),
+                __fixed_size__: true,
+                __z__: TASKS_SEQUENCE_FRAGMENT_Z + box.depth,
+                position: { x: left, y: top },
+                width: right - left,
+                height: bottom - top,
+            });
+        });
+    }
+    // An activation bar is one call's lifetime on the lane that is executing: it
+    // opens on the row the call arrives and closes on the row its reply leaves.
+    // Depth shifts a bar that opens while another is still open on the same lane,
+    // so recursion stays two bars rather than one.
+    if (activation) {
+        const openByLane = {};
+        rows.forEach((edge, index) => {
+            if (isReply[index] || halves.get(edge.id)?.half !== 'call') return;
+            const replyRow = replyRowOfCallId.get(edge.id);
+            if (replyRow === undefined || replyRow <= rowOf[index]) return;
+            const open = openByLane[edge.target] || [];
+            const depth = open.filter((bar) => bar.bottom >= rowOf[index]).length;
+            const bar = { top: rowOf[index], bottom: replyRow, depth };
+            openByLane[edge.target] = [...open, bar];
+            const laneWidth = TASKS_SEQUENCE_LANE_WIDTH - TASKS_SEQUENCE_LANE_GAP;
+            const laneX = TASKS_SEQUENCE_LEFT + (laneIndex[edge.target] ?? 0) * TASKS_SEQUENCE_LANE_WIDTH;
+            const inset = Math.min(bar.depth * TASKS_SEQUENCE_ACTIVATION_INSET, (laneWidth - 12) / 2);
+            const width = laneWidth - inset * 2;
+            // The top clears the opening call, so that arrow reads as a row inside
+            // the frame rather than as its border. The bottom is FLUSH with the
+            // closing reply, which is where UML draws a return leaving an
+            // execution. That line carries no label of its own, so nothing is lost
+            // to the border, and the frame stops at the last thing it contains.
+            const top = rowY(bar.top) - TASKS_SEQUENCE_ACTIVATION_PAD;
+            const height = rowY(bar.bottom) - top;
+            nodes.push({
+                id: `__seq_activation_${index}`,
+                // The step the frame opens on. Its closing reply carries no
+                // number of its own, so without this the bottom edge reads as
+                // nothing and the height says only "somewhere below".
+                label: edges[index].__sequence_step__ || '',
+                __kind__: 'sequenceActivation',
+                // The renderer takes the executing lane's own colour from here,
+                // so the frame reads as belonging to that lifeline.
+                __sequence_lane__: edge.target,
+                // What the two edges SAY, not what they are called. An id names
+                // nothing to a reader, and the pack already states which attribute
+                // is an arrow's label.
+                // Every edge this lane touches while the frame is open: the call
+                // that opened it and the reply that closes it, on one side, and
+                // every call the lane makes in between, on the other. Naming only
+                // the bounding pair lit one side of the bar and dimmed the work
+                // the frame exists to contain.
+                __edge_ids__: drawnIdsInRows(bar.top, bar.bottom, edge.target),
+                lane: laneLabel(edge.target),
+                call: edgeNote(edge.id),
+                reply: edgeNote(halves.get(edge.id).mate),
+                ...(stepSpan(rowOf[index], replyRow) ? { steps: stepSpan(rowOf[index], replyRow) } : {}),
+                description: 'An activation bar: one call still running on this lane. It opens when the call arrives and closes when the reply leaves, so every row drawn between them ran while that call was active.',
+                // The bar draws its own box, so the whole box answers the pointer.
+                // Nothing smaller would be findable: it carries no text but a step.
+                __hit_rect__: { dx: 0, dy: 0, width, height },
+                __fixed_size__: true,
+                __z__: TASKS_SEQUENCE_ACTIVATION_Z,
+                position: { x: laneX + inset, y: top },
+                width,
+                height,
+            });
+        });
+    }
     return { nodes, edges };
 }
 
@@ -526,12 +961,42 @@ export function buildMatrixTasksGraph(model, projection = {}) {
     return { nodes, edges };
 }
 
+// PROTOTYPE: Place semantic nodes on relative tracks; keep edges unchanged.
+export function buildGridTasksGraph(model, projection = {}) {
+    const colAttr = requireLayoutAttr('grid', projection, 'grid_col');
+    const rowAttr = requireLayoutAttr('grid', projection, 'grid_row');
+    const tasks = model.tasks || [];
+    const values = (key) => [...new Set(tasks.map((task) => layoutAttrOf(task, key)).filter(Boolean))];
+    const cols = layoutAttrList(projection.grid_col_order);
+    const rows = layoutAttrList(projection.grid_row_order);
+    const colValues = cols.length ? cols : values(colAttr);
+    const rowValues = rows.length ? rows : values(rowAttr);
+    const occupied = new Map();
+    const nodes = tasks.map((task) => {
+        const col = colValues.indexOf(layoutAttrOf(task, colAttr));
+        const row = rowValues.indexOf(layoutAttrOf(task, rowAttr));
+        if (col < 0 || row < 0) throw new Error(`grid cannot place node ${task.id}`);
+        const cell = `${col}:${row}`;
+        const slot = occupied.get(cell) || 0;
+        occupied.set(cell, slot + 1);
+        return {
+            ...task, __kind__: 'task', __fixed_size__: true,
+            position: { x: 80 + col * 250, y: 60 + row * 190 + slot * 70 },
+            width: 190, height: labelHeight(task.label, 190),
+        };
+    });
+    return { nodes, edges: model.dependency_edges || [] };
+}
+
 export const TASKS_LAYOUTS = {
     sequence: {
         id: 'sequence',
         label: 'Sequence',
-        keys: ['sequence_role', 'sequence_phase'],
-        chromeKinds: ['sequencePhase'],
+        keys: [
+            'sequence_role', 'sequence_phase', 'sequence_activation', 'sequence_lanes',
+            'sequence_message', 'sequence_fragment', 'sequence_operand', 'sequence_operand_note',
+        ],
+        chromeKinds: ['sequencePhase', 'sequenceActivation', 'sequenceFragment'],
         authoredHandles: true,
         edgesOverNodes: true,
         build: buildSequenceTasksGraph,
@@ -555,6 +1020,13 @@ export const TASKS_LAYOUTS = {
         edgesOverNodes: false,
         build: buildMatrixTasksGraph,
     },
+    grid: {
+        id: 'grid',
+        label: 'Grid',
+        keys: ['grid_col', 'grid_row', 'grid_col_order', 'grid_row_order'],
+        chromeKinds: [], authoredHandles: false, edgesOverNodes: false,
+        build: buildGridTasksGraph,
+    },
 };
 
 export function tasksLayoutById(layoutId) {
@@ -563,4 +1035,740 @@ export function tasksLayoutById(layoutId) {
 
 export function tasksLayoutChromeKinds() {
     return new Set(Object.values(TASKS_LAYOUTS).flatMap((layout) => layout.chromeKinds));
+}
+
+let tasksElk;
+async function layoutWithElk(graph) {
+    tasksElk ||= import('https://esm.sh/elkjs@0.10.0').then(({ default: ELK }) => new ELK());
+    return (await tasksElk).layout(graph);
+}
+
+const TASKS_GROUP_PADDING = { top: 68, right: 40, bottom: 40, left: 40 };
+
+const TASKS_ROOT_SPACING = { node: 44, layer: 96 };
+
+const TASKS_ROOT_COLLISION_GAP = 96;
+
+// A fixed layout places every node itself, so ELK never runs for it.
+export const tasksFixedLayout = (mode) => tasksLayoutById(mode);
+
+export const tasksIsFixedMode = (mode) => mode === 'gantt' || mode === TASKS_LAYOUT_ERROR_MODE || Boolean(tasksLayoutById(mode));
+
+export function readTasksDirection(value) {
+    const raw = String(value || 'TD').trim().toUpperCase();
+    if (raw === 'LR' || raw === 'RIGHT') return 'RIGHT';
+    return 'DOWN';
+}
+
+export function tasksMergeHandleLayouts(primary = {}, secondary = {}) {
+    return {
+        source: [...(primary.source || []), ...(secondary.source || [])],
+        target: [...(primary.target || []), ...(secondary.target || [])],
+    };
+}
+
+function stableTaskJitter(id, amplitudeX = 16, amplitudeY = 8) {
+    const text = String(id || '');
+    let hashA = 0;
+    let hashB = 0;
+    for (let i = 0; i < text.length; i += 1) {
+        const code = text.charCodeAt(i);
+        hashA = (hashA * 33 + code) % 1000003;
+        hashB = (hashB * 97 + code) % 1000033;
+    }
+    return {
+        x: ((hashA % 1000) / 999 - 0.5) * amplitudeX,
+        y: ((hashB % 1000) / 999 - 0.5) * amplitudeY,
+    };
+}
+
+async function layoutTasksGraph(graph, model, expanded, jitterConfig = {}, layoutConfig = {}) {
+    const nodeLabels = tasksModelNodeLabels(model);
+    const nodeMap = Object.fromEntries(graph.nodes.map((n) => [n.id, n]));
+    const layoutEdges = reduceTransitiveEdges(graph.edges || []);
+    const parentOf = {};
+    const expandedGroupSizes = {};
+    const groupPadding = layoutConfig.groupPadding || 40;
+    const groupTopPadding = (groupNode, widthOverride = null) => {
+        const width = Math.max(80, Number(widthOverride || groupNode?.width || 250) - 16);
+        const titleHeight = sizeTaskNode(groupNode?.label || groupNode?.id || '', 'groupTitle', width, {
+            hasImage: Boolean(resolveTasksNodeImage(groupNode, model)),
+            nodeLabels,
+        }).height;
+        return groupPadding + titleHeight;
+    };
+
+    for (const n of graph.nodes) {
+        if (n.__kind__ === 'group' && expanded.has(n.id)) {
+            const childGroups = (model.group_tree?.[n.id] || []).filter((cg) => graph.nodes.some((gn) => gn.id === cg));
+            const childTasks = (model.task_children?.[n.id] || []).filter((ct) => graph.nodes.some((tn) => tn.id === ct));
+            [...childGroups, ...childTasks].forEach((cid) => { parentOf[cid] = n.id; });
+        }
+    }
+
+    const buildElkNode = (nid) => {
+        const n = nodeMap[nid];
+        const node = { id: nid, width: n?.width || 250, height: n?.height || 80 };
+        const children = graph.nodes.filter((cn) => parentOf[cn.id] === nid);
+        if (children.length > 0) {
+            node.children = children.map((c) => buildElkNode(c.id));
+            node.layoutOptions = {
+                'elk.algorithm': 'layered',
+                'elk.direction': layoutConfig.elkDirection || 'DOWN',
+                'elk.spacing.nodeNode': `${layoutConfig.nodeSpacing || 72}`,
+                'elk.layered.spacing.nodeNodeBetweenLayers': `${layoutConfig.layerSpacing || 112}`,
+                'elk.padding': `[top=${groupTopPadding(n)},left=${groupPadding},bottom=${groupPadding},right=${groupPadding}]`
+            };
+        }
+        return node;
+    };
+
+    for (const gid of expanded) {
+        if (!graph.nodes.some((n) => n.id === gid && n.__kind__ === 'group')) continue;
+        const childGroups = (model.group_tree?.[gid] || []).filter((cg) => graph.nodes.some((gn) => gn.id === cg));
+        const childTasks = (model.task_children?.[gid] || []).filter((ct) => graph.nodes.some((tn) => tn.id === ct));
+        const allChildren = [...childGroups, ...childTasks];
+        if (allChildren.length === 0) continue;
+        const childGraph = {
+            id: `sub-${gid}`,
+            layoutOptions: {
+                'elk.algorithm': 'layered',
+                'elk.direction': layoutConfig.elkDirection || 'DOWN',
+                'elk.spacing.nodeNode': `${layoutConfig.nodeSpacing || 72}`,
+                'elk.layered.spacing.nodeNodeBetweenLayers': `${layoutConfig.layerSpacing || 112}`,
+                'elk.padding': `[top=${groupTopPadding(nodeMap[gid])},left=${groupPadding},bottom=${groupPadding},right=${groupPadding}]`
+            },
+            children: allChildren.map((cid) => {
+                const cn = nodeMap[cid];
+                return { id: cid, width: cn?.width || 250, height: cn?.height || 80 };
+            }),
+            edges: reduceTransitiveEdges((graph.edges || [])
+                .filter((e) => allChildren.includes(e.source) && allChildren.includes(e.target))
+            ).map((e, i) => ({ id: `e${i}`, sources: [e.source], targets: [e.target] })),
+        };
+        const subLayout = await layoutWithElk(childGraph);
+        if (subLayout.children && subLayout.children.length > 0) {
+            expandedGroupSizes[gid] = {
+                width: Math.max(subLayout.width || 0, 250),
+                height: Math.max(subLayout.height || 0, 80),
+            };
+        }
+    }
+
+    const adjustedNodes = graph.nodes.map((n) => {
+        if (expandedGroupSizes[n.id]) {
+            return { ...n, width: expandedGroupSizes[n.id].width, height: expandedGroupSizes[n.id].height };
+        }
+        return n;
+    });
+    const adjustedNodeMap = Object.fromEntries(adjustedNodes.map((n) => [n.id, n]));
+
+    const buildElkNodeAdjusted = (nid) => {
+        const n = adjustedNodeMap[nid];
+        const node = { id: nid, width: n?.width || 250, height: n?.height || 80 };
+        const children = adjustedNodes.filter((cn) => parentOf[cn.id] === nid);
+        if (children.length > 0) {
+            node.children = children.map((c) => buildElkNodeAdjusted(c.id));
+            node.layoutOptions = {
+                'elk.algorithm': 'layered',
+                'elk.direction': layoutConfig.elkDirection || 'DOWN',
+                'elk.spacing.nodeNode': `${layoutConfig.nodeSpacing || 72}`,
+                'elk.layered.spacing.nodeNodeBetweenLayers': `${layoutConfig.layerSpacing || 112}`,
+                'elk.padding': `[top=${groupTopPadding(n, n?.width)},left=${groupPadding},bottom=${groupPadding},right=${groupPadding}]`
+            };
+        }
+        return node;
+    };
+
+    const topLevel = adjustedNodes.filter((n) => !parentOf[n.id]);
+    const rootLayoutOptions = {
+        'elk.algorithm': 'layered',
+        'elk.direction': layoutConfig.elkDirection || 'DOWN',
+        'elk.spacing.nodeNode': `${layoutConfig.nodeSpacing || TASKS_ROOT_SPACING.node}`,
+        'elk.layered.spacing.nodeNodeBetweenLayers': `${layoutConfig.layerSpacing || TASKS_ROOT_SPACING.layer}`,
+    };
+    const laidOut = await layoutWithElk({
+        id: 'root',
+        layoutOptions: rootLayoutOptions,
+        children: topLevel.map((n) => buildElkNodeAdjusted(n.id)),
+        edges: layoutEdges.map((e, i) => ({ id: `e${i}`, sources: [e.source], targets: [e.target] })),
+    });
+    const absPosMap = {};
+    const relPosMap = {};
+    const collectPos = (node, offsetX = 0, offsetY = 0) => {
+        const jitter = stableTaskJitter(node.id, jitterConfig.x ?? 18, jitterConfig.y ?? 10);
+        const localX = (node.x || 0) + jitter.x;
+        const localY = (node.y || 0) + jitter.y;
+        relPosMap[node.id] = { x: localX, y: localY };
+        absPosMap[node.id] = { x: localX + offsetX, y: localY + offsetY };
+        if (node.children) {
+            node.children.forEach((c) => collectPos(c, absPosMap[node.id].x, absPosMap[node.id].y));
+        }
+    };
+    laidOut.children?.forEach((c) => collectPos(c));
+    laidOut.absoluteChildPositions = absPosMap;
+    laidOut.relativeChildPositions = relPosMap;
+    laidOut.parentOf = parentOf;
+    laidOut.expandedGroupSizes = expandedGroupSizes;
+    return laidOut;
+}
+
+export async function layoutBaseTasksGraph(graph, model, jitterConfig = {}, layoutConfig = {}) {
+    const rootGroupIds = new Set(model.group_tree?.["null"] || []);
+    const rootTaskIds = new Set(model.task_children?.["null"] || []);
+    const rootNodeIds = new Set([...rootGroupIds, ...rootTaskIds]);
+    const taskToGroup = Object.fromEntries((model.tasks || []).map((t) => [t.id, t.group_id || null]));
+    const groupParent = Object.fromEntries((model.groups || []).map((g) => [g.id, g.parent_group_id || null]));
+
+    const getRoot = (id) => {
+        let cur = id;
+        while (groupParent[cur]) {
+            cur = groupParent[cur];
+        }
+        return cur;
+    };
+
+    const rootEdges = [];
+    const seenRootEdges = new Map();
+    for (const edge of (model.dependency_edges || [])) {
+        const srcGroup = taskToGroup[edge.source] || edge.source;
+        const dstGroup = taskToGroup[edge.target] || edge.target;
+        const srcRoot = getRoot(srcGroup);
+        const dstRoot = getRoot(dstGroup);
+        if (srcRoot !== dstRoot && rootNodeIds.has(srcRoot) && rootNodeIds.has(dstRoot)) {
+            appendProjectedEdge(rootEdges, seenRootEdges, srcRoot, dstRoot, edge.label || '', edge);
+        }
+    }
+
+    const rootGraph = {
+        nodes: graph.nodes.filter((n) => rootNodeIds.has(n.id)),
+        edges: rootEdges,
+    };
+    logTasksDebugVerbose('rootGraph', {
+        nodes: rootGraph.nodes.map(n => n.id),
+        edges: rootGraph.edges,
+        edgeCount: rootGraph.edges.length,
+    });
+    const laidOut = await layoutTasksGraph(rootGraph, model, new Set(), jitterConfig, layoutConfig);
+    logTasksDebugVerbose('baseLayout', {
+        width: Math.round(laidOut.width || 0),
+        height: Math.round(laidOut.height || 0),
+        positions: Object.fromEntries(Object.entries(laidOut.absoluteChildPositions || {}).map(([id, rect]) => [id, rectSummary(rect)])),
+    });
+    const positions = {};
+    for (const node of rootGraph.nodes) {
+        const pos = laidOut.absoluteChildPositions?.[node.id] || { x: 0, y: 0 };
+        positions[node.id] = {
+            x: pos.x,
+            y: pos.y,
+            width: node.width || 250,
+            height: node.height || 80,
+        };
+    }
+    return { positions, width: laidOut.width || 0, height: laidOut.height || 0 };
+}
+
+export function buildProjectedRootTasksGraph(rawGraph, model) {
+    const rootGroupIds = new Set(model.group_tree?.["null"] || []);
+    const rootTaskIds = new Set(model.task_children?.["null"] || []);
+    const rootNodeIds = new Set([...rootGroupIds, ...rootTaskIds]);
+    const taskToGroup = Object.fromEntries((model.tasks || []).map((task) => [task.id, task.group_id || null]));
+    const groupParent = Object.fromEntries((model.groups || []).map((group) => [group.id, group.parent_group_id || null]));
+    const getRoot = (id) => {
+        let cur = taskToGroup[id] || id;
+        while (groupParent[cur]) cur = groupParent[cur];
+        return cur;
+    };
+    const edges = [];
+    const seen = new Map();
+    for (const edge of (model.dependency_edges || [])) {
+        const source = getRoot(edge.source);
+        const target = getRoot(edge.target);
+        if (source !== target && rootNodeIds.has(source) && rootNodeIds.has(target)) {
+            appendProjectedEdge(edges, seen, source, target, edge.label || '', edge);
+        }
+    }
+    return {
+        nodes: rawGraph.nodes.filter((node) => rootNodeIds.has(node.id)),
+        edges,
+    };
+}
+
+// Read the layering ELK already worked out, rather than re-deriving ranks from
+// the edges. ELK breaks cycles as part of laying out; a longest-path rank of our
+// own cuts a cycle wherever its walk happens to enter it, which can drop a group
+// far from the one edge that placed it. A band is a set of children that overlap
+// vertically, which is exactly what one ELK layer looks like.
+function tasksWaterfallBands(ids, edges, direction, positions = {}) {
+    if (direction !== 'DOWN' || !edges.length) return null;
+    const placed = ids.filter((id) => positions[id]);
+    if (!placed.length) return null;
+    const bands = [];
+    let bandBottom = -Infinity;
+    for (const id of placed.sort((left, right) => positions[left].y - positions[right].y)) {
+        const rect = positions[id];
+        if (!bands.length || rect.y >= bandBottom) {
+            bands.push([]);
+            bandBottom = -Infinity;
+        }
+        bands[bands.length - 1].push(id);
+        bandBottom = Math.max(bandBottom, rect.y + (rect.height || 0));
+    }
+    for (const band of bands) band.sort((left, right) => positions[left].x - positions[right].x);
+    return bands;
+}
+
+async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig = {}, layoutConfig = {}, useElkForGroups = true) {
+    const nodeLabels = tasksModelNodeLabels(model);
+    const groupsById = Object.fromEntries((model.groups || []).map((group) => [group.id, group]));
+    const tasksById = Object.fromEntries((model.tasks || []).map((task) => [task.id, task]));
+    const groupDirection = readTasksDirection(groupsById[groupId]?.layout_direction || groupsById[groupId]?.direction || layoutConfig.elkDirection);
+    const groupPadding = layoutConfig.groupPadding || 40;
+    const groupTitleWidth = Math.max(80, (childSizes[groupId]?.width || groupsById[groupId]?.width || 250) - 16);
+    const groupTitleHeight = sizeTaskNode(groupsById[groupId]?.label || groupId, 'groupTitle', groupTitleWidth, {
+        hasImage: Boolean(resolveTasksNodeImage(groupsById[groupId], model)),
+        nodeLabels,
+    }).height;
+    const groupPadTop = groupPadding + groupTitleHeight;
+    const groupChildren = [
+        ...(model.task_children?.[groupId] || []).map((id) => {
+            const source = tasksById[id] || {};
+            const label = source.label || id;
+            return { id, __kind__: 'task', label, ...sizeTaskNode(label, 'task', null, { hasImage: Boolean(resolveTasksNodeImage(source, model)), nodeLabels }) };
+        }),
+        ...(model.group_tree?.[groupId] || []).map((id) => {
+            const source = groupsById[id] || {};
+            const label = source.label || id;
+            return { id, __kind__: 'group', label, ...sizeTaskNode(label, 'group', null, { hasImage: Boolean(resolveTasksNodeImage(source, model)), nodeLabels }) };
+        }),
+    ].map((child) => childSizes[child.id] ? { ...child, ...childSizes[child.id] } : child);
+    if (groupChildren.length === 0) {
+        return {
+            positions: {},
+            bbox: { width: 250, height: 80 },
+        };
+    }
+    const compactGroupChildren = (positions, beforeBbox) => {
+        const order = [...groupChildren]
+            .sort((left, right) => (
+                ((positions[left.id]?.y || 0) - (positions[right.id]?.y || 0))
+                || ((positions[left.id]?.x || 0) - (positions[right.id]?.x || 0))
+                || (left.__kind__ === right.__kind__ ? 0 : (left.__kind__ === 'task' ? -1 : 1))
+            ))
+            .map((child) => child.id);
+        const bands = tasksWaterfallBands(order, childEdges, groupDirection, positions);
+        const compacted = packTaskChildRects(positions, {
+            gap: Math.max(12, Math.min(layoutConfig.nodeSpacing || 72, 36)),
+            padX: groupPadding,
+            padTop: groupPadTop,
+            padBottom: groupPadding,
+            minWidth: 250,
+            minHeight: 80,
+            targetAspectRatio: 1.05,
+            order,
+            bands: bands || undefined,
+        });
+        logTasksDebugVerbose('groupPacking', {
+            groupId,
+            before: rectSummary(beforeBbox),
+            after: rectSummary(compacted.bbox),
+            rows: compacted.rows,
+            positions: Object.fromEntries(Object.entries(compacted.positions).map(([id, rect]) => [id, rectSummary(rect)])),
+        });
+        return compacted;
+    };
+    const childIds = new Set(groupChildren.map((child) => child.id));
+    const parentOf = Object.fromEntries([
+        ...(model.tasks || []).map((task) => [task.id, task.group_id || null]),
+        ...(model.groups || []).map((group) => [group.id, group.parent_group_id || null]),
+    ]);
+    const liftToChild = (id) => {
+        let current = id;
+        while (current && !childIds.has(current)) current = parentOf[current] ?? null;
+        return current;
+    };
+    const liftedEdges = new Map();
+    for (const edge of (model.dependency_edges || [])) {
+        const source = liftToChild(edge.source);
+        const target = liftToChild(edge.target);
+        if (!source || !target || source === target) continue;
+        const key = `${source}->${target}`;
+        if (!liftedEdges.has(key)) liftedEdges.set(key, { ...edge, source, target });
+    }
+    const childEdges = reduceTransitiveEdges([...liftedEdges.values()]);
+    if (useElkForGroups && childEdges.length > 0) {
+        const elkLayout = await layoutWithElk({
+            id: `group-${groupId}`,
+            layoutOptions: {
+                'elk.algorithm': 'layered',
+                'elk.direction': groupDirection,
+                'elk.spacing.nodeNode': `${layoutConfig.nodeSpacing || 72}`,
+                'elk.layered.spacing.nodeNodeBetweenLayers': `${layoutConfig.layerSpacing || 112}`,
+                'elk.padding': `[top=${groupPadTop},left=${groupPadding},bottom=${groupPadding},right=${groupPadding}]`,
+            },
+            children: groupChildren.map((child) => ({
+                id: child.id,
+                width: child.width || 250,
+                height: child.height || 80,
+            })),
+            edges: childEdges.map((edge, index) => ({ id: `e${index}`, sources: [edge.source], targets: [edge.target] })),
+        });
+        const positions = {};
+        for (const child of elkLayout.children || []) {
+            const jitter = stableTaskJitter(child.id, jitterConfig.x ?? 14, jitterConfig.y ?? 8);
+            positions[child.id] = {
+                x: (child.x || 0) + jitter.x,
+                y: (child.y || 0) + jitter.y,
+                width: child.width || 0,
+                height: child.height || 0,
+            };
+        }
+        return compactGroupChildren(positions, {
+            width: Math.max(elkLayout.width || 0, 250),
+            height: Math.max(elkLayout.height || 0, 80),
+        });
+    }
+    const packedLayout = layoutDisconnectedTaskNodes(groupChildren, groupDirection, {
+        gap: Math.max(layoutConfig.nodeSpacing || 72, layoutConfig.layerSpacing || 112),
+        padX: groupPadding,
+        padTop: groupPadTop,
+        padBottom: groupPadding,
+    });
+    const positions = {};
+    for (const child of groupChildren) {
+        const base = packedLayout.positions[child.id];
+        const jitter = stableTaskJitter(child.id, jitterConfig.x ?? 14, jitterConfig.y ?? 8);
+        positions[child.id] = {
+            x: (base?.x || 0) + jitter.x,
+            y: (base?.y || 0) + jitter.y,
+            width: child.width || 0,
+            height: child.height || 0,
+        };
+    }
+    return compactGroupChildren(positions, {
+        width: Math.max(packedLayout.bbox.width || 0, 250),
+        height: Math.max(packedLayout.bbox.height || 0, 80),
+    });
+}
+
+export async function layoutExpandedGroups(model, expandedSet, jitterConfig = {}, layoutConfig = {}, useElkForGroups = true) {
+    const expandedIds = Array.from(expandedSet);
+    const groupParent = Object.fromEntries((model.groups || []).map((g) => [g.id, g.parent_group_id || null]));
+    const depthOf = (id) => {
+        let depth = 0;
+        let cur = groupParent[id];
+        while (cur) {
+            depth += 1;
+            cur = groupParent[cur];
+        }
+        return depth;
+    };
+    const layouts = {};
+    for (const groupId of expandedIds.sort((a, b) => depthOf(b) - depthOf(a))) {
+        const childSizes = {};
+        for (const childId of (model.group_tree?.[groupId] || [])) {
+            if (layouts[childId]) childSizes[childId] = layouts[childId].bbox;
+        }
+        layouts[groupId] = await layoutGroupInternal(groupId, model, childSizes, jitterConfig, layoutConfig, useElkForGroups);
+    }
+    return layouts;
+}
+
+export async function deriveSquishedExpandedLayout(baseGraph, model, expandedSet, baseLayout, groupLayouts, layoutConfig = {}) {
+    const visible = buildVisibleTasksGraph(model, expandedSet);
+    logTasksDebugVerbose('visibleGraph', {
+        expanded: Array.from(expandedSet),
+        nodes: visible.nodes.map(n => n.id),
+        edges: visible.edges,
+    });
+    const visibleNodeMap = Object.fromEntries(visible.nodes.map((node) => [node.id, node]));
+    const parentOf = {};
+    for (const groupId of expandedSet) {
+        (model.group_tree?.[groupId] || []).forEach((id) => { parentOf[id] = groupId; });
+        (model.task_children?.[groupId] || []).forEach((id) => { parentOf[id] = groupId; });
+    }
+
+    const topLevelIds = baseGraph.nodes.map((node) => node.id);
+    const expandedTopLevelIds = topLevelIds.filter((id) => expandedSet.has(id));
+    const topLevelRects = {};
+    for (const id of topLevelIds) {
+        const baseRect = baseLayout.positions[id];
+        if (!baseRect) continue;
+        const groupLayout = expandedSet.has(id) ? groupLayouts[id] : null;
+        topLevelRects[id] = groupLayout ? tasksExpandedRootRect(baseRect, groupLayout.bbox) : {
+            x: baseRect.x,
+            y: baseRect.y,
+            width: baseRect.width,
+            height: baseRect.height,
+            baseWidth: baseRect.width,
+            baseHeight: baseRect.height,
+        };
+    }
+    const layoutTrace = {
+        expandedTopLevelIds,
+        visibleNodeIds: visible.nodes.map((node) => node.id),
+        baseRects: Object.fromEntries(topLevelIds.map((id) => [id, rectSummary(baseLayout.positions[id])]).filter(([, rect]) => rect)),
+        expandedRects: Object.fromEntries(Object.entries(topLevelRects).map(([id, rect]) => [id, rectSummary(rect)])),
+        collisionPasses: [],
+        finalRects: {},
+    };
+
+    const nodes = [];
+    let rootPositions = null;
+    if (expandedTopLevelIds.length > 0) {
+        const rootLayout = await layoutWithElk({
+            id: 'expanded-root',
+            layoutOptions: {
+                'elk.algorithm': 'layered',
+                'elk.direction': layoutConfig.elkDirection || 'DOWN',
+                'elk.spacing.nodeNode': `${layoutConfig.nodeSpacing || TASKS_ROOT_SPACING.node}`,
+                'elk.layered.spacing.nodeNodeBetweenLayers': `${layoutConfig.layerSpacing || TASKS_ROOT_SPACING.layer}`,
+            },
+            children: topLevelIds
+                .filter((id) => topLevelRects[id])
+                .map((id) => ({
+                    id,
+                    width: topLevelRects[id].width,
+                    height: topLevelRects[id].height,
+                })),
+            edges: (baseGraph.edges || []).map((edge, index) => ({ id: `root-${index}`, sources: [edge.source], targets: [edge.target] })),
+        });
+        rootPositions = Object.fromEntries((rootLayout.children || []).map((node) => [node.id, { x: node.x || 0, y: node.y || 0 }]));
+        logTasksDebugVerbose('expandedRootLayout', {
+            edges: (baseGraph.edges || []).map((edge) => ({ source: edge.source, target: edge.target, reference: edge.__reference__ === true })),
+            positions: Object.fromEntries((rootLayout.children || []).map((node) => [node.id, {
+                x: Math.round(node.x || 0), y: Math.round(node.y || 0),
+                width: Math.round(node.width || 0), height: Math.round(node.height || 0),
+            }])),
+        });
+        layoutTrace.rootElk = {
+            width: Math.round(rootLayout.width || 0),
+            height: Math.round(rootLayout.height || 0),
+            positions: Object.fromEntries(Object.entries(rootPositions).map(([id, position]) => [id, rectSummary({ ...position, width: topLevelRects[id]?.width, height: topLevelRects[id]?.height })])),
+        };
+    }
+    for (const id of topLevelIds) {
+        const visibleNode = visibleNodeMap[id];
+        if (!visibleNode) continue;
+        const rect = topLevelRects[id];
+        const rootPosition = rootPositions?.[id] || rect;
+        nodes.push({
+            ...visibleNode,
+            position: { x: rootPosition.x, y: rootPosition.y },
+            width: rect.width,
+            height: rect.height,
+            parentId: null,
+        });
+    }
+
+    const addExpandedChildren = (groupId) => {
+        const groupLayout = groupLayouts[groupId];
+        if (!groupLayout) return;
+        const groupChildren = [...(model.group_tree?.[groupId] || []), ...(model.task_children?.[groupId] || [])];
+        for (const childId of groupChildren) {
+            const childVisible = visibleNodeMap[childId];
+            const childRect = groupLayout.positions[childId];
+            if (!childVisible || !childRect) continue;
+            const nestedLayout = expandedSet.has(childId) ? groupLayouts[childId] : null;
+            nodes.push({
+                ...childVisible,
+                position: { x: childRect.x, y: childRect.y },
+                width: nestedLayout?.bbox.width || childRect.width,
+                height: nestedLayout?.bbox.height || childRect.height,
+                parentId: groupId,
+            });
+            if (nestedLayout) addExpandedChildren(childId);
+        }
+    };
+    for (const groupId of expandedTopLevelIds) addExpandedChildren(groupId);
+
+    if (expandedTopLevelIds.length > 0 && !rootPositions) {
+        const topLevelState = {};
+        for (const id of topLevelIds) {
+            const baseRect = baseLayout.positions[id];
+            const rect = topLevelRects[id];
+            if (!baseRect || !rect) continue;
+            topLevelState[id] = {
+                x: rect.x || 0,
+                y: rect.y || 0,
+                width: rect.baseWidth,
+                height: rect.baseHeight,
+                expandedWidth: rect.width,
+                expandedHeight: rect.height,
+            };
+        }
+
+        for (const expandedId of expandedTopLevelIds) {
+            const expandedState = topLevelState[expandedId];
+            if (!expandedState) continue;
+            expandedState.width = expandedState.expandedWidth;
+            expandedState.height = expandedState.expandedHeight;
+        }
+
+        const topLevelStateList = topLevelIds
+            .map((id) => topLevelState[id])
+            .filter(Boolean)
+            .sort((a, b) => (a.y - b.y) || (a.x - b.x));
+        logTasksDebugVerbose('unwarpBeforeCollisions', {
+            expandedTopLevelIds,
+            topLevelState: Object.fromEntries(Object.entries(topLevelState).map(([id, rect]) => [id, rectSummary(rect)])),
+        });
+        for (let pass = 0; pass < 4; pass += 1) {
+            const collisionMoves = [];
+            for (let i = 0; i < topLevelStateList.length; i += 1) {
+                const a = topLevelStateList[i];
+                for (let j = i + 1; j < topLevelStateList.length; j += 1) {
+                    const b = topLevelStateList[j];
+                    const overlapX = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
+                    const overlapY = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+                    if (overlapX <= -(layoutConfig.collisionGap || TASKS_ROOT_COLLISION_GAP) || overlapY <= -(layoutConfig.collisionGap || TASKS_ROOT_COLLISION_GAP)) continue;
+                    if (Math.abs((a.x + a.width / 2) - (b.x + b.width / 2)) < Math.abs((a.y + a.height / 2) - (b.y + b.height / 2))) {
+                        const nextY = a.y + a.height + (layoutConfig.collisionGap || TASKS_ROOT_COLLISION_GAP);
+                        if (nextY !== b.y) collisionMoves.push({ pass, axis: 'y', fromY: Math.round(b.y), toY: Math.round(nextY) });
+                        b.y = nextY;
+                    } else {
+                        const nextX = a.x + a.width + (layoutConfig.collisionGap || TASKS_ROOT_COLLISION_GAP);
+                        if (nextX !== b.x) collisionMoves.push({ pass, axis: 'x', fromX: Math.round(b.x), toX: Math.round(nextX) });
+                        b.x = nextX;
+                    }
+                }
+            }
+            logTasksDebugVerbose('unwarpPass', {
+                pass,
+                collisionMoves,
+                topLevelState: Object.fromEntries(Object.entries(topLevelState).map(([id, rect]) => [id, rectSummary(rect)])),
+            });
+            layoutTrace.collisionPasses.push({
+                pass,
+                collisionMoves,
+                state: Object.fromEntries(Object.entries(topLevelState).map(([id, rect]) => [id, rectSummary(rect)])),
+            });
+        }
+
+        if (baseGraph.enforceRootRank) {
+            const rankGap = Math.min(layoutConfig.collisionGap || TASKS_ROOT_COLLISION_GAP, 40);
+            const rankAxis = (layoutConfig.elkDirection || 'DOWN') === 'RIGHT' ? 'x' : 'y';
+            for (let pass = 0; pass < topLevelIds.length; pass += 1) {
+                let moved = false;
+                for (const edge of baseGraph.edges || []) {
+                    const source = topLevelState[edge.source];
+                    const target = topLevelState[edge.target];
+                    if (!source || !target) continue;
+                    const minTarget = rankAxis === 'x'
+                        ? source.x + source.width + rankGap
+                        : source.y + source.height + rankGap;
+                    if (rankAxis === 'x' && target.x < minTarget) {
+                        target.x = minTarget;
+                        moved = true;
+                    } else if (rankAxis === 'y' && target.y < minTarget) {
+                        target.y = minTarget;
+                        moved = true;
+                    }
+                }
+                if (!moved) break;
+            }
+            const orderedTopLevelIds = topLevelIds
+                .filter((id) => topLevelState[id])
+                .sort((a, b) => {
+                    const left = topLevelState[a];
+                    const right = topLevelState[b];
+                    return rankAxis === 'x' ? ((left.x - right.x) || (left.y - right.y)) : ((left.y - right.y) || (left.x - right.x));
+                });
+            for (const id of orderedTopLevelIds) {
+                const incoming = (baseGraph.edges || [])
+                    .filter((edge) => edge.target === id)
+                    .map((edge) => topLevelState[edge.source])
+                    .filter(Boolean);
+                if (!incoming.length) continue;
+                const minPosition = Math.max(...incoming.map((source) => (
+                    rankAxis === 'x'
+                        ? source.x + source.width + rankGap
+                        : source.y + source.height + rankGap
+                )));
+                if (rankAxis === 'x' && topLevelState[id].x > minPosition) topLevelState[id].x = minPosition;
+                if (rankAxis === 'y' && topLevelState[id].y > minPosition) topLevelState[id].y = minPosition;
+            }
+        }
+
+        for (const node of nodes.filter((n) => !n.parentId)) {
+            const state = topLevelState[node.id];
+            if (!state) continue;
+            node.position = { x: state.x, y: state.y };
+        }
+        logTasksDebugVerbose('unwarpFinal', {
+            topLevelNodes: nodes.filter(n => !n.parentId).map(n => ({
+                id: n.id,
+                x: Math.round(n.position.x),
+                y: Math.round(n.position.y),
+                width: Math.round(n.width || 0),
+                height: Math.round(n.height || 0),
+            })),
+        });
+    }
+    layoutTrace.finalRects = Object.fromEntries(nodes.filter((node) => !node.parentId).map((node) => [
+        node.id,
+        rectSummary({ ...node.position, width: node.width, height: node.height }),
+    ]));
+    window.__vyasaTasksDebug.latestLayout = layoutTrace;
+    logTasksDebug('layoutTrace', layoutTrace);
+
+    const finalEdges = visible.edges.map((e, i) => ({
+        ...e,
+        id: `${e.source}-${e.target}-${i}`,
+        source: e.source,
+        target: e.target,
+        label: e.label || undefined,
+    }));
+    logTasksDebugVerbose('deriveResult', { visibleEdges: visible.edges, finalEdges });
+    return {
+        nodes,
+        edges: finalEdges,
+    };
+}
+
+export function buildTasksViewState(sourceModel, sourceGraph, projectionId, viewMode, groupByEnabled = false, groupByHierarchy = [], preserveGrouping = false) {
+    const projectionState = selectTasksProjectionState(sourceModel, sourceGraph, projectionId);
+    const projection = tasksProjectionById(sourceModel, projectionId) || {};
+    const fixedLayout = tasksLayoutById(tasksProjectionLayout(sourceModel, projectionId));
+    // Two ways a view can be unusable: a key the schema reader rejected, or a
+    // build that throws on the pack's own data. Both end up on screen.
+    const declaredError = String(projection.layout_error || '');
+    if (declaredError) {
+        return { ...projectionState, graph: buildLayoutErrorGraph(declaredError, projectionId), viewMode: TASKS_LAYOUT_ERROR_MODE };
+    }
+    if (fixedLayout) {
+        try {
+            return {
+                ...projectionState,
+                graph: fixedLayout.build(projectionState.model, projection),
+                viewMode: fixedLayout.id,
+            };
+        } catch (error) {
+            logTasksDebug('layoutError', { projectionId, layout: fixedLayout.id, message: String(error?.message || error) });
+            return {
+                ...projectionState,
+                graph: buildLayoutErrorGraph(String(error?.message || error), projectionId),
+                viewMode: TASKS_LAYOUT_ERROR_MODE,
+            };
+        }
+    }
+    if (preserveGrouping) return projectionState;
+    if (viewMode !== 'gantt') {
+        if (!tasksGroupByPrefsDifferFromSchema(sourceModel, projectionId, groupByEnabled, groupByHierarchy)) return projectionState;
+        const overrideState = (
+            groupByEnabled ? buildTasksGroupedState(projectionState.model, groupByHierarchy) : null
+        ) || buildTasksUngroupedState(projectionState.model);
+        return { ...overrideState, projectionId: projectionState.projectionId };
+    }
+    return {
+        ...projectionState,
+        graph: buildGanttTasksGraph({
+            ...projectionState.model,
+            dependency_edges: [
+                ...(projectionState.model.dependency_edges || []),
+                ...tasksReferenceEdges(projectionState.model),
+            ],
+        }),
+        viewMode: 'gantt',
+    };
 }

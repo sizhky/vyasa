@@ -1,0 +1,16 @@
+{
+  "node_color_palettes": {
+    "layer": {
+      "core": "#2563eb"
+    }
+  },
+  "edge_color_palettes": {
+    "step": {
+      "s1": "#2563eb",
+      "s2": "#ef4444",
+      "s3": "#22c55e",
+      "s4": "#f97316",
+      "s5": "#06b6d4"
+    }
+  }
+}

@@ -1,0 +1,7 @@
+@node_attrs
+role:
+  caller caller
+  loader loader
+  path-finder path-finder
+  parser parser
+  environment environment

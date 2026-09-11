@@ -8,8 +8,17 @@ calculation.
 from __future__ import annotations
 
 import html
+import re
+from difflib import SequenceMatcher
+from itertools import zip_longest
 
-from ..markdown.renderer import render_code_shell
+from fasthtml.common import to_xml
+
+from ...assets import bundle_asset_nodes_for_collector
+from ...config import get_config
+from ...extensions import get_extension_runtime, refresh_extension_runtime
+from ...helpers import _strip_leading_frontmatter_block
+from ..markdown.renderer import _render_markdown_fragment, render_code_shell
 from .code_reference import (
     RENDERED_LINES_LIMIT,
     CodeReference,
@@ -50,9 +59,10 @@ def _highlight_spec(resolved: ResolvedCodeReference, block: SourceRange) -> str:
 
 
 def _badge(kind: str, text: str, label: str = "") -> str:
+    title = f' title="{_escape(label)}"' if label else ""
     return (
         f'<span class="vyasa-code-reference-badge" data-badge="{_escape(kind)}"'
-        f'{f" title=\"{_escape(label)}\"" if label else ""}>'
+        f'{title}>'
         f'<span class="sr-only">{_escape(label or kind)}: </span>{_escape(text)}</span>'
     )
 
@@ -62,9 +72,23 @@ def _post_href(relative_path: str, line: int = 0) -> str:
     return f"/posts/{encoded}%3A{line}" if line else f"/posts/{encoded}"
 
 
+def _markdown_page_href(relative_path: str) -> str:
+    path = str(relative_path)
+    return _post_href(path[:-3] if path.lower().endswith(".md") else path)
+
+
 def _header(resolved: ResolvedCodeReference, relative_path: str) -> str:
+    from ...code_source import split_origin_slug
+
     reference = resolved.reference
-    path_html = _escape(relative_path)
+    # The origin repeats on every reference in a pack, so it reads as its own
+    # label and leaves the path short. `relative_path` stays the address.
+    split = split_origin_slug(relative_path)
+    origin_html = (
+        f'<span class="vyasa-code-reference-origin" title="{_escape(split[0])}">{_escape(split[0])}</span>'
+        if split else ""
+    )
+    path_html = _escape(split[1] if split else relative_path)
     if resolved.renamed:
         path_html = (
             f'<span class="vyasa-code-reference-rename">{_escape(resolved.path_before)}'
@@ -83,12 +107,18 @@ def _header(resolved: ResolvedCodeReference, relative_path: str) -> str:
     for diagnostic in resolved.diagnostics:
         badges.append(_badge(diagnostic.code, diagnostic.message, diagnostic.severity))
     actions = (
-        f'<a class="vyasa-code-reference-action" href="{_escape(_post_href(relative_path, resolved.selected.start))}">'
+        f'<a class="vyasa-code-reference-action" data-vyasa-open-editor="true" '
+        f'href="{_escape(_post_href(relative_path, resolved.selected.start))}">'
         "Open in editor</a>"
-        f'<a class="vyasa-code-reference-action" href="{_escape(_post_href(relative_path))}">Open full file</a>'
     )
+    if relative_path.lower().endswith(".md"):
+        actions += (
+            f'<a class="vyasa-code-reference-action" href="{_escape(_markdown_page_href(relative_path))}">'
+            "Open full file</a>"
+        )
     return (
         '<header class="vyasa-code-reference-header">'
+        f'{origin_html}'
         f'<span class="vyasa-code-reference-path">{path_html}</span>'
         f'<span class="vyasa-code-reference-selection">{_escape(reference.label())}</span>'
         f'<span class="vyasa-code-reference-badges">{"".join(badges)}</span>'
@@ -284,6 +314,296 @@ def _diagnostic_card(code: str, message: str) -> str:
     )
 
 
+_MARKDOWN_FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})")
+_MARKDOWN_WORD_RE = re.compile(r"\s+|\w+|[^\w\s]+", re.UNICODE)
+_MARKDOWN_INLINE_UNSAFE_RE = re.compile(r"`|!?\[[^\]]*\]\([^)]*\)|<[^>]+>")
+_MARKDOWN_TABLE_RE = re.compile(r"(?m)^\s*\|.*\|\s*$")
+_TABLE_MARKERS = {
+    "old_open": "VYASATABLEOLDOPEN",
+    "old_close": "VYASATABLEOLDCLOSE",
+    "new_open": "VYASATABLENEWOPEN",
+    "new_close": "VYASATABLENEWCLOSE",
+    "break": "VYASATABLEBREAK",
+}
+
+
+def _markdown_blocks(source: str) -> list[str]:
+    """Split a document at blank lines, but keep fenced blocks whole."""
+    blocks: list[str] = []
+    current: list[str] = []
+    fence = ""
+    for line in _strip_leading_frontmatter_block(source).strip().splitlines():
+        match = _MARKDOWN_FENCE_RE.match(line)
+        if match and not fence:
+            fence = match.group(1)
+        elif fence and re.match(rf"^\s*{re.escape(fence[0])}{{{len(fence)},}}\s*$", line):
+            fence = ""
+        if line.strip() or fence:
+            current.append(line)
+            continue
+        if current:
+            blocks.append("\n".join(current))
+            current = []
+    if current:
+        blocks.append("\n".join(current))
+    return blocks
+
+
+def _marked_words(before: str, after: str) -> tuple[str, str]:
+    """Mark changed words without wrapping Markdown punctuation."""
+    if (
+        _MARKDOWN_FENCE_RE.match(before)
+        or _MARKDOWN_FENCE_RE.match(after)
+        or _MARKDOWN_INLINE_UNSAFE_RE.search(before)
+        or _MARKDOWN_INLINE_UNSAFE_RE.search(after)
+        or _MARKDOWN_TABLE_RE.search(before)
+        or _MARKDOWN_TABLE_RE.search(after)
+    ):
+        return before, after
+    sides = [_MARKDOWN_WORD_RE.findall(value) for value in (before, after)]
+    words = [[token for token in side if not token.isspace()] for side in sides]
+    changed = [set(), set()]
+    for tag, i1, i2, j1, j2 in SequenceMatcher(None, words[0], words[1], autojunk=False).get_opcodes():
+        if tag == "equal":
+            continue
+        changed[0].update(range(i1, i2))
+        changed[1].update(range(j1, j2))
+
+    def mark(tokens: list[str], indexes: set[int], tag: str) -> str:
+        word_index = 0
+        output: list[str] = []
+        for token in tokens:
+            is_word = not token.isspace()
+            should_mark = is_word and word_index in indexes and any(char.isalnum() for char in token)
+            output.append(f'<{tag} class="vyasa-markdown-diff-word">{token}</{tag}>' if should_mark else token)
+            word_index += int(is_word)
+        return "".join(output)
+
+    return mark(sides[0], changed[0], "del"), mark(sides[1], changed[1], "ins")
+
+
+def _markdown_diff_block(markdown: str, state: str, current_path: str, collector) -> str:
+    label = {"added": "Added", "deleted": "Removed", "context": "Unchanged"}[state]
+    rendered = _render_markdown_fragment(markdown, current_path=current_path, asset_collector=collector)
+    label_html = (
+        f'<span class="vyasa-markdown-diff-label">{label}</span>'
+        if state != "context"
+        else ""
+    )
+    return (
+        f'<section class="vyasa-markdown-diff-block" data-markdown-diff-state="{state}">'
+        f'{label_html}{rendered}</section>'
+    )
+
+
+def _table_cells(line: str) -> list[str]:
+    return [cell.strip().replace(r"\|", "|") for cell in re.split(r"(?<!\\)\|", line.strip().strip("|"))]
+
+
+def _markdown_table(block: str) -> tuple[list[str], list[list[str]]] | None:
+    lines = [line for line in block.splitlines() if line.strip()]
+    if len(lines) < 2 or not all(line.strip().startswith("|") for line in lines):
+        return None
+    headers = _table_cells(lines[0])
+    divider = _table_cells(lines[1])
+    if len(headers) != len(divider) or not all(re.fullmatch(r":?-{3,}:?", cell) for cell in divider):
+        return None
+    rows = [_table_cells(line) for line in lines[2:]]
+    return headers, [row + [""] * (len(headers) - len(row)) for row in rows]
+
+
+def _table_pairs(
+    before_headers: list[str], before_rows: list[list[str]],
+    after_headers: list[str], after_rows: list[list[str]],
+) -> list[tuple[list[str] | None, list[str] | None]]:
+    old_indexes = {header.casefold(): index for index, header in enumerate(before_headers)}
+    new_indexes = {header.casefold(): index for index, header in enumerate(after_headers)}
+    shared = [header.casefold() for header in after_headers if header.casefold() in old_indexes]
+    identity = shared[0] if shared else ""
+    available = set(range(len(before_rows)))
+    pairs: list[tuple[list[str] | None, list[str] | None]] = []
+    for new_row in after_rows:
+        match = next(
+            (
+                index for index in available
+                if identity and before_rows[index][old_indexes[identity]] == new_row[new_indexes[identity]]
+            ),
+            None,
+        )
+        if match is None and not identity and available:
+            match = min(available)
+        old_row = before_rows[match] if match is not None else None
+        if match is not None:
+            available.remove(match)
+        pairs.append((old_row, new_row))
+    pairs.extend((before_rows[index], None) for index in sorted(available))
+    return pairs
+
+
+def _table_mark(value: str, state: str) -> str:
+    if not value:
+        return ""
+    prefix = _TABLE_MARKERS[f"{state}_open"]
+    suffix = _TABLE_MARKERS[f"{state}_close"]
+    return f"{prefix}{value}{suffix}"
+
+
+def _table_diff_cell(old: str, new: str) -> str:
+    if old == new:
+        return new
+    if not old:
+        return _table_mark(new, "new")
+    if not new:
+        return _table_mark(old, "old")
+    return f'{_table_mark(old, "old")}{_TABLE_MARKERS["break"]}{_table_mark(new, "new")}'
+
+
+def _markdown_table_diff(
+    before: str, after: str, current_path: str, collector, *, focus: str, context: int,
+) -> str | None:
+    old_table, new_table = _markdown_table(before), _markdown_table(after)
+    if not old_table or not new_table:
+        return None
+    old_headers, old_rows = old_table
+    new_headers, new_rows = new_table
+    old_indexes = {header.casefold(): index for index, header in enumerate(old_headers)}
+    new_indexes = {header.casefold(): index for index, header in enumerate(new_headers)}
+    headers = list(new_headers)
+    headers.extend(f"{header} (removed)" for header in old_headers if header.casefold() not in new_indexes)
+    records: list[tuple[str, list[str]]] = []
+    for old_row, new_row in _table_pairs(old_headers, old_rows, new_headers, new_rows):
+        state = "added" if old_row is None else "removed" if new_row is None else "changed"
+        values: list[str] = []
+        for header in headers:
+            key = header.removesuffix(" (removed)").casefold()
+            old_value = old_row[old_indexes[key]] if old_row is not None and key in old_indexes else ""
+            new_value = new_row[new_indexes[key]] if new_row is not None and key in new_indexes else ""
+            values.append(_table_diff_cell(old_value, new_value))
+        if old_row is not None and new_row is not None and old_headers == new_headers and old_row == new_row:
+            state = "context"
+        records.append((state, values))
+
+    keep = set(range(len(records)))
+    if focus == "changed":
+        changed = [index for index, (state, _) in enumerate(records) if state != "context"]
+        keep = {
+            nearby
+            for index in changed
+            for nearby in range(max(0, index - context), min(len(records), index + context + 1))
+        }
+    rows: list[list[str]] = []
+    omitted = False
+    for index, (state, values) in enumerate(records):
+        if index in keep:
+            rows.append([f"VYASATABLESTATE{state.upper()}", *values])
+            omitted = False
+        elif not omitted:
+            rows.append(["VYASATABLESTATEOMITTED", "Unchanged rows omitted", *([""] * (len(headers) - 1))])
+            omitted = True
+
+    def safe(value: str) -> str:
+        return re.sub(r"(?<!\\)\|", r"\|", value)
+
+    markdown = "\n".join([
+        f'| Change | {" | ".join(safe(header) for header in headers)} |',
+        f'|---|{"|".join("---" for _ in headers)}|',
+        *(f'| {" | ".join(safe(cell) for cell in row)} |' for row in rows),
+    ])
+    rendered = _render_markdown_fragment(markdown, current_path=current_path, asset_collector=collector)
+    for state in ("added", "removed", "changed", "context", "omitted"):
+        marker = f"VYASATABLESTATE{state.upper()}"
+        label = "Unchanged" if state == "context" else state.title()
+        rendered = rendered.replace(marker, f'<span class="vyasa-markdown-table-state is-{state}">{label}</span>')
+    rendered = rendered.replace(_TABLE_MARKERS["old_open"], '<del class="vyasa-markdown-table-cell-old">')
+    rendered = rendered.replace(_TABLE_MARKERS["old_close"], "</del>")
+    rendered = rendered.replace(_TABLE_MARKERS["new_open"], '<ins class="vyasa-markdown-table-cell-new">')
+    rendered = rendered.replace(_TABLE_MARKERS["new_close"], "</ins>")
+    rendered = rendered.replace(_TABLE_MARKERS["break"], "<br>")
+    return f'<div class="vyasa-markdown-table-diff">{rendered}</div>'
+
+
+def _markdown_equal_blocks(
+    blocks: list[str], opcode_index: int, opcode_count: int, context: int,
+    current_path: str, collector,
+) -> list[str]:
+    if not blocks:
+        return []
+    keep = set(range(min(context, len(blocks)))) if opcode_index > 0 else set()
+    if opcode_index < opcode_count - 1:
+        keep.update(range(max(0, len(blocks) - context), len(blocks)))
+    if len(keep) == len(blocks):
+        return [_markdown_diff_block(block, "context", current_path, collector) for block in blocks]
+    output: list[str] = []
+    omitted = False
+    for index, block in enumerate(blocks):
+        if index in keep:
+            output.append(_markdown_diff_block(block, "context", current_path, collector))
+            omitted = False
+        elif not omitted:
+            output.append('<div class="vyasa-markdown-diff-omission">Unchanged content omitted</div>')
+            omitted = True
+    return output
+
+
+def _markdown_diff_body(resolved: ResolvedCodeReference, current_path: str) -> str:
+    runtime = get_extension_runtime() or refresh_extension_runtime(get_config().get_extensions_config())
+    collector = runtime.new_asset_collector() if runtime else None
+    old_blocks = _markdown_blocks(resolved.before_source)
+    new_blocks = _markdown_blocks(resolved.after_source)
+    opcodes = SequenceMatcher(None, old_blocks, new_blocks, autojunk=False).get_opcodes()
+    rendered: list[str] = []
+    for opcode_index, (tag, i1, i2, j1, j2) in enumerate(opcodes):
+        if tag == "equal":
+            blocks = new_blocks[j1:j2]
+            rendered.extend(
+                _markdown_equal_blocks(
+                    blocks, opcode_index, len(opcodes), resolved.reference.context,
+                    current_path, collector,
+                )
+                if resolved.reference.focus == "changed"
+                else [_markdown_diff_block(block, "context", current_path, collector) for block in blocks]
+            )
+            continue
+        old, new = old_blocks[i1:i2], new_blocks[j1:j2]
+        for before_block, after_block in zip_longest(old, new, fillvalue=""):
+            if before_block and after_block:
+                table_diff = _markdown_table_diff(
+                    before_block, after_block, current_path, collector,
+                    focus=resolved.reference.focus, context=resolved.reference.context,
+                )
+                if table_diff:
+                    rendered.append(table_diff)
+                    continue
+                marked_before, marked_after = _marked_words(before_block, after_block)
+                rendered.append(
+                    '<div class="vyasa-markdown-diff-pair">'
+                    f'{_markdown_diff_block(marked_before, "deleted", current_path, collector)}'
+                    f'{_markdown_diff_block(marked_after, "added", current_path, collector)}</div>'
+                )
+            elif before_block:
+                rendered.append(_markdown_diff_block(before_block, "deleted", current_path, collector))
+            elif after_block:
+                rendered.append(_markdown_diff_block(after_block, "added", current_path, collector))
+    assets = "".join(to_xml(node) for node in bundle_asset_nodes_for_collector(collector, runtime=runtime))
+    return f'{assets}<div class="vyasa-markdown-diff">{"".join(rendered)}</div>'
+
+
+def render_markdown_diff_reference(
+    resolved: ResolvedCodeReference, relative_path: str, *, current_path: str
+) -> str:
+    """Render two Markdown revisions through Vyasa and mark their differences."""
+    body = _markdown_diff_body(resolved, current_path)
+    reference = resolved.reference
+    return (
+        '<div class="vyasa-code-reference vyasa-markdown-reference" '
+        f'data-code-reference-role="{_escape(reference.role)}" '
+        'data-code-reference-view="markdown-diff" data-code-reference-blocks="" data-code-reference-focus="">'
+        f'<div class="vyasa-code-reference-chrome">{_header(resolved, relative_path)}</div>'
+        f'<div class="vyasa-code-reference-body" role="region" '
+        f'aria-label="Markdown changes for {_escape(reference.label())}">{body}</div></div>'
+    )
+
+
 def render_resolved_code_reference(
     resolved: ResolvedCodeReference,
     relative_path: str,
@@ -338,6 +658,7 @@ def render_code_reference_diagnostic(error: CodeReferenceError) -> str:
 
 __all__ = [
     "CodeReference",
+    "render_markdown_diff_reference",
     "render_code_reference_diagnostic",
     "render_resolved_code_reference",
 ]
