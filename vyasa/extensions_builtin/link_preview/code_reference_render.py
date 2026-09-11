@@ -318,6 +318,13 @@ _MARKDOWN_FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})")
 _MARKDOWN_WORD_RE = re.compile(r"\s+|\w+|[^\w\s]+", re.UNICODE)
 _MARKDOWN_INLINE_UNSAFE_RE = re.compile(r"`|!?\[[^\]]*\]\([^)]*\)|<[^>]+>")
 _MARKDOWN_TABLE_RE = re.compile(r"(?m)^\s*\|.*\|\s*$")
+_TABLE_MARKERS = {
+    "old_open": "VYASATABLEOLDOPEN",
+    "old_close": "VYASATABLEOLDCLOSE",
+    "new_open": "VYASATABLENEWOPEN",
+    "new_close": "VYASATABLENEWCLOSE",
+    "break": "VYASATABLEBREAK",
+}
 
 
 def _markdown_blocks(source: str) -> list[str]:
@@ -389,6 +396,132 @@ def _markdown_diff_block(markdown: str, state: str, current_path: str, collector
     )
 
 
+def _table_cells(line: str) -> list[str]:
+    return [cell.strip().replace(r"\|", "|") for cell in re.split(r"(?<!\\)\|", line.strip().strip("|"))]
+
+
+def _markdown_table(block: str) -> tuple[list[str], list[list[str]]] | None:
+    lines = [line for line in block.splitlines() if line.strip()]
+    if len(lines) < 2 or not all(line.strip().startswith("|") for line in lines):
+        return None
+    headers = _table_cells(lines[0])
+    divider = _table_cells(lines[1])
+    if len(headers) != len(divider) or not all(re.fullmatch(r":?-{3,}:?", cell) for cell in divider):
+        return None
+    rows = [_table_cells(line) for line in lines[2:]]
+    return headers, [row + [""] * (len(headers) - len(row)) for row in rows]
+
+
+def _table_pairs(
+    before_headers: list[str], before_rows: list[list[str]],
+    after_headers: list[str], after_rows: list[list[str]],
+) -> list[tuple[list[str] | None, list[str] | None]]:
+    old_indexes = {header.casefold(): index for index, header in enumerate(before_headers)}
+    new_indexes = {header.casefold(): index for index, header in enumerate(after_headers)}
+    shared = [header.casefold() for header in after_headers if header.casefold() in old_indexes]
+    identity = shared[0] if shared else ""
+    available = set(range(len(before_rows)))
+    pairs: list[tuple[list[str] | None, list[str] | None]] = []
+    for new_row in after_rows:
+        match = next(
+            (
+                index for index in available
+                if identity and before_rows[index][old_indexes[identity]] == new_row[new_indexes[identity]]
+            ),
+            None,
+        )
+        if match is None and not identity and available:
+            match = min(available)
+        old_row = before_rows[match] if match is not None else None
+        if match is not None:
+            available.remove(match)
+        pairs.append((old_row, new_row))
+    pairs.extend((before_rows[index], None) for index in sorted(available))
+    return pairs
+
+
+def _table_mark(value: str, state: str) -> str:
+    if not value:
+        return ""
+    prefix = _TABLE_MARKERS[f"{state}_open"]
+    suffix = _TABLE_MARKERS[f"{state}_close"]
+    return f"{prefix}{value}{suffix}"
+
+
+def _table_diff_cell(old: str, new: str) -> str:
+    if old == new:
+        return new
+    if not old:
+        return _table_mark(new, "new")
+    if not new:
+        return _table_mark(old, "old")
+    return f'{_table_mark(old, "old")}{_TABLE_MARKERS["break"]}{_table_mark(new, "new")}'
+
+
+def _markdown_table_diff(
+    before: str, after: str, current_path: str, collector, *, focus: str, context: int,
+) -> str | None:
+    old_table, new_table = _markdown_table(before), _markdown_table(after)
+    if not old_table or not new_table:
+        return None
+    old_headers, old_rows = old_table
+    new_headers, new_rows = new_table
+    old_indexes = {header.casefold(): index for index, header in enumerate(old_headers)}
+    new_indexes = {header.casefold(): index for index, header in enumerate(new_headers)}
+    headers = list(new_headers)
+    headers.extend(f"{header} (removed)" for header in old_headers if header.casefold() not in new_indexes)
+    records: list[tuple[str, list[str]]] = []
+    for old_row, new_row in _table_pairs(old_headers, old_rows, new_headers, new_rows):
+        state = "added" if old_row is None else "removed" if new_row is None else "changed"
+        values: list[str] = []
+        for header in headers:
+            key = header.removesuffix(" (removed)").casefold()
+            old_value = old_row[old_indexes[key]] if old_row is not None and key in old_indexes else ""
+            new_value = new_row[new_indexes[key]] if new_row is not None and key in new_indexes else ""
+            values.append(_table_diff_cell(old_value, new_value))
+        if old_row is not None and new_row is not None and old_headers == new_headers and old_row == new_row:
+            state = "context"
+        records.append((state, values))
+
+    keep = set(range(len(records)))
+    if focus == "changed":
+        changed = [index for index, (state, _) in enumerate(records) if state != "context"]
+        keep = {
+            nearby
+            for index in changed
+            for nearby in range(max(0, index - context), min(len(records), index + context + 1))
+        }
+    rows: list[list[str]] = []
+    omitted = False
+    for index, (state, values) in enumerate(records):
+        if index in keep:
+            rows.append([f"VYASATABLESTATE{state.upper()}", *values])
+            omitted = False
+        elif not omitted:
+            rows.append(["VYASATABLESTATEOMITTED", "Unchanged rows omitted", *([""] * (len(headers) - 1))])
+            omitted = True
+
+    def safe(value: str) -> str:
+        return re.sub(r"(?<!\\)\|", r"\|", value)
+
+    markdown = "\n".join([
+        f'| Change | {" | ".join(safe(header) for header in headers)} |',
+        f'|---|{"|".join("---" for _ in headers)}|',
+        *(f'| {" | ".join(safe(cell) for cell in row)} |' for row in rows),
+    ])
+    rendered = _render_markdown_fragment(markdown, current_path=current_path, asset_collector=collector)
+    for state in ("added", "removed", "changed", "context", "omitted"):
+        marker = f"VYASATABLESTATE{state.upper()}"
+        label = "Unchanged" if state == "context" else state.title()
+        rendered = rendered.replace(marker, f'<span class="vyasa-markdown-table-state is-{state}">{label}</span>')
+    rendered = rendered.replace(_TABLE_MARKERS["old_open"], '<del class="vyasa-markdown-table-cell-old">')
+    rendered = rendered.replace(_TABLE_MARKERS["old_close"], "</del>")
+    rendered = rendered.replace(_TABLE_MARKERS["new_open"], '<ins class="vyasa-markdown-table-cell-new">')
+    rendered = rendered.replace(_TABLE_MARKERS["new_close"], "</ins>")
+    rendered = rendered.replace(_TABLE_MARKERS["break"], "<br>")
+    return f'<div class="vyasa-markdown-table-diff">{rendered}</div>'
+
+
 def _markdown_equal_blocks(
     blocks: list[str], opcode_index: int, opcode_count: int, context: int,
     current_path: str, collector,
@@ -434,6 +567,13 @@ def _markdown_diff_body(resolved: ResolvedCodeReference, current_path: str) -> s
         old, new = old_blocks[i1:i2], new_blocks[j1:j2]
         for before_block, after_block in zip_longest(old, new, fillvalue=""):
             if before_block and after_block:
+                table_diff = _markdown_table_diff(
+                    before_block, after_block, current_path, collector,
+                    focus=resolved.reference.focus, context=resolved.reference.context,
+                )
+                if table_diff:
+                    rendered.append(table_diff)
+                    continue
                 marked_before, marked_after = _marked_words(before_block, after_block)
                 rendered.append(
                     '<div class="vyasa-markdown-diff-pair">'

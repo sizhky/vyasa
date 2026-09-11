@@ -248,6 +248,31 @@
 ins.vyasa-markdown-diff-word { background: color-mix(in srgb, #16a34a 20%, transparent); }
 del.vyasa-markdown-diff-word { background: color-mix(in srgb, #dc2626 20%, transparent); }
 
+.vyasa-markdown-table-diff .vyasa-table-scroll { margin: 0; }
+.vyasa-markdown-table-diff table { width: 100%; margin: 0; }
+.vyasa-markdown-table-state {
+    display: inline-flex;
+    padding: 0.08rem 0.42rem;
+    border-radius: 999px;
+    font-size: 0.72em;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+.vyasa-markdown-table-state.is-added { color: #15803d; background: color-mix(in srgb, #16a34a 14%, transparent); }
+.vyasa-markdown-table-state.is-removed { color: #b91c1c; background: color-mix(in srgb, #dc2626 14%, transparent); }
+.vyasa-markdown-table-state.is-changed { color: #a16207; background: color-mix(in srgb, #ca8a04 16%, transparent); }
+.vyasa-markdown-table-state.is-context { color: var(--vyasa-ink-soft); }
+.vyasa-markdown-table-state.is-omitted { color: var(--vyasa-ink-soft); background: color-mix(in srgb, var(--vyasa-ink) 6%, transparent); }
+.vyasa-markdown-table-cell-old,
+.vyasa-markdown-table-cell-new {
+    padding: 0.04em 0.16em;
+    border-radius: 0.15em;
+    text-decoration: none;
+}
+.vyasa-markdown-table-cell-old { background: color-mix(in srgb, #dc2626 18%, transparent); }
+.vyasa-markdown-table-cell-new { background: color-mix(in srgb, #16a34a 18%, transparent); }
+
 @media (max-width: 900px) {
     .vyasa-code-reference-panes { grid-template-columns: 1fr; }
 }

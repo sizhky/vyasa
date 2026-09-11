@@ -18,6 +18,22 @@ from vyasa.extensions_builtin.link_preview.code_reference_markdown import (
 )
 
 
+def _resolved_markdown_diff(tmp_path, before, after, *, context):
+    repo = _git_repo(tmp_path)
+    source = repo / "table.md"
+    source.write_text(before, encoding="utf-8")
+    base = _commit(repo, "base")
+    source.write_text(after, encoding="utf-8")
+    head = _commit(repo, "head")
+    return resolve_code_reference(
+        source,
+        CodeReference.parse({
+            "change": f"{base}..{head}", "show": "file", "view": "split",
+            "side": "both", "focus": "changed", "context": str(context),
+        }),
+    )
+
+
 def test_code_reference_normalizes_defaults():
     reference = CodeReference.parse(
         {
@@ -186,6 +202,51 @@ def test_markdown_diff_does_not_put_marks_inside_table_syntax():
     after = "| Stage | Path |\n|---|---|\n| Architecture | new |"
 
     assert code_reference_render._marked_words(before, after) == (before, after)
+
+
+def test_markdown_diff_renders_one_collapsed_table_with_changed_cells(tmp_path):
+    before = """| Name | Stage |
+|---|---|
+| Alpha | Ready |
+| Beta | Old |
+| Gamma | Ready |
+| Delta | Ready |
+| Epsilon | Ready |"""
+    after = before.replace("| Beta | Old |", "| Beta | New |")
+    resolved = _resolved_markdown_diff(tmp_path, before, after, context=0)
+
+    result = code_reference_render.render_markdown_diff_reference(
+        resolved, "table.md", current_path="table"
+    )
+
+    assert result.count("<table") == 1
+    assert 'class="vyasa-markdown-table-diff"' in result
+    assert '<span class="vyasa-markdown-table-state is-changed">Changed</span>' in result
+    assert '<del class="vyasa-markdown-table-cell-old">Old</del>' in result
+    assert '<ins class="vyasa-markdown-table-word">' not in result
+    assert '<ins class="vyasa-markdown-table-cell-new">New</ins>' in result
+    assert "Unchanged rows omitted" in result
+    assert "Alpha" not in result and "Gamma" not in result
+
+
+def test_markdown_diff_unifies_changed_table_headers(tmp_path):
+    before = """| Input Signal | Command |
+|---|---|
+| vision | vision |"""
+    after = """| Load | Input Signal |
+|---|---|
+| stages/10 | vision |"""
+    resolved = _resolved_markdown_diff(tmp_path, before, after, context=3)
+
+    result = code_reference_render.render_markdown_diff_reference(
+        resolved, "table.md", current_path="table"
+    )
+
+    assert result.count("<table") == 1
+    assert ">Load</th>" in result
+    assert ">Input Signal</th>" in result
+    assert ">Command (removed)</th>" in result
+    assert "stages/10" in result and "vision" in result
 
 
 def test_link_preview_renders_disjoint_changed_blocks_for_symbol(tmp_path, monkeypatch):
