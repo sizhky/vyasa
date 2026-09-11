@@ -28,6 +28,34 @@
         0 0 0 1px color-mix(in srgb, var(--vyasa-primary) 12%, transparent);
 }
 
+@keyframes vyasa-link-preview-pin-bloom {
+    0% {
+        box-shadow:
+            0 4px 14px rgba(15, 23, 42, 0.2),
+            0 28px 72px rgba(15, 23, 42, 0.32),
+            0 0 20px 5px color-mix(in srgb, var(--vyasa-primary) 54%, transparent),
+            0 0 36px 12px color-mix(in srgb, var(--vyasa-primary) 34%, transparent);
+    }
+    100% {
+        box-shadow:
+            0 4px 14px rgba(15, 23, 42, 0.2),
+            0 28px 72px rgba(15, 23, 42, 0.32),
+            0 0 128px 56px color-mix(in srgb, var(--vyasa-primary) 0%, transparent),
+            0 0 192px 84px color-mix(in srgb, var(--vyasa-primary) 0%, transparent);
+    }
+}
+
+.vyasa-link-preview-popover.vyasa-link-preview-pin-bloom {
+    animation: vyasa-link-preview-pin-bloom 7440ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .vyasa-link-preview-popover.vyasa-link-preview-pin-bloom {
+        animation: none;
+        box-shadow: 0 0 0 2px var(--vyasa-primary);
+    }
+}
+
 .vyasa-link-preview-resize-handle {
     position: absolute;
     z-index: 4;

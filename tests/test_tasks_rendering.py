@@ -869,6 +869,7 @@ def test_w_enter_pin_blooms_from_the_edge():
     assert "vyasa-tasks-edge-pin-bloom--late" not in source
     assert "@keyframes vyasa-tasks-edge-pin-bloom" in css
     assert "1720ms" in css
+    assert "window.vyasaLinkPreview?.pin?.(codeModeEntryRef.current);" in source
 
 
 def test_kg_pane_drag_pans_with_a_locked_cursor():

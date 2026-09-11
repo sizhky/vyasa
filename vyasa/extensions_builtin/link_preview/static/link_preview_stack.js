@@ -41,6 +41,12 @@ export class LinkPreviewStack {
         entry.view.remove();
     }
 
+    pin(entry) {
+        if (!entry || !this.entries.has(entry)) return false;
+        entry.view.pin?.();
+        return true;
+    }
+
     closeLatest() {
         const latest = Array.from(this.entries).at(-1);
         if (!latest) return false;

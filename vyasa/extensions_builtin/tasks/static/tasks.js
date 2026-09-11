@@ -1412,6 +1412,7 @@ async function renderTasksGraphs(rootElement = document) {
                 // Escape or its × button, the same as any other preview.
                 const pinCodePreview = () => {
                     if (!codeModeEntryRef.current) return false;
+                    window.vyasaLinkPreview?.pin?.(codeModeEntryRef.current);
                     codeModeEntryRef.current = null;
                     logTasksDebug('codeModePinned', { widgetId });
                     setEdgeStatus('Code preview pinned.');

@@ -735,6 +735,37 @@ def test_link_preview_stack_keeps_nested_previews_until_each_is_closed():
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
 
 
+def test_link_preview_stack_pins_only_open_entries():
+    script = """
+        import { LinkPreviewStack } from './vyasa/extensions_builtin/link_preview/static/link_preview_stack.js';
+
+        let pins = 0;
+        const stack = new LinkPreviewStack({
+            createView: () => ({ pin: () => { pins += 1; }, remove() {}, setContent() {}, setMessage() {} }),
+            fetchPreview: async () => '<p>preview</p>',
+        });
+        const link = { getAttribute: () => '/doc', dataset: {} };
+        const entry = stack.open(link, { clientX: 0, clientY: 0 });
+        if (!stack.pin(entry) || pins !== 1) throw new Error('open preview did not pin');
+        stack.close(entry);
+        if (stack.pin(entry) || pins !== 1) throw new Error('closed preview pinned');
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
+def test_link_preview_pin_uses_the_edge_pin_bloom_timing():
+    source = Path("vyasa/extensions_builtin/link_preview/static/link_preview.js").read_text()
+    css = Path("vyasa/extensions_builtin/link_preview/static/link_preview.css").read_text()
+
+    assert "pin: (entry) => previews.pin(entry)" in source
+    assert "popover.classList.add('vyasa-link-preview-pin-bloom')" in source
+    assert "@keyframes vyasa-link-preview-pin-bloom" in css
+    assert "3440ms cubic-bezier(0.16, 1, 0.3, 1)" in css
+    assert "0 0 0 54px" not in css
+    assert "0 0 192px 84px" in css
+    assert "prefers-reduced-motion: reduce" in css
+
+
 # --- code reference: parser, resolver, selection, render, build ---------
 
 

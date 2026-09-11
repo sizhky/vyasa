@@ -273,9 +273,21 @@ function createPreviewView({ point, link, onClose }) {
     raise();
     const resizeObserver = new ResizeObserver(schedulePointerRefresh);
     resizeObserver.observe(popover);
+    let pinBloomTimer = 0;
     const view = {
         raise,
         updatePointer,
+        pin: () => {
+            window.clearTimeout(pinBloomTimer);
+            popover.classList.remove('vyasa-link-preview-pin-bloom');
+            void popover.offsetWidth;
+            popover.classList.add('vyasa-link-preview-pin-bloom');
+            pinBloomTimer = window.setTimeout(
+                () => popover.classList.remove('vyasa-link-preview-pin-bloom'),
+                3520,
+            );
+            raise();
+        },
         scrollBy: (deltaX, deltaY) => scrollPreviewBody(popover, deltaX, deltaY),
         // Walk the reference's marked blocks. The Prev and Next buttons already
         // own that walk, so drive them instead of repeating the block maths.
@@ -289,6 +301,7 @@ function createPreviewView({ point, link, onClose }) {
             return true;
         },
         remove: () => {
+            window.clearTimeout(pinBloomTimer);
             resizeObserver.disconnect();
             forgetPositionAnchor(popover);
             previewViews.delete(view);
@@ -436,6 +449,7 @@ const previews = new LinkPreviewStack({
 // `data-vyasa-link-preview-current-path`, the same as a link in the page.
 window.vyasaLinkPreview = {
     open: (link, point) => previews.open(link, point),
+    pin: (entry) => previews.pin(entry),
     close: (entry) => previews.close(entry),
     scrollBy: (entry, deltaX, deltaY) => entry?.view?.scrollBy?.(deltaX, deltaY) === true,
     stepCodeBlock: (entry, delta) => entry?.view?.stepCodeBlock?.(delta) === true,
