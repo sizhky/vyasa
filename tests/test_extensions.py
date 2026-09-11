@@ -176,7 +176,7 @@ def test_document_extensions_register_document_type_renderers():
     runtime = build_extension_runtime({})
 
     assert runtime.document_types[".kg"] == DocumentType(".kg", "kg", "network")
-    assert ".mdx" not in runtime.document_types
+    assert runtime.document_types[".mdx"] == DocumentType(".mdx", "mdx", "file-code")
     assert runtime.document_types[".pdf"] == DocumentType(".pdf", "pdf", "file")
     assert runtime.document_types[".tree"] == DocumentType(".tree", "tree", "table")
     assert "kg" in runtime.document_renderers

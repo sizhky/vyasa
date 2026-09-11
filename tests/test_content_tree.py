@@ -109,15 +109,32 @@ def test_content_routes_keep_symlink_name(monkeypatch, tmp_path):
         reload_config()
 
 
-def test_content_tree_rejects_mdx_suffix(tmp_path):
+def test_content_tree_discovers_mdx_suffix(tmp_path):
     page = tmp_path / "dashboard.mdx"
     page.write_text("# Dashboard\n\n<Widget />\n", encoding="utf-8")
 
     tree = ContentTree(root=tmp_path)
     resolved = tree.resolve_document("dashboard")
 
-    assert tree.list_entries() == []
-    assert resolved is None
+    assert [(entry.slug, entry.kind) for entry in tree.list_entries()] == [("dashboard", "mdx")]
+    assert resolved is not None
+    assert resolved.kind == "mdx"
+    assert resolved.path == page.resolve()
+
+
+def test_sidebar_shows_mdx_suffix(tmp_path):
+    page = tmp_path / "dashboard.mdx"
+    page.write_text("# Dashboard\n\n<Widget />\n", encoding="utf-8")
+    (tmp_path / ".vyasa").write_text("", encoding="utf-8")
+    reload_config(tmp_path / ".vyasa")
+    core._nav_entries_cache.clear()
+
+    try:
+        html = to_xml(core.build_post_tree(tmp_path))
+    finally:
+        reload_config()
+
+    assert "/posts/dashboard" in html
 
 
 def test_content_tree_discovers_mdx_in_named_folder_markdown(tmp_path):
