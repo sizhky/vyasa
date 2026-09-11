@@ -8,8 +8,17 @@ calculation.
 from __future__ import annotations
 
 import html
+import re
+from difflib import SequenceMatcher
+from itertools import zip_longest
 
-from ..markdown.renderer import render_code_shell
+from fasthtml.common import to_xml
+
+from ...assets import bundle_asset_nodes_for_collector
+from ...config import get_config
+from ...extensions import get_extension_runtime, refresh_extension_runtime
+from ...helpers import _strip_leading_frontmatter_block
+from ..markdown.renderer import _render_markdown_fragment, render_code_shell
 from .code_reference import (
     RENDERED_LINES_LIMIT,
     CodeReference,
@@ -50,9 +59,10 @@ def _highlight_spec(resolved: ResolvedCodeReference, block: SourceRange) -> str:
 
 
 def _badge(kind: str, text: str, label: str = "") -> str:
+    title = f' title="{_escape(label)}"' if label else ""
     return (
         f'<span class="vyasa-code-reference-badge" data-badge="{_escape(kind)}"'
-        f'{f" title=\"{_escape(label)}\"" if label else ""}>'
+        f'{title}>'
         f'<span class="sr-only">{_escape(label or kind)}: </span>{_escape(text)}</span>'
     )
 
@@ -294,6 +304,156 @@ def _diagnostic_card(code: str, message: str) -> str:
     )
 
 
+_MARKDOWN_FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})")
+_MARKDOWN_WORD_RE = re.compile(r"\s+|\w+|[^\w\s]+", re.UNICODE)
+_MARKDOWN_INLINE_UNSAFE_RE = re.compile(r"`|!?\[[^\]]*\]\([^)]*\)|<[^>]+>")
+_MARKDOWN_TABLE_RE = re.compile(r"(?m)^\s*\|.*\|\s*$")
+
+
+def _markdown_blocks(source: str) -> list[str]:
+    """Split a document at blank lines, but keep fenced blocks whole."""
+    blocks: list[str] = []
+    current: list[str] = []
+    fence = ""
+    for line in _strip_leading_frontmatter_block(source).strip().splitlines():
+        match = _MARKDOWN_FENCE_RE.match(line)
+        if match and not fence:
+            fence = match.group(1)
+        elif fence and re.match(rf"^\s*{re.escape(fence[0])}{{{len(fence)},}}\s*$", line):
+            fence = ""
+        if line.strip() or fence:
+            current.append(line)
+            continue
+        if current:
+            blocks.append("\n".join(current))
+            current = []
+    if current:
+        blocks.append("\n".join(current))
+    return blocks
+
+
+def _marked_words(before: str, after: str) -> tuple[str, str]:
+    """Mark changed words without wrapping Markdown punctuation."""
+    if (
+        _MARKDOWN_FENCE_RE.match(before)
+        or _MARKDOWN_FENCE_RE.match(after)
+        or _MARKDOWN_INLINE_UNSAFE_RE.search(before)
+        or _MARKDOWN_INLINE_UNSAFE_RE.search(after)
+        or _MARKDOWN_TABLE_RE.search(before)
+        or _MARKDOWN_TABLE_RE.search(after)
+    ):
+        return before, after
+    sides = [_MARKDOWN_WORD_RE.findall(value) for value in (before, after)]
+    words = [[token for token in side if not token.isspace()] for side in sides]
+    changed = [set(), set()]
+    for tag, i1, i2, j1, j2 in SequenceMatcher(None, words[0], words[1], autojunk=False).get_opcodes():
+        if tag == "equal":
+            continue
+        changed[0].update(range(i1, i2))
+        changed[1].update(range(j1, j2))
+
+    def mark(tokens: list[str], indexes: set[int], tag: str) -> str:
+        word_index = 0
+        output: list[str] = []
+        for token in tokens:
+            is_word = not token.isspace()
+            should_mark = is_word and word_index in indexes and any(char.isalnum() for char in token)
+            output.append(f'<{tag} class="vyasa-markdown-diff-word">{token}</{tag}>' if should_mark else token)
+            word_index += int(is_word)
+        return "".join(output)
+
+    return mark(sides[0], changed[0], "del"), mark(sides[1], changed[1], "ins")
+
+
+def _markdown_diff_block(markdown: str, state: str, current_path: str, collector) -> str:
+    label = {"added": "Added", "deleted": "Removed", "context": "Unchanged"}[state]
+    rendered = _render_markdown_fragment(markdown, current_path=current_path, asset_collector=collector)
+    label_html = (
+        f'<span class="vyasa-markdown-diff-label">{label}</span>'
+        if state != "context"
+        else ""
+    )
+    return (
+        f'<section class="vyasa-markdown-diff-block" data-markdown-diff-state="{state}">'
+        f'{label_html}{rendered}</section>'
+    )
+
+
+def _markdown_equal_blocks(
+    blocks: list[str], opcode_index: int, opcode_count: int, context: int,
+    current_path: str, collector,
+) -> list[str]:
+    if not blocks:
+        return []
+    keep = set(range(min(context, len(blocks)))) if opcode_index > 0 else set()
+    if opcode_index < opcode_count - 1:
+        keep.update(range(max(0, len(blocks) - context), len(blocks)))
+    if len(keep) == len(blocks):
+        return [_markdown_diff_block(block, "context", current_path, collector) for block in blocks]
+    output: list[str] = []
+    omitted = False
+    for index, block in enumerate(blocks):
+        if index in keep:
+            output.append(_markdown_diff_block(block, "context", current_path, collector))
+            omitted = False
+        elif not omitted:
+            output.append('<div class="vyasa-markdown-diff-omission">Unchanged content omitted</div>')
+            omitted = True
+    return output
+
+
+def _markdown_diff_body(resolved: ResolvedCodeReference, current_path: str) -> str:
+    runtime = get_extension_runtime() or refresh_extension_runtime(get_config().get_extensions_config())
+    collector = runtime.new_asset_collector() if runtime else None
+    old_blocks = _markdown_blocks(resolved.before_source)
+    new_blocks = _markdown_blocks(resolved.after_source)
+    opcodes = SequenceMatcher(None, old_blocks, new_blocks, autojunk=False).get_opcodes()
+    rendered: list[str] = []
+    for opcode_index, (tag, i1, i2, j1, j2) in enumerate(opcodes):
+        if tag == "equal":
+            blocks = new_blocks[j1:j2]
+            rendered.extend(
+                _markdown_equal_blocks(
+                    blocks, opcode_index, len(opcodes), resolved.reference.context,
+                    current_path, collector,
+                )
+                if resolved.reference.focus == "changed"
+                else [_markdown_diff_block(block, "context", current_path, collector) for block in blocks]
+            )
+            continue
+        old, new = old_blocks[i1:i2], new_blocks[j1:j2]
+        for before_block, after_block in zip_longest(old, new, fillvalue=""):
+            if before_block and after_block:
+                marked_before, marked_after = _marked_words(before_block, after_block)
+                rendered.append(
+                    '<div class="vyasa-markdown-diff-pair">'
+                    f'{_markdown_diff_block(marked_before, "deleted", current_path, collector)}'
+                    f'{_markdown_diff_block(marked_after, "added", current_path, collector)}</div>'
+                )
+            elif before_block:
+                rendered.append(_markdown_diff_block(before_block, "deleted", current_path, collector))
+            elif after_block:
+                rendered.append(_markdown_diff_block(after_block, "added", current_path, collector))
+    assets = "".join(to_xml(node) for node in bundle_asset_nodes_for_collector(collector, runtime=runtime))
+    return f'{assets}<div class="vyasa-markdown-diff">{"".join(rendered)}</div>'
+
+
+def render_markdown_diff_reference(
+    resolved: ResolvedCodeReference, relative_path: str, *, current_path: str
+) -> str:
+    """Render two Markdown revisions through Vyasa and mark their differences."""
+    body = _markdown_diff_body(resolved, current_path)
+    reference = resolved.reference
+    return (
+        '<div class="vyasa-code-reference vyasa-markdown-reference" '
+        f'data-code-reference-role="{_escape(reference.role)}" '
+        'data-code-reference-view="markdown-diff" data-code-reference-blocks="" data-code-reference-focus="">'
+        f'<div class="vyasa-code-reference-chrome">{_header(resolved, relative_path)}</div>'
+        f'<div class="vyasa-code-reference-body" role="region" '
+        f'aria-label="Markdown changes for {_escape(reference.label())}">{body}</div></div>'
+    )
+
+
 def render_resolved_code_reference(
     resolved: ResolvedCodeReference,
     relative_path: str,
@@ -348,6 +508,7 @@ def render_code_reference_diagnostic(error: CodeReferenceError) -> str:
 
 __all__ = [
     "CodeReference",
+    "render_markdown_diff_reference",
     "render_code_reference_diagnostic",
     "render_resolved_code_reference",
 ]

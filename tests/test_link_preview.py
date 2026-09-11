@@ -129,6 +129,61 @@ def test_markdown_code_reference_uses_document_rendering(tmp_path, monkeypatch):
     assert "name: daksh" not in result
 
 
+def test_markdown_code_reference_renders_revision_diff_as_documents(tmp_path, monkeypatch):
+    repo = _git_repo(tmp_path)
+    source = repo / "SKILL.md"
+    source.write_text("---\nname: daksh\n---\n# Daksh\n\nThe **old stage** runs.\n\n- Keep\n")
+    base = _commit(repo, "base")
+    source.write_text("---\nname: daksh\n---\n# Daksh\n\nThe **new phase** runs.\n\n- Keep\n- Added\n")
+    head = _commit(repo, "head")
+    monkeypatch.setattr(routes, "_resolve_preview_file", lambda _slug: source)
+    monkeypatch.setattr(routes, "content_slug_for_path", lambda _path, strip_suffix=True: "skills/daksh/SKILL.md")
+
+    result = routes.render_link_preview_html(
+        href="skills/daksh/SKILL.md",
+        code_ref=json.dumps({
+            "change": f"{base}..{head}", "show": "file", "view": "split",
+            "side": "both", "focus": "changed", "context": "0", "role": "implementation",
+        }),
+    )
+
+    assert result is not None
+    assert 'data-code-reference-view="markdown-diff"' in result
+    assert 'data-markdown-diff-state="deleted"' in result
+    assert 'data-markdown-diff-state="added"' in result
+    assert '<del class="vyasa-markdown-diff-word">old</del>' in result
+    assert '<ins class="vyasa-markdown-diff-word">new</ins>' in result
+    assert "<strong>" in result and "<ul" in result
+    assert 'class="language-markdown"' not in result
+    assert "name: daksh" not in result
+    assert "Unchanged content omitted" in result
+
+
+def test_markdown_diff_keeps_fenced_blocks_whole():
+    before = "# Doc\n\n```text\none\n\ntwo\n```"
+    after = "# Doc\n\n```text\none\n\nthree\n```"
+
+    old_blocks = code_reference_render._markdown_blocks(before)
+    new_blocks = code_reference_render._markdown_blocks(after)
+    assert len(old_blocks) == 2
+    old, new = code_reference_render._marked_words(old_blocks[1], new_blocks[1])
+    assert old == old_blocks[1] and new == new_blocks[1]
+
+
+def test_markdown_diff_does_not_put_marks_inside_link_syntax():
+    before = "Read [the guide](old-guide)."
+    after = "Read [the guide](new-guide)."
+
+    assert code_reference_render._marked_words(before, after) == (before, after)
+
+
+def test_markdown_diff_does_not_put_marks_inside_table_syntax():
+    before = "| Stage | Path |\n|---|---|\n| Architecture | old |"
+    after = "| Stage | Path |\n|---|---|\n| Architecture | new |"
+
+    assert code_reference_render._marked_words(before, after) == (before, after)
+
+
 def test_link_preview_renders_disjoint_changed_blocks_for_symbol(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     repo.mkdir()

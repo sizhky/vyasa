@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import re
+from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from starlette.responses import Response
@@ -19,6 +20,7 @@ from .code_reference import CodeReferenceError, resolve_code_reference
 from .code_reference_markdown import parse_code_reference_json
 from .code_reference_render import (
     render_code_reference_diagnostic,
+    render_markdown_diff_reference,
     render_resolved_code_reference,
 )
 
@@ -112,6 +114,24 @@ def _render_code_reference_preview(
     return render_resolved_code_reference(resolved, relative_path, full=full)
 
 
+def _render_markdown_reference_preview(
+    file_path: Path, code_ref: str, relative_path: str
+) -> str | None:
+    """Render a Markdown reference as a document or a rendered revision diff."""
+    try:
+        reference = parse_code_reference_json(code_ref)
+        resolved = resolve_code_reference(file_path, reference)
+    except CodeReferenceError as exc:
+        return render_code_reference_diagnostic(exc)
+    page_slug = content_slug_for_path(file_path) or relative_path
+    if reference.change and reference.view in {"diff", "split"}:
+        return render_markdown_diff_reference(resolved, relative_path, current_path=page_slug)
+    source = resolved.source or resolved.after_source
+    if not source:
+        return None
+    return from_md(_strip_leading_frontmatter_block(source).strip(), current_path=page_slug)
+
+
 def _source_label_attrs(relative_path: str) -> str:
     """Display attributes for the preview chrome, beside the address.
 
@@ -139,11 +159,15 @@ def render_link_preview_html(
         file_path = content_path_for_slug(slug) or content_path_for_slug(slug, ".md")
     if not file_path or (not file_path.exists() and not code_ref):
         return None
-    if code_ref and file_path.suffix.lower() != ".md":
+    if code_ref:
         relative_path = content_slug_for_path(file_path, strip_suffix=False) or file_path.name
-        preview_html = _render_code_reference_preview(
-            file_path, code_ref, relative_path, full=full
+        preview_html = (
+            _render_markdown_reference_preview(file_path, code_ref, relative_path)
+            if file_path.suffix.lower() == ".md"
+            else _render_code_reference_preview(file_path, code_ref, relative_path, full=full)
         )
+        if preview_html is None:
+            return None
         return (
             f'<div class="vyasa-link-preview-shell" data-relative-path="{html.escape(relative_path, quote=True)}" '
             f'{_source_label_attrs(relative_path)}'
@@ -155,9 +179,7 @@ def render_link_preview_html(
     target_line = _markdown_target_line(source, href) if file_path.suffix.lower() == ".md" else None
     if file_path.suffix.lower() == ".md":
         page_slug = content_slug_for_path(file_path) or slug
-        if code_ref:
-            section = _strip_leading_frontmatter_block(source).strip()
-        elif target_line:
+        if target_line:
             section = None
         else:
             section = (
