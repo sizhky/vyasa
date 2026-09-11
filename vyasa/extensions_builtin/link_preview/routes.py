@@ -139,7 +139,7 @@ def render_link_preview_html(
         file_path = content_path_for_slug(slug) or content_path_for_slug(slug, ".md")
     if not file_path or (not file_path.exists() and not code_ref):
         return None
-    if code_ref:
+    if code_ref and file_path.suffix.lower() != ".md":
         relative_path = content_slug_for_path(file_path, strip_suffix=False) or file_path.name
         preview_html = _render_code_reference_preview(
             file_path, code_ref, relative_path, full=full
@@ -154,21 +154,29 @@ def render_link_preview_html(
     source = file_path.read_text(encoding="utf-8", errors="replace")
     target_line = _markdown_target_line(source, href) if file_path.suffix.lower() == ".md" else None
     if file_path.suffix.lower() == ".md":
-        section = None if target_line else (
-            _extract_markdown_section_text(source, fragment)
-            if fragment
-            else _strip_leading_frontmatter_block(source).strip()
-            if symbol
-            else _default_section_markdown(source)
-        )
+        page_slug = content_slug_for_path(file_path) or slug
+        if code_ref:
+            section = _strip_leading_frontmatter_block(source).strip()
+        elif target_line:
+            section = None
+        else:
+            section = (
+                _extract_markdown_section_text(source, fragment)
+                if fragment
+                else _strip_leading_frontmatter_block(source).strip()
+                if symbol
+                else _default_section_markdown(source)
+            )
         if not section and fragment:
             section = _default_section_markdown(source)
         if target_line:
-            preview_html = render_code_shell(source, "markdown", line_numbers=True)
+            preview_html = from_md(
+                _strip_leading_frontmatter_block(source).strip(),
+                current_path=page_slug,
+            )
         elif not section:
             return None
         else:
-            page_slug = content_slug_for_path(file_path) or slug
             preview_html = from_md(section, current_path=page_slug)
     else:
         language = infer_code_language(file_path.name)

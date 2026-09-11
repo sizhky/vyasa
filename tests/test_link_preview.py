@@ -111,6 +111,24 @@ def test_link_preview_renders_code_reference_metadata(tmp_path, monkeypatch):
     assert 'data-code-highlight-lines="1-2"' in result
 
 
+def test_markdown_code_reference_uses_document_rendering(tmp_path, monkeypatch):
+    source = tmp_path / "SKILL.md"
+    source.write_text("---\nname: daksh\n---\n# Daksh\n\n**Rendered body.**\n")
+    monkeypatch.setattr(routes, "_resolve_preview_file", lambda _slug: source)
+    monkeypatch.setattr(routes, "content_slug_for_path", lambda _path, strip_suffix=True: "skills/daksh/SKILL.md")
+
+    result = routes.render_link_preview_html(
+        href="skills/daksh/SKILL.md",
+        code_ref=json.dumps({"show": "file", "focus": "all", "role": "implementation"}),
+    )
+
+    assert result is not None
+    assert "<strong>Rendered body.</strong>" in result
+    assert 'class="language-markdown"' not in result
+    assert "data-code-reference-role" not in result
+    assert "name: daksh" not in result
+
+
 def test_link_preview_renders_disjoint_changed_blocks_for_symbol(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -578,6 +596,21 @@ def test_link_preview_renders_full_markdown_for_symbol_position(tmp_path, monkey
     assert result is not None
     assert "Opening." in result
     assert "Run the target." in result
+
+
+def test_link_preview_renders_markdown_line_target_through_markdown_pipeline(tmp_path, monkeypatch):
+    source = tmp_path / "sample.md"
+    source.write_text("---\ntitle: Sample\n---\n# Start\n\n**Rendered body.**\n")
+    monkeypatch.setattr(routes, "_resolve_preview_file", lambda _slug: source)
+    monkeypatch.setattr(routes, "content_slug_for_path", lambda _path, strip_suffix=True: "sample.md")
+
+    result = routes.render_link_preview_html(href="/posts/sample.md:6")
+
+    assert result is not None
+    assert "<strong>Rendered body.</strong>" in result
+    assert 'class="language-markdown"' not in result
+    assert "title: Sample" not in result
+    assert "data-target-line=6" in result
 
 
 def test_link_preview_fragment_match_ignores_heading_case(tmp_path, monkeypatch):
