@@ -1,0 +1,8 @@
+n11: 1.1 Find the Astro project
+	code=|
+		- [astro_project_for](../../vyasa/extensions_builtin/mdx/astro.py){show=symbol symbol=astro_project_for kind=function}
+		- [astro_source_fingerprint](../../vyasa/extensions_builtin/mdx/astro.py){show=symbol symbol=astro_source_fingerprint kind=function}
+n12: 1.2 Render the Astro MDX document
+	code=|
+		- [render_astro_mdx_body](../../vyasa/extensions_builtin/mdx/astro.py){show=symbol symbol=render_astro_mdx_body kind=function}
+		- [_render_astro_mdx_cached](../../vyasa/extensions_builtin/mdx/astro.py){show=symbol symbol=_render_astro_mdx_cached kind=function}

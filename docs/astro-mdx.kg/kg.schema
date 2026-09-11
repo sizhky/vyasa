@@ -1,0 +1,20 @@
+@graph id=astro-mdx title="Astro MDX rendering"
+hover_attrs=description,code
+
+@sources
+nodes=kg.code.nodes+kg.nodes
+base:
+	edges=kg.edges
+
+@relations
+finds
+renders
+
+@views
+delivery:
+	source=base
+	layout=layered
+	layered_tier=layer
+	layered_order=discovery,rendering
+	hover_attrs=description,code
+	caption="Vyasa finds the Astro project before it asks that project to render an MDX document."

@@ -1,0 +1,7 @@
+root: 1 Astro MDX rendering
+	n11: 1.1 Find the Astro project
+		layer=discovery
+		description=Find the nearest Astro configuration file above the requested MDX document.
+	n12: 1.2 Render the Astro MDX document
+		layer=rendering
+		description=Run the owning Astro project and return the document body with inlined styles.
