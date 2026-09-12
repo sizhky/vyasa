@@ -130,14 +130,19 @@ def parse_node_attr_coverage(path):
 
 
 def parse_schema(path):
-    """Return (declared_relations, referenced_source_files, grammar_ref).
+    """Return (declared_relations, referenced_source_files, grammar_ref, node_files).
+
+    `node_files` lists every file named by a `nodes=` line under `@sources`, in
+    the order the schema lists them, including the per-source blocks. The
+    runtime reads that whole chain, so an edge endpoint defined in any of those
+    files is defined for the graph.
 
     grammar_ref is the path declared by an `@grammar path=...` line (or a
     `grammar=...` line inside @sources), or None. A CLI `--grammar` flag overrides
     it. The grammar is what layers dialect-specific invariants on top of the
     generic structural checks; without one, only the structural checks run.
     """
-    relations, sources, grammar_ref = set(), {}, None
+    relations, sources, grammar_ref, node_files = set(), {}, None, []
     section = ""
     for line in path.read_text(encoding="utf-8").splitlines():
         s = line.strip()
@@ -163,7 +168,9 @@ def parse_schema(path):
                     grammar_ref = m.group(2)
                 else:
                     sources[m.group(1)] = m.group(2)
-    return relations, sources, grammar_ref
+                    if m.group(1) == "nodes":
+                        node_files.extend(m.group(2).split("+"))
+    return relations, sources, grammar_ref, node_files
 
 
 def parse_contexts(pack):
@@ -407,6 +414,23 @@ def load_grammar(ref, pack, cli_override):
     return None, f"grammar file not found: {raw} (tried as-is and relative to {pack})"
 
 
+def pack_from_items_fence(page):
+    """The pack directory the page's `items` fence names, or None.
+
+    The fence holds `items_schema: <pack>/kg.schema`, a path relative to the
+    page, so a pack directory may carry a name that is not the page stem.
+    """
+    try:
+        text = page.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    match = re.search(r"^items_schema:\s*(\S+)\s*$", text, re.MULTILINE)
+    if not match:
+        return None
+    pack = (page.parent / match.group(1)).parent
+    return pack if pack.is_dir() else None
+
+
 def main():
     args = sys.argv[1:]
     cli_grammar = None
@@ -429,7 +453,9 @@ def main():
         pack = target
     elif target.suffix == ".md":
         mom_md = target
-        pack = target.with_suffix("").with_name(target.stem + ".kg")
+        pack = pack_from_items_fence(target)
+        if pack is None:
+            pack = target.with_suffix("").with_name(target.stem + ".kg")
         if not pack.is_dir():
             pack = Path(str(target)[:-3] + ".kg")
     else:
@@ -457,11 +483,17 @@ def main():
             print(f"ERROR: {e}")
         return 1
 
-    node_ids = parse_nodes(need["kg.nodes"])
     edges_path = pack / "kg.edges"
     edge_ids, edges = parse_edges(edges_path) if edges_path.exists() else (set(), [])
     node_refs, edge_refs = parse_attr_refs(need["kg.attrs"])
-    relations, sources, grammar_ref = parse_schema(need["kg.schema"])
+    relations, sources, grammar_ref, node_files = parse_schema(need["kg.schema"])
+    # The pool is every node file the schema lists, not `kg.nodes` alone. A view
+    # that carries its own participants declares them in its own `nodes=` file.
+    node_ids = parse_nodes(need["kg.nodes"])
+    for name in node_files:
+        candidate = pack / name
+        if candidate.exists() and candidate != need["kg.nodes"]:
+            node_ids |= parse_nodes(candidate)
     if re.search(r"\bfold_mode\s*=", need["kg.schema"].read_text(encoding="utf-8")):
         errors.append("kg.schema: fold_mode is not allowed; every context is a complete snapshot")
 
