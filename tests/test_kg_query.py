@@ -357,6 +357,96 @@ plain:
     assert model["projection_models"]["day1-story"]["model"]["slides"][0]["id"] == "intro"
 
 
+def test_schema_visibility_rules_promote_context_views(tmp_path):
+    """3.1 Matching context views use the selected context data."""
+    schema_path = _write_view_context_pack(tmp_path)
+    with schema_path.open("a", encoding="utf-8") as handle:
+        handle.write(
+            """@view_visibility
+day1/local:
+    show_in=self
+day1/everywhere:
+    show_in=all
+day1/future:
+    show_in=from:day1
+day1/picked:
+    show_in=ids:day2
+day1/pattern:
+    show_in=id_regex:"day[2-9]"
+"""
+        )
+    with (tmp_path / "day1.context").open("a", encoding="utf-8") as handle:
+        handle.write(
+            """@views
+local:
+    color_by=status
+everywhere:
+    color_by=status
+future:
+    color_by=status
+picked:
+    color_by=status
+pattern:
+    color_by=status
+"""
+        )
+    (tmp_path / "day20.context").write_text(
+        "@context id=day20 seq=20\n@edges\nnew -> claim\nclaim -> jira\n",
+        encoding="utf-8",
+    )
+
+    day1 = read_kg_pack(schema_path, "day1")["view_projections"]
+    day2 = read_kg_pack(schema_path, "day2")["view_projections"]
+    day20 = read_kg_pack(schema_path, "day20")["view_projections"]
+
+    assert [view["id"] for view in day1] == ["local", "everywhere", "future"]
+    assert [view["id"] for view in day2] == ["everywhere", "future", "picked", "pattern"]
+    assert [view["id"] for view in day20] == ["everywhere", "future"]
+    assert {view["resolved_context"] for view in day2} == {"day2"}
+    model = parse_tasks_text(
+        f"```items\n---\nitems_schema: {schema_path}\nkg_context_id: day2\n---\n```",
+        current_path=tmp_path / "graph.md",
+    )
+    pattern_model = model["projection_models"]["pattern"]["model"]
+    assert {node["id"] for node in pattern_model["tasks"]} == {"new", "claim", "jira"}
+
+
+@pytest.mark.parametrize(
+    ("rule", "message"),
+    [
+        ("missing/story:\n    show_in=all", "unknown owner context"),
+        ("day1/missing:\n    show_in=all", "unknown context view"),
+        ("day1/day1_story:\n    show_in=id_regex:\"[\"", "invalid id_regex"),
+        ("day1/day1_story:\n    show_in=from:missing", "unknown context"),
+        ("day1/day1_story:\n    show_in=ids:day2,missing", "unknown contexts"),
+        ("day1/day1_story:\n    show_in=later", "unknown show_in selector"),
+    ],
+)
+def test_schema_visibility_rules_reject_invalid_policy(tmp_path, rule, message):
+    """1.2 Invalid visibility policy fails before rendering."""
+    schema_path = _write_view_context_pack(tmp_path)
+    with (tmp_path / "day1.context").open("a", encoding="utf-8") as handle:
+        handle.write("@views\nday1_story:\n    color_by=status\n")
+    with schema_path.open("a", encoding="utf-8") as handle:
+        handle.write(f"@view_visibility\n{rule}\n")
+
+    with pytest.raises(ValueError, match=message):
+        read_kg_pack(schema_path, "day1")
+
+
+def test_schema_visibility_rules_reject_matching_view_id_conflicts(tmp_path):
+    """2.3 Matching context views cannot replace each other silently."""
+    schema_path = _write_view_context_pack(tmp_path)
+    for context_id in ("day1", "day2"):
+        with (tmp_path / f"{context_id}.context").open("a", encoding="utf-8") as handle:
+            handle.write("@views\nshared:\n    color_by=status\n")
+    with schema_path.open("a", encoding="utf-8") as handle:
+        handle.write("@view_visibility\nday1/shared:\n    show_in=all\n")
+
+    with pytest.raises(ValueError, match="duplicate visible view id 'shared'"):
+        read_kg_pack(schema_path, "day2")
+
+
 def test_unknown_view_context_fails_pack_loading(tmp_path):
     schema_path = _write_view_context_pack(tmp_path, fixed_context="missing")
 

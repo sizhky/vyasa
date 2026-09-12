@@ -97,11 +97,20 @@ class KgView:
 
 
 @dataclass
+class KgViewVisibility:
+    """1.1 Hold one schema rule for one context-owned view."""
+
+    view_ref: str
+    show_in: str = ""
+
+
+@dataclass
 class KgSchema:
     graph: dict[str, str] = field(default_factory=dict)
     sources: dict[str, dict[str, Any]] = field(default_factory=dict)
     relations: dict[str, dict[str, str]] = field(default_factory=dict)
     views: list[KgView] = field(default_factory=list)
+    view_visibility: list[KgViewVisibility] = field(default_factory=list)
     slides: list[dict[str, Any]] = field(default_factory=list)
     status_defaults: dict[str, str] = field(default_factory=dict)
     acl: dict[str, Any] = field(default_factory=lambda: {"classes": [], "grants": {}, "people": {}})
@@ -208,6 +217,8 @@ def read_kg_pack(schema_path: PathLike, context_id: str = "") -> dict[str, Any]:
 
 
 def _read_context_kg_pack(schema_path: PathLike, schema: KgSchema, context_id: str = "") -> dict[str, Any]:
+    """3.2 Read one context while preserving existing view fallbacks."""
+
     contexts = _discover_contexts(schema_path, schema.graph.get("contexts", ""))
     _validate_context_catalog(contexts, require_stage=bool(schema.edges))
     catalog = _context_catalog(contexts)
@@ -224,6 +235,7 @@ def _read_context_kg_pack(schema_path: PathLike, schema: KgSchema, context_id: s
         for context in contexts
     }
     edges = resolved_edges[active.id]
+    context_views = _visible_context_views(contexts, schema.view_visibility, active.id)
     nodes_by_id: dict[str, dict[str, Any]] = {}
     _merge_node_files(schema_path, schema.nodes, nodes_by_id)
     _merge_node_files(schema_path, active.nodes_file, nodes_by_id)
@@ -254,7 +266,12 @@ def _read_context_kg_pack(schema_path: PathLike, schema: KgSchema, context_id: s
             for node_id, node in nodes_by_id.items()
         },
         "dependency_edges": edges,
-        "view_projections": _resolved_projections(active.views or schema.views, catalog, active.id),
+        "view_projections": _resolved_projections(
+            context_views or schema.views,
+            catalog,
+            active.id,
+            bind_to_active=bool(context_views),
+        ),
         "slides": active.slides or schema.slides,
         "default_projection": schema.graph.get("default_view", ""),
         "default_group_by": _list_value(schema.graph.get("group_by", "")),
@@ -382,14 +399,100 @@ def _resolved_projections(
     views: list[KgView],
     contexts: list[dict[str, Any]],
     active_context: str,
+    *,
+    bind_to_active: bool = False,
 ) -> list[dict[str, Any]]:
+    """3.1 Resolve promoted views against the selected context data."""
+
     return [
         _projection(
             view,
-            resolve_context_id(contexts, view.context, active_context, active_context),
+            active_context if bind_to_active else resolve_context_id(contexts, view.context, active_context, active_context),
         )
         for view in views
     ]
+
+
+def _context_views_by_ref(contexts: list[KgContext]) -> dict[str, tuple[str, KgView]]:
+    """2.1 Collect every context view under its stable schema reference."""
+
+    views: dict[str, tuple[str, KgView]] = {}
+    for context in contexts:
+        for view in context.views:
+            ref = f"{context.id}/{view.id}"
+            if ref in views:
+                raise ValueError(f"duplicate context view reference {ref!r}")
+            views[ref] = (context.id, view)
+    return views
+
+
+def _view_visibility_targets(
+    rule: KgViewVisibility,
+    owner_id: str,
+    contexts: list[KgContext],
+) -> set[str]:
+    """1.2 Validate one selector and return every context identifier it targets."""
+
+    by_id = {context.id: context for context in contexts}
+    selector = rule.show_in.strip()
+    if selector == "self":
+        return {owner_id}
+    if selector == "all":
+        return set(by_id)
+    if selector.startswith("from:"):
+        anchor_id = selector.removeprefix("from:").strip()
+        if anchor_id not in by_id:
+            raise ValueError(f"view visibility {rule.view_ref!r} names unknown context {anchor_id!r}")
+        return {context.id for context in contexts if context.seq >= by_id[anchor_id].seq}
+    if selector.startswith("ids:"):
+        selected = {item.strip() for item in selector.removeprefix("ids:").split(",") if item.strip()}
+        unknown = selected - set(by_id)
+        if unknown:
+            raise ValueError(f"view visibility {rule.view_ref!r} names unknown contexts {sorted(unknown)!r}")
+        return selected
+    if selector.startswith("id_regex:"):
+        pattern = selector.removeprefix("id_regex:")
+        try:
+            matcher = re.compile(pattern)
+        except re.error as error:
+            raise ValueError(f"view visibility {rule.view_ref!r} has invalid id_regex: {error}") from error
+        return {context.id for context in contexts if matcher.fullmatch(context.id)}
+    raise ValueError(f"view visibility {rule.view_ref!r} has unknown show_in selector {selector!r}")
+
+
+def _assert_unique_view_ids(views: list[KgView]) -> None:
+    """2.3 Reject matching views that would replace each other in the browser."""
+
+    seen: set[str] = set()
+    for view in views:
+        if view.id in seen:
+            raise ValueError(f"duplicate visible view id {view.id!r}")
+        seen.add(view.id)
+
+
+def _visible_context_views(
+    contexts: list[KgContext],
+    rules: list[KgViewVisibility],
+    active_id: str,
+) -> list[KgView]:
+    """2.2 Return context-owned views visible for the selected context."""
+
+    views_by_ref = _context_views_by_ref(contexts)
+    rules_by_ref = {rule.view_ref: rule for rule in rules}
+    for ref in rules_by_ref:
+        if ref not in views_by_ref:
+            owner_id, separator, _view_id = ref.partition("/")
+            if not separator or owner_id not in {context.id for context in contexts}:
+                raise ValueError(f"view visibility {ref!r} names unknown owner context")
+            raise ValueError(f"view visibility {ref!r} names unknown context view")
+    visible: list[KgView] = []
+    for ref, (owner_id, view) in views_by_ref.items():
+        rule = rules_by_ref.get(ref)
+        targets = {owner_id} if rule is None else _view_visibility_targets(rule, owner_id, contexts)
+        if active_id in targets:
+            visible.append(view)
+    _assert_unique_view_ids(visible)
+    return visible
 
 
 def _read_context(path: PathLike) -> KgContext:
@@ -574,6 +677,7 @@ def read_schema(path: PathLike) -> KgSchema:
     section = ""
     current_source = ""
     current_source_attrs = False
+    current_visibility: KgViewVisibility | None = None
     current_slide: dict[str, Any] | None = None
     raw_lines = path.read_text(encoding="utf-8").splitlines()
     raw_index = 0
@@ -588,6 +692,7 @@ def read_schema(path: PathLike) -> KgSchema:
             section = parts[0]
             current_source = ""
             current_source_attrs = False
+            current_visibility = None
             current_slide = None
             if section == "@graph":
                 payload = _assignments(parts[1:])
@@ -623,6 +728,12 @@ def read_schema(path: PathLike) -> KgSchema:
                 schema.sources.setdefault(current_source, {}).update(payload)
             elif section == "@slides" and current_slide is not None:
                 raw_index += _read_slide_attr(raw_lines, raw_index - 1, current_slide)
+            elif section == "@view_visibility" and current_visibility is not None:
+                payload = _assignments(shlex.split(line))
+                if "show_in" in payload:
+                    if current_visibility.show_in:
+                        raise ValueError(f"duplicate show_in rule for {current_visibility.view_ref!r}")
+                    current_visibility.show_in = payload["show_in"]
             continue
         if section == "@sources":
             current_source = _read_source_line(schema, line)
@@ -636,6 +747,8 @@ def read_schema(path: PathLike) -> KgSchema:
             schema.status_defaults.update(payload)
         elif section == "@acl":
             _read_acl_line(schema, line)
+        elif section == "@view_visibility":
+            current_visibility = _start_view_visibility(schema, line)
         elif section == "@slides":
             sid, _, title = line.partition(":")
             current_slide = {"id": sid.strip(), "title": title.strip(), "nodes": []}
@@ -644,6 +757,21 @@ def read_schema(path: PathLike) -> KgSchema:
     if "base" not in schema.sources:
         schema.sources["base"] = {}
     return schema
+
+
+def _start_view_visibility(schema: KgSchema, line: str) -> KgViewVisibility:
+    """1.1 Parse one schema visibility reference and its inline selector."""
+
+    view_ref, separator, values = line.partition(":")
+    view_ref = view_ref.strip()
+    if not separator or view_ref.count("/") != 1 or any(not part for part in view_ref.split("/")):
+        raise ValueError(f"invalid view visibility reference {line!r}; expected owner-context/view-id:")
+    if any(rule.view_ref == view_ref for rule in schema.view_visibility):
+        raise ValueError(f"duplicate view visibility rule for {view_ref!r}")
+    rule = KgViewVisibility(view_ref=view_ref)
+    schema.view_visibility.append(rule)
+    rule.show_in = _assignments(shlex.split(values)).get("show_in", "")
+    return rule
 
 
 def _read_tmp_view_sidecars(schema: KgSchema, schema_path: PathLike) -> None:

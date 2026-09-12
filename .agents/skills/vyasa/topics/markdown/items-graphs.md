@@ -81,10 +81,34 @@ dependency:
 - `@grammar` is optional and names a declarative rules file (`path=` relative to the pack, or absolute) that layers *dialect* invariants on top of the generic structural checks. A grammar can enforce closed vocabularies (`closed_vocab`), directed spines over an ordered attr (`edge_direction`), relation cardinality (`edge_cardinality`), allowed endpoint kinds (`edge_endpoints`), and conditional attr presence (`requires_attr_when`). It stays out of the pack proper so one grammar is shared across many packs. No `@grammar` means structural checks only. See `scripts/validate_kg_pack.py` for the rule schema.
 - `@views` are named read-only views. A view may group or filter nodes, change display settings, own slides, or combine those choices. It does not need `group_by`.
 - A view accepts `context=active` (default), `context=latest`, or one exact context id. `active` follows the context selected by the request or UI; the other values select their resolved context when the view opens.
+- A view inside a `.context` file belongs to that context and is visible there by default. Put cross-context visibility rules in `kg.schema`, not in the `.context` file.
 - `group_by,color_by=status` expands to `group_by=status color_by=status`; `X,Y,Z=value` is valid for simple scalar values.
 - Projection display controls may live on views: `hover_attrs`, `edge_color_by`, `edge_label_from`, `aggregate_edges`, `default_open_depth`, and spacing/layout keys.
 - Panel sizing lives on the graph or a view: `node-card-width` and `filter-panel-width` both default to `20%` of the widget, so the panels keep their share on any screen. Any CSS length works (`30rem`, `440px`).
 - `node-card-content-scale` draws the node card's details wider than the card and lets sideways scroll pan across it. Default `2`. Set `1` to turn it off.
+
+### Context View Visibility
+
+Reference a context-owned view as `<owner-context>/<view-id>` under `@view_visibility`:
+
+```text
+@view_visibility
+ctx013/master-story:
+	show_in=from:ctx013
+ctx004/review:
+	show_in=ids:ctx010,ctx011
+ctx006/release-check:
+	show_in=id_regex:"release-[0-9]+"
+```
+
+- `show_in=self` selects only the owner context. This is also the default when the schema has no rule for the view.
+- `show_in=all` selects every context.
+- `show_in=from:<context-id>` selects that context and every context with a later `seq`.
+- `show_in=ids:<context-id>,<context-id>` selects only the listed contexts.
+- `show_in=id_regex:<pattern>` uses a full regular-expression match against each context id. Use `from:` for sequence order.
+- A matching view reads the selected context's graph data, not its owner's graph data.
+- Unknown references, contexts, selectors, invalid patterns, and duplicate visible view ids stop pack loading with a named error.
+- Matching views keep context `seq` order, then their authored order. When no context-owned view matches, schema views retain their compatibility fallback.
 
 ## Fixed Layouts
 
