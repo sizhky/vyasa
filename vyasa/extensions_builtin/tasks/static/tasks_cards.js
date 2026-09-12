@@ -286,24 +286,45 @@ export function tasksHeldKeyApplies(event, flowWrapper, active) {
 // `{show=symbol ...}` payload as `data-vyasa-code-reference`. Re-parsing the
 // Markdown here would drop it and preview the whole file, so read the rendered
 // anchor first and fall back to the raw text only when the render step is off.
-export function tasksCodeAttributeLink(record) {
-    if (!record) return null;
+export function tasksCodeAttributeLinks(record) {
+    if (!record) return [];
     const key = Object.keys(record).find((name) => String(name).toLowerCase() === 'code');
-    if (!key) return null;
+    if (!key) return [];
     const rendered = record.__rendered_attrs__?.[key];
-    const html = Array.isArray(rendered) ? rendered[0] : rendered;
-    if (typeof html === 'string' && html.trim()) {
+    const links = [];
+    for (const html of (Array.isArray(rendered) ? rendered : [rendered])) {
+        if (typeof html !== 'string' || !html.trim()) continue;
         const holder = document.createElement('div');
         holder.innerHTML = html;
-        const anchor = holder.querySelector('a[href]');
-        if (anchor) return anchor;
+        links.push(...holder.querySelectorAll('a[href]'));
     }
-    const value = Array.isArray(record[key]) ? record[key][0] : record[key];
-    const href = tasksExtractUrls(value)[0] || '';
-    if (!href) return null;
-    const anchor = document.createElement('a');
-    anchor.setAttribute('href', href);
-    return anchor;
+    if (links.length) return links;
+    return (Array.isArray(record[key]) ? record[key] : [record[key]])
+        .flatMap(tasksExtractUrls)
+        .map((href) => {
+            const anchor = document.createElement('a');
+            anchor.setAttribute('href', href);
+            return anchor;
+        });
+}
+
+export function tasksCodeAttributeLink(record) {
+    return tasksCodeAttributeLinks(record)[0] || null;
+}
+
+export function tasksGroupCodeLinks(links) {
+    const groups = [];
+    const byHref = new Map();
+    links.forEach((link, index) => {
+        const href = link.getAttribute('href') || '';
+        if (byHref.has(href)) byHref.get(href).links.push(link);
+        else {
+            const group = { href, links: [link], index };
+            groups.push(group);
+            byHref.set(href, group);
+        }
+    });
+    return groups;
 }
 
 function tasksHrefKind(href) {

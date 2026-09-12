@@ -148,6 +148,7 @@ function scrollPreviewBody(popover, deltaX, deltaY) {
 }
 
 function createPreviewView({ point, link, onClose }) {
+    let activeLink = link;
     const popover = document.createElement('aside');
     const pointer = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     const pointerShape = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
@@ -168,6 +169,7 @@ function createPreviewView({ point, link, onClose }) {
         '<button type="button" class="vyasa-link-preview-close" aria-label="Close preview">×</button>',
         '</span>',
         '</div>',
+        '<div class="vyasa-link-preview-tabs" role="tablist" aria-label="Code URLs" hidden></div>',
         '<div data-vyasa-link-preview-content class="vyasa-link-preview-content vyasa-link-preview-loading">Loading preview...</div>',
         '</div>',
     ].join('');
@@ -177,6 +179,9 @@ function createPreviewView({ point, link, onClose }) {
     pointer.appendChild(pointerOutline);
     const content = popover.querySelector('[data-vyasa-link-preview-content]');
     const bar = popover.querySelector('.vyasa-link-preview-bar');
+    const tabs = popover.querySelector('.vyasa-link-preview-tabs');
+    let tabSignature = '';
+    let selectTab = () => {};
     const sourceLabel = popover.querySelector('[data-vyasa-link-preview-origin]');
     const sourceOrigin = popover.querySelector('[data-vyasa-link-preview-source]');
     const wrapButton = popover.querySelector('[data-vyasa-link-preview-wrap]');
@@ -192,7 +197,7 @@ function createPreviewView({ point, link, onClose }) {
         applyWordWrap();
     });
     applyWordWrap();
-    sourceLabel.textContent = link.textContent.trim() || link.getAttribute('href') || 'Link';
+    sourceLabel.textContent = activeLink.textContent.trim() || activeLink.getAttribute('href') || 'Link';
     const normalFontPx = parseFloat(getComputedStyle(document.querySelector('#main-content') || document.body).fontSize);
     let fontSizePt = Math.max(6, (normalFontPx || 18) * 0.75 - 2);
     const applyFontSize = () => {
@@ -218,11 +223,11 @@ function createPreviewView({ point, link, onClose }) {
         popover.style.zIndex = String(z);
     };
     const updatePointer = () => {
-        if (!link.isConnected) {
+        if (!activeLink.isConnected) {
             pointer.hidden = true;
             return;
         }
-        const sourceRect = link.getBoundingClientRect();
+        const sourceRect = activeLink.getBoundingClientRect();
         const popupRect = popover.getBoundingClientRect();
         const geometry = linkPreviewPointerGeometry(sourceRect, popupRect);
         pointer.hidden = false;
@@ -288,6 +293,44 @@ function createPreviewView({ point, link, onClose }) {
             );
             raise();
         },
+        setTabs: (links, activeIndex, onSelect) => {
+            selectTab = onSelect;
+            const nextSignature = links.map((item) => item.getAttribute('href') || '').join('\n');
+            if (nextSignature !== tabSignature) {
+                tabs.replaceChildren();
+                links.forEach((item, index) => {
+                    const button = document.createElement('button');
+                    const href = item.getAttribute('href') || '';
+                    button.type = 'button';
+                    button.setAttribute('role', 'tab');
+                    button.textContent = decodeURIComponent(href.split(/[?#]/)[0].split('/').pop() || href);
+                    button.title = href;
+                    button.addEventListener('click', () => selectTab(index));
+                    button.addEventListener('keydown', (event) => {
+                        const delta = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+                        if (!delta) return;
+                        const target = (index + delta + links.length) % links.length;
+                        selectTab(target);
+                        tabs.children[target]?.focus();
+                        event.preventDefault();
+                        event.stopPropagation();
+                    });
+                    tabs.appendChild(button);
+                });
+                tabSignature = nextSignature;
+            }
+            Array.from(tabs.children).forEach((button, index) => {
+                button.setAttribute('aria-selected', String(index === activeIndex));
+                button.tabIndex = index === activeIndex ? 0 : -1;
+            });
+            tabs.hidden = links.length < 2;
+        },
+        setLink: (nextLink) => {
+            activeLink = nextLink;
+            sourceLabel.textContent = activeLink.textContent.trim() || activeLink.getAttribute('href') || 'Link';
+            content.className = 'vyasa-link-preview-content vyasa-link-preview-loading';
+            content.textContent = 'Loading preview...';
+        },
         scrollBy: (deltaX, deltaY) => scrollPreviewBody(popover, deltaX, deltaY),
         // Walk the reference's marked blocks. The Prev and Next buttons already
         // own that walk, so drive them instead of repeating the block maths.
@@ -323,9 +366,9 @@ function createPreviewView({ point, link, onClose }) {
                 // The full-file view is fetched only when the reader asks, so a
                 // hover preview stays small.
                 load: (full) => fetchPreview({
-                    href: link.getAttribute('href') || '',
-                    currentPath: link.dataset.vyasaLinkPreviewCurrentPath || '',
-                    codeReference: link.dataset.vyasaCodeReference || '',
+                    href: activeLink.getAttribute('href') || '',
+                    currentPath: activeLink.dataset.vyasaLinkPreviewCurrentPath || '',
+                    codeReference: activeLink.dataset.vyasaCodeReference || '',
                     full,
                 }),
                 onSwap: () => {
@@ -346,10 +389,10 @@ function createPreviewView({ point, link, onClose }) {
                 const shown = shellData?.sourcePath || relativePath;
                 sourceLabel.textContent = shown;
                 sourceLabel.title = origin ? `${origin}/${shown}` : shown;
-                sourceLabel.href = link.getAttribute('href')
+                sourceLabel.href = activeLink.getAttribute('href')
                     || `/posts/${relativePath.split('/').map(encodeURIComponent).join('/')}`;
             }
-            requestAnimationFrame(() => scrollLinkPreviewToTarget(content, link.getAttribute('href') || ''));
+            requestAnimationFrame(() => scrollLinkPreviewToTarget(content, activeLink.getAttribute('href') || ''));
             schedulePointerRefresh();
         },
     };
@@ -451,6 +494,9 @@ window.vyasaLinkPreview = {
     open: (link, point) => previews.open(link, point),
     pin: (entry) => previews.pin(entry),
     close: (entry) => previews.close(entry),
+    isOpen: (entry) => previews.has(entry),
+    replace: (entry, link) => previews.replace(entry, link),
+    setTabs: (entry, links, activeIndex, onSelect) => entry?.view?.setTabs?.(links, activeIndex, onSelect),
     scrollBy: (entry, deltaX, deltaY) => entry?.view?.scrollBy?.(deltaX, deltaY) === true,
     stepCodeBlock: (entry, delta) => entry?.view?.stepCodeBlock?.(delta) === true,
 };

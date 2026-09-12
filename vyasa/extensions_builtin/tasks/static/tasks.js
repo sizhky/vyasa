@@ -1,5 +1,5 @@
 import {
-    copyTasksText, tasksCodeAttributeLink, tasksHeldKeyApplies, tasksInlineReferenceHtml,
+    copyTasksText, tasksCodeAttributeLinks, tasksGroupCodeLinks, tasksHeldKeyApplies, tasksInlineReferenceHtml,
     tasksNodeLinkKinds,
 } from './tasks_cards.js';
 import {
@@ -817,6 +817,9 @@ async function renderTasksGraphs(rootElement = document) {
             // mode reads it so that W + A + Enter pins the code preview instead of
             // the edge: A is the newer hold, so it claims Enter.
             const codeModeEntryRef = React.useRef(null);
+            const codeModeLinksRef = React.useRef([]);
+            const codeModeIndexRef = React.useRef(0);
+            const codeModePinnedRef = React.useRef(null);
             const edgePinBloomIdRef = React.useRef(0);
             const [edgePinBloom, setEdgePinBloom] = React.useState(null);
             const contextDiffSelectionRef = React.useRef({ key: '', ids: new Set() });
@@ -1332,7 +1335,6 @@ async function renderTasksGraphs(rootElement = document) {
             // preview instead of the graph. Releasing A closes it, so the preview
             // never outlives the key. Same shape as the W edge preview above.
             React.useEffect(() => {
-                const CODE_BLOCK_STEP = { ArrowRight: 1, ArrowLeft: -1 };
                 let pointerAt = null;
                 const trackPointer = (event) => {
                     pointerAt = { clientX: event.clientX, clientY: event.clientY };
@@ -1382,23 +1384,46 @@ async function renderTasksGraphs(rootElement = document) {
                     if (rect) return { clientX: rect.right, clientY: rect.top + 12 };
                     return pointerAt || { clientX: 24, clientY: 24 };
                 };
+                const activePinnedCodePreview = () => {
+                    const pinned = codeModePinnedRef.current;
+                    if (!pinned || window.vyasaLinkPreview?.isOpen?.(pinned.entry)) return pinned;
+                    codeModePinnedRef.current = null;
+                    return null;
+                };
+                const showCodeTabs = (entry, links, index) => {
+                    const groups = tasksGroupCodeLinks(links);
+                    const active = groups.findIndex((group) => group.links.includes(links[index]));
+                    window.vyasaLinkPreview?.setTabs?.(
+                        entry,
+                        groups.map((group) => group.links[0]),
+                        active,
+                        (target) => switchCodeLink(groups[target].index),
+                    );
+                };
+                const openCodePreviewAt = (links, index, pinned = false) => {
+                    const nextIndex = (index + links.length) % links.length;
+                    const link = links[nextIndex];
+                    const entry = window.vyasaLinkPreview?.open?.(link, codeModeOpenPoint()) || null;
+                    if (pinned && entry) window.vyasaLinkPreview?.pin?.(entry);
+                    if (pinned) codeModePinnedRef.current = entry ? { entry, links, index: nextIndex } : null;
+                    else {
+                        codeModeEntryRef.current = entry;
+                        codeModeLinksRef.current = links;
+                        codeModeIndexRef.current = nextIndex;
+                    }
+                    showCodeTabs(entry, links, nextIndex);
+                    logTasksDebug('codeModeOpen', { widgetId, href: link.getAttribute('href') || '', opened: Boolean(entry), index: nextIndex });
+                    return entry;
+                };
                 const openCodePreview = () => {
                     if (codeModeEntryRef.current) return;
-                    const link = tasksCodeAttributeLink(codeModeRecord());
-                    if (!link) {
+                    const links = tasksCodeAttributeLinks(codeModeRecord());
+                    if (!links.length) {
                         setEdgeStatus('No code link here. Point at a node or edge that has a Code attribute.');
                         return;
                     }
-                    const entry = window.vyasaLinkPreview?.open?.(link, codeModeOpenPoint()) || null;
-                    codeModeEntryRef.current = entry;
-                    logTasksDebug('codeModeOpen', {
-                        widgetId,
-                        href: link.getAttribute('href') || '',
-                        opened: Boolean(entry),
-                    });
-                    setEdgeStatus(entry
-                        ? 'Code preview open. Hold A and scroll to read it, Enter to pin it.'
-                        : 'Link preview is not available on this page.');
+                    const entry = openCodePreviewAt(links, 0);
+                    setEdgeStatus(entry ? 'Code preview open. Hold A and scroll to read it, Enter to pin it.' : 'Link preview is not available on this page.');
                 };
                 const closeCodePreview = () => {
                     if (!codeModeEntryRef.current) return;
@@ -1406,34 +1431,59 @@ async function renderTasksGraphs(rootElement = document) {
                     codeModeEntryRef.current = null;
                     setEdgeStatus('Code preview closed.');
                 };
-                // Pinning hands the popup over to the reader. Code mode stops owning
-                // it, so releasing A leaves it up and the next A opens a fresh one
-                // that steps clear of the pinned popup. Close a pinned one with
-                // Escape or its × button, the same as any other preview.
                 const pinCodePreview = () => {
                     if (!codeModeEntryRef.current) return false;
                     window.vyasaLinkPreview?.pin?.(codeModeEntryRef.current);
+                    codeModePinnedRef.current = { entry: codeModeEntryRef.current, links: codeModeLinksRef.current, index: codeModeIndexRef.current };
                     codeModeEntryRef.current = null;
                     logTasksDebug('codeModePinned', { widgetId });
-                    setEdgeStatus('Code preview pinned.');
+                    setEdgeStatus('Code preview pinned. Use Left and Right to switch Code URLs.');
                     return true;
+                };
+                const switchCodeLink = (targetIndex) => {
+                    const pinned = activePinnedCodePreview();
+                    const entry = codeModeEntryRef.current || pinned?.entry;
+                    const links = codeModeEntryRef.current ? codeModeLinksRef.current : pinned?.links;
+                    const index = codeModeEntryRef.current ? codeModeIndexRef.current : pinned?.index;
+                    if (!entry || !links?.length) return false;
+                    const nextIndex = (targetIndex + links.length) % links.length;
+                    if (!window.vyasaLinkPreview?.replace?.(entry, links[nextIndex])) return false;
+                    if (codeModeEntryRef.current) codeModeIndexRef.current = nextIndex;
+                    else codeModePinnedRef.current = { entry, links, index: nextIndex };
+                    showCodeTabs(entry, links, nextIndex);
+                    return true;
+                };
+                const stepCodeUrl = (delta) => {
+                    const links = codeModeEntryRef.current ? codeModeLinksRef.current : activePinnedCodePreview()?.links;
+                    const index = codeModeEntryRef.current ? codeModeIndexRef.current : codeModePinnedRef.current?.index;
+                    const groups = tasksGroupCodeLinks(links || []);
+                    const current = groups.findIndex((group) => group.links.includes(links?.[index]));
+                    return current >= 0 && switchCodeLink(groups[(current + delta + groups.length) % groups.length].index);
+                };
+                const stepCodeChunk = (delta) => {
+                    const links = codeModeEntryRef.current ? codeModeLinksRef.current : activePinnedCodePreview()?.links;
+                    const index = codeModeEntryRef.current ? codeModeIndexRef.current : codeModePinnedRef.current?.index;
+                    const group = tasksGroupCodeLinks(links || []).find((item) => item.links.includes(links?.[index]));
+                    const current = group?.links.indexOf(links[index]) ?? -1;
+                    return current >= 0 && switchCodeLink(links.indexOf(group.links[(current + delta + group.links.length) % group.links.length]));
                 };
                 const onKeyDown = (event) => {
                     if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
-                    if (!tasksHeldKeyApplies(event, flowWrapperRef.current, codeModeEntryRef.current)) return;
+                    const activeEntry = codeModeEntryRef.current || activePinnedCodePreview()?.entry;
+                    if (!tasksHeldKeyApplies(event, flowWrapperRef.current, activeEntry)) return;
                     if (event.key === 'Enter' && pinCodePreview()) {
                         event.preventDefault();
                         event.stopImmediatePropagation();
                         return;
                     }
-                    // Left and right walk the blocks the reference marks, so the
-                    // reader steps through the code the author pointed at instead
-                    // of panning the graph they cannot see.
-                    const blockStep = CODE_BLOCK_STEP[event.key] || 0;
-                    if (blockStep && codeModeEntryRef.current) {
-                        if (!window.vyasaLinkPreview?.stepCodeBlock?.(codeModeEntryRef.current, blockStep)) {
-                            setEdgeStatus('This preview marks no code blocks.');
-                        }
+                    if ((event.key === 'ArrowRight' || event.key === 'ArrowLeft')
+                        && stepCodeUrl(event.key === 'ArrowRight' ? 1 : -1)) {
+                        event.preventDefault();
+                        event.stopImmediatePropagation();
+                        return;
+                    }
+                    if ((event.key === 'ArrowDown' || event.key === 'ArrowUp')
+                        && stepCodeChunk(event.key === 'ArrowDown' ? 1 : -1)) {
                         event.preventDefault();
                         event.stopPropagation();
                         return;

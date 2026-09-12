@@ -41,6 +41,19 @@ export class LinkPreviewStack {
         entry.view.remove();
     }
 
+    replace(entry, link) {
+        const href = link?.getAttribute('href') || '';
+        if (!href || !this.entries.has(entry)) return false;
+        entry.abort.abort();
+        this.entriesByLink.delete(entry.link);
+        entry.link = link;
+        entry.abort = new AbortController();
+        this.entriesByLink.set(link, entry);
+        entry.view.setLink?.(link);
+        this.load(entry, href, link.dataset.vyasaLinkPreviewCurrentPath || '', link.dataset.vyasaCodeReference || '');
+        return true;
+    }
+
     pin(entry) {
         if (!entry || !this.entries.has(entry)) return false;
         entry.view.pin?.();
@@ -58,19 +71,24 @@ export class LinkPreviewStack {
         Array.from(this.entries).reverse().forEach((entry) => this.close(entry));
     }
 
+    has(entry) {
+        return this.entries.has(entry);
+    }
+
     async load(entry, href, currentPath, codeReference) {
+        const abort = entry.abort;
         try {
             const content = await this.fetchPreview({
                 href,
                 currentPath,
                 codeReference,
-                signal: entry.abort.signal,
+                signal: abort.signal,
             });
-            if (!this.entries.has(entry)) return;
+            if (!this.entries.has(entry) || entry.abort !== abort) return;
             if (content === null) entry.view.setMessage('Preview unavailable.');
             else entry.view.setContent(content);
         } catch (error) {
-            if (!entry.abort.signal.aborted && this.entries.has(entry)) {
+            if (!abort.signal.aborted && this.entries.has(entry) && entry.abort === abort) {
                 entry.view.setMessage('Preview unavailable.');
             }
         }
