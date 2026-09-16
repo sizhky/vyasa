@@ -126,6 +126,26 @@ From `demo/visuals/index.md` with `code_root: ../..`, that link resolves to the 
 - A file with any other suffix has no keyword table. The preview highlights the first whole-word match.
 - An unknown `kind` value behaves the same way. Prefer no `kind` over a guessed one.
 
+### Unsupported Languages: Use `match[...]`, Not `?symbol=`
+
+Check the language before writing a code link:
+
+- **Python and JS/TS/TSX** have a strict symbol-range adapter. Use `?symbol=X&kind=Y` above, or the richer `show=symbol symbol=X kind=Y` attribute form from the spec linked below — both resolve a real range.
+- **Every other language** — Java, XML (`pom.xml`), `.properties`, YAML, Dockerfile, Swift, Go, and so on — has no adapter. Do not write `?symbol=&kind=` for these; the fallback is a first-whole-word-match guess, not a resolved range, and a guessed `kind` is worse than none.
+
+For an unsupported language, link the file and select the evidence with a literal-text match instead:
+
+```md
+[log4j-core](../pom.xml){show=file focus="match[<artifactId>log4j-core</artifactId>]" context=2 role=implementation}
+```
+
+- `focus="match[...]"` highlights every line containing that exact literal text. The literal must be an exact substring of the file and cannot contain `]`.
+- `context=N` adds N lines around each match.
+- `role=implementation` (or `test`, `context`, `contract`) says why the code is linked.
+- A file-format label such as `kind=Dependency` or `kind=Setting` is optional free text here — `show=file` never uses `kind` for lookup, so any label is safe and never guessed.
+- Full grammar, `show=symbol|region|lines`, diffs, and Git-derived `focus=changed`: see `../../../../../docs/refactor/code-reference-highlighting-spec.md`.
+- Live worked example across many unsupported-language files: `kg.code.nodes` in a Drishti blueprints KG pack uses this form throughout.
+
 ## VS Code Symbol Links
 
 Use the installed `yeshwanth.vyasa` extension when a link must open one symbol inside one code file:
