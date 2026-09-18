@@ -186,6 +186,7 @@ def _merge_edges(base: dict[str, Any], head: dict[str, Any]) -> dict[str, list[d
             change, record = "removed", before
             removed = copy.deepcopy(before)
             removed["__kg_review_change__"] = "removed"
+            removed["__kg_review__"] = {"change": "removed", "fields": []}
             head.setdefault("dependency_edges", []).append(removed)
         else:
             fields = _field_changes(before, after, _EDGE_IGNORED_FIELDS | {"id"})
@@ -196,6 +197,7 @@ def _merge_edges(base: dict[str, Any], head: dict[str, Any]) -> dict[str, list[d
         # the renderer unable to recede them behind the changed topology.
         if after is not None:
             after["__kg_review_change__"] = change
+            after["__kg_review__"] = {"change": change, "fields": fields}
         if change == "unchanged":
             continue
         statement = _edge_statement(record, change, fields)

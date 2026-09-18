@@ -20,6 +20,28 @@ import {
     tasksGradientDomain, tasksOpacityPctLabel,
 } from './tasks_paint.js';
 
+const TASKS_REVIEW_MARKS = { added: '+', removed: '−' };
+
+function tasksReviewMark(change) {
+    return TASKS_REVIEW_MARKS[change] || '~';
+}
+
+// One before/after list, shared by the node card, the edge card, and the
+// changed-edge rows inside a node card.
+function renderTasksReviewFields(React, fields, keyPrefix = '') {
+    return (fields || []).map((field) => React.createElement('details', {
+        key: `${keyPrefix}${field.field}`, open: true, className: 'vyasa-kg-review-field',
+    },
+        React.createElement('summary', null,
+            React.createElement('span', { className: `vyasa-kg-review-mark vyasa-kg-review-mark--${field.change}` }, tasksReviewMark(field.change)),
+            field.field),
+        React.createElement('div', { className: 'vyasa-kg-review-values' },
+            React.createElement('div', null, React.createElement('b', null, 'Before'), React.createElement('pre', null, tasksReviewFieldText(field.before))),
+            React.createElement('div', null, React.createElement('b', null, 'After'), React.createElement('pre', null, tasksReviewFieldText(field.after)))
+        )
+    ));
+}
+
 // Panels read current state when called, after the app has built its actions.
 export function createTasksPanels(getState) {
     const SelectedNodePanel = (panelGraphNodeId, readOnly = false, hoverCard = null) => {
@@ -129,19 +151,16 @@ export function createTasksPanels(getState) {
                 ),
                 (review.fields || []).length ? React.createElement('section', null,
                     React.createElement('h4', null, 'Changed fields'),
-                    ...(review.fields || []).map((field) => React.createElement('details', { key: field.field, open: true, className: 'vyasa-kg-review-field' },
-                        React.createElement('summary', null, React.createElement('span', { className: `vyasa-kg-review-mark vyasa-kg-review-mark--${field.change}` }, field.change === 'added' ? '+' : field.change === 'removed' ? '−' : '~'), field.field),
-                        React.createElement('div', { className: 'vyasa-kg-review-values' },
-                            React.createElement('div', null, React.createElement('b', null, 'Before'), React.createElement('pre', null, tasksReviewFieldText(field.before))),
-                            React.createElement('div', null, React.createElement('b', null, 'After'), React.createElement('pre', null, tasksReviewFieldText(field.after)))
-                        )
-                    ))
+                    ...renderTasksReviewFields(React, review.fields)
                 ) : null,
                 (review.edges || []).length ? React.createElement('section', null,
                     React.createElement('h4', null, 'Changed edges'),
                     React.createElement('div', { className: 'vyasa-kg-review-edges' }, ...(review.edges || []).map((edge, index) => React.createElement('div', { key: `${edge.id}-${index}`, className: `vyasa-kg-review-edge vyasa-kg-review-edge--${edge.change}` },
-                        React.createElement('span', null, edge.change === 'added' ? '+' : edge.change === 'removed' ? '−' : '~'),
-                        React.createElement('code', null, `${edge.source} --${edge.relation}--> ${edge.target}`)
+                        React.createElement('span', null, tasksReviewMark(edge.change)),
+                        React.createElement('div', { style: { minWidth: 0 } },
+                            React.createElement('code', null, `${edge.source} --${edge.relation}--> ${edge.target}`),
+                            ...renderTasksReviewFields(React, edge.fields, `${edge.id}-${index}-`)
+                        )
                     )))
                 ) : null
             ) : renderTasksDetailEntries(React, entries, { copyValues: true, currentPath: sourceModel?.document_path || '' })
@@ -244,7 +263,7 @@ export function createTasksPanels(getState) {
     };
 
     const SelectedEdgePanel = () => {
-        const { React, detailCardRef, detailCardScrollRef, edgeCardError, edgeCardOpen, edgeNodeLabels, edgeNodesById, edgeNoteTextareaRef, edgeNotes, edgeTypeColors, fitSelectedEdgeConnection, handlePinnedCardKeyDown, hoverCardScrollMode, model, nodeCardContentScale, optionEdgeNodeIdRef, reactFlowApiRef, selectedEdgeIdRef, selectedEdgeRecord, setEdgeCardField, setEdgeCardOpen, setEdgeStatus, setSelectedEdgeId, setSelectedEdgeRecord, sourceModel, updateEdgeNote } = getState();
+        const { React, detailCardRef, detailCardScrollRef, edgeCardError, edgeCardOpen, edgeNodeLabels, edgeNodesById, edgeNoteTextareaRef, edgeNotes, edgeTypeColors, fitSelectedEdgeConnection, gitReviewEnabled, handlePinnedCardKeyDown, hoverCardScrollMode, model, nodeCardContentScale, optionEdgeNodeIdRef, reactFlowApiRef, selectedEdgeIdRef, selectedEdgeRecord, setEdgeCardField, setEdgeCardOpen, setEdgeStatus, setSelectedEdgeId, setSelectedEdgeRecord, sourceModel, updateEdgeNote } = getState();
         if (!edgeCardOpen) return null;
         if (edgeCardError) return React.createElement('div', {
             role: 'alert',
@@ -261,6 +280,10 @@ export function createTasksPanels(getState) {
             ? 'var(--vyasa-primary)'
             : (resolveTasksEdgeColor(selectedEdgeRecord, model, model?.edge_color_by, tasksEdgeColorPaletteFor(model, model?.edge_color_by)) || edgeTypeColors[relation] || 'currentColor');
         const entries = tasksEdgeMetaEntries(selectedEdgeRecord, model.edge_attr_order, model.edge_hidden_attrs);
+        const edgeEndpointId = (value) => React.createElement('span', {
+            style: { marginLeft: '6px', fontSize: '11px', fontWeight: 600, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', opacity: 0.55 },
+        }, `(${String(value || '')})`);
+        const edgeReview = gitReviewEnabled ? selectedEdgeRecord.__kg_review__ : null;
         const edgeNotesEditor = renderTasksCardNoteEditor(React, {
             ref: edgeNoteTextareaRef,
             value: edgeNotes[selectedEdgeRecord.id] || '',
@@ -283,9 +306,9 @@ export function createTasksPanels(getState) {
             React.createElement('div', { style: { display: 'flex', alignItems: 'start', gap: '10px', marginBottom: '10px' } },
                 React.createElement('div', { style: { flex: '1 1 auto', minWidth: 0 } },
                     React.createElement('div', { style: { display: 'grid', gap: '4px', fontSize: '14px', fontWeight: 700, lineHeight: 1.3, overflowWrap: 'anywhere' } },
-                        React.createElement('div', { style: { display: 'flex', alignItems: 'flex-start', gap: '7px' } }, renderTasksCardNodeIcon(React, sourceNode, model), React.createElement('span', { style: { minWidth: 0 } }, renderTasksInlineLinks(sourceLabel, { currentPath: sourceModel?.document_path || '', nodeLabels: edgeNodeLabels }))),
+                        React.createElement('div', { style: { display: 'flex', alignItems: 'flex-start', gap: '7px' } }, renderTasksCardNodeIcon(React, sourceNode, model), React.createElement('span', { style: { minWidth: 0 } }, renderTasksInlineLinks(sourceLabel, { currentPath: sourceModel?.document_path || '', nodeLabels: edgeNodeLabels }), edgeEndpointId(selectedEdgeRecord.source))),
                         relation ? React.createElement('div', { style: { paddingLeft: '29px', fontSize: '12px', fontWeight: 600, color: edgeCardColor, opacity: 0.82 } }, relation) : null,
-                        React.createElement('div', { style: { display: 'flex', alignItems: 'flex-start', gap: '7px' } }, renderTasksCardNodeIcon(React, targetNode, model), React.createElement('span', { style: { minWidth: 0 } }, renderTasksInlineLinks(targetLabel, { currentPath: sourceModel?.document_path || '', nodeLabels: edgeNodeLabels })))
+                        React.createElement('div', { style: { display: 'flex', alignItems: 'flex-start', gap: '7px' } }, renderTasksCardNodeIcon(React, targetNode, model), React.createElement('span', { style: { minWidth: 0 } }, renderTasksInlineLinks(targetLabel, { currentPath: sourceModel?.document_path || '', nodeLabels: edgeNodeLabels }), edgeEndpointId(selectedEdgeRecord.target)))
                     ),
                     React.createElement('div', { style: { marginTop: '4px', fontSize: '12px', lineHeight: 1.3, fontWeight: 600, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', opacity: 0.7, overflowWrap: 'anywhere' } }, selectedEdgeRecord.id),
                     sourceModel?.kg_context?.label ? React.createElement('div', { style: { marginTop: '3px', fontSize: '12px', lineHeight: 1.3, opacity: 0.62 } }, sourceModel.kg_context.label) : null
@@ -304,9 +327,21 @@ export function createTasksPanels(getState) {
                     style: { border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer', fontSize: '18px', lineHeight: 1, padding: 0, opacity: 0.62 },
                 }, '×')
             ),
+            edgeReview ? React.createElement('div', { className: 'vyasa-kg-review-inspector' },
+                React.createElement('div', { className: 'vyasa-kg-review-revisions' },
+                    React.createElement('span', null, String(sourceModel?.kg_review?.base || '').slice(0, 8)),
+                    React.createElement('span', { 'aria-hidden': 'true' }, '→'),
+                    React.createElement('span', null, sourceModel?.kg_review?.head === 'WORKTREE' ? 'Worktree' : String(sourceModel?.kg_review?.head || '').slice(0, 8)),
+                    React.createElement('span', null, edgeReview.change)
+                ),
+                (edgeReview.fields || []).length ? React.createElement('section', null,
+                    React.createElement('h4', null, 'Changed fields'),
+                    ...renderTasksReviewFields(React, edgeReview.fields)
+                ) : null
+            ) : null,
             renderTasksDetailEntries(React, entries, { copyValues: true, edgeFields: true, currentPath: sourceModel?.document_path || '' })
             ),
-            notes: edgeNotesEditor,
+            notes: edgeReview ? null : edgeNotesEditor,
         });
     };
 

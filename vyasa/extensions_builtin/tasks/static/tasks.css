@@ -69,6 +69,8 @@
 .vyasa-kg-review-values pre { margin: 0; max-height: 180px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 10px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
 .vyasa-kg-review-edges { display: grid; gap: 5px; }
 .vyasa-kg-review-edge { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 5px; border-radius: 7px; padding: 6px; background: color-mix(in srgb, currentColor 5%, transparent); font-size: 10px; }
+.vyasa-kg-review-edge .vyasa-kg-review-field { border-top-color: color-mix(in srgb, currentColor 16%, transparent); margin-top: 4px; padding-bottom: 0; }
+.vyasa-kg-review-edge .vyasa-kg-review-field summary { font-size: 10px; }
 .vyasa-kg-review-edge--added > span { color: #16a34a; }
 .vyasa-kg-review-edge--modified > span { color: #d97706; }
 .vyasa-kg-review-edge--removed > span { color: #dc2626; }
