@@ -10,6 +10,7 @@ import {
 } from './tasks_diagnostics.js';
 import { createTasksEdgeRenderer } from './tasks_edges.js';
 import { createTasksFullscreenController } from './tasks_fullscreen.js';
+import { tasksGitHistoryRows } from './tasks_git_review.js';
 import {
     buildTaskEdgeAnchors, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable,
     isTasksUnspecifiedProjectionGroup, nearestTasksIncidentEdge, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon,
@@ -25,7 +26,7 @@ import {
     effectiveExpandedGroups, expandOneGroupDepth, normalizeTasksCardStates, normalizeTasksCheckedNodeIds,
     normalizeTasksFilterQuery, normalizeTasksGraphNodes, normalizeTasksGroupByDisabledKeys, normalizeTasksNodeNotes,
     normalizeTasksNodeStates, normalizeTasksSlideNotes, parseTasksProjectionConfigText, readTasksProjectionPrefsForModel,
-    selectTasksAclViewerState, tasksAclViewerOptions, tasksCollectSearchMatches, tasksContextDiffSelectionIds,
+    selectTasksAclViewerState, tasksAclViewerOptions, tasksCollectSearchMatches,
     tasksCountFilterRules, tasksEdgeFilterNodeIds, tasksEdgesMatchingTypes, tasksEmptyFilterQuery,
     tasksExpandableNodeIds, tasksFilterHoverFocus, tasksFilterOptions, tasksFilterQueryHasRules,
     tasksGroupByPrefsDifferFromSchema, tasksHopSeedIds, tasksLogicalGraphStatsLabel, tasksLogicalNodeId,
@@ -95,6 +96,10 @@ const TASKS_NODE_CONNECTION_HANDLES = {
     target: ['top', 'right', 'bottom', 'left'].flatMap((side) => [0, 1, 2].map((index) => ({ id: `target-${side}-${index}`, side, offsetPct: 50 }))),
 };
 
+function tasksKgReviewEdgeColor(change, fallback) {
+    return ({ added: '#16a34a', modified: '#d97706', removed: '#dc2626', unchanged: 'color-mix(in srgb, var(--vyasa-ink) 24%, transparent)' })[String(change || '')] || fallback;
+}
+
 // Chrome kinds are whatever the layouts declare. Adding a layout must not
 // mean remembering to edit a set over here.
 const TASKS_PASSIVE_NODE_KINDS = new Set(['ganttHeader', 'layoutError', ...tasksLayoutChromeKinds()]);
@@ -148,7 +153,7 @@ function readTasksColorMixConfig(wrapper) {
 // document shortcuts while a graph is focused; anything absent here stays the
 // document's key.
 const TASKS_SHORTCUT_KEYS = new Set([
-    'f', 'g', 's', 'e', 'c', 't', 'i', 'o', 'u', 'p',
+    'd', 'f', 'g', 's', 'e', 'c', 't', 'i', 'o', 'u', 'p',
     'h', 'j', 'k', 'l', 'v',
     '[', ']', 'enter',
     'arrowup', 'arrowdown', 'arrowleft', 'arrowright',
@@ -294,12 +299,23 @@ async function loadTasksContext({ schemaPath, currentPath, contextId }) {
     return response.json();
 }
 
-async function loadTasksContextDiff({ schemaPath, contextId }) {
-    const response = await fetch('/api/tasks/context-diff', {
+async function loadTasksGitHistory({ schemaPath }) {
+    const response = await fetch('/api/tasks/git-history', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ schema_path: schemaPath, context_id: contextId }),
+        body: JSON.stringify({ schema_path: schemaPath }),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    return response.json();
+}
+
+async function loadTasksGitReview({ schemaPath, baseRef, headRef, contextId }) {
+    const response = await fetch('/api/tasks/git-review', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ schema_path: schemaPath, base_ref: baseRef, head_ref: headRef, context_id: contextId }),
     });
     if (!response.ok) throw new Error(await response.text());
     return response.json();
@@ -560,36 +576,13 @@ async function renderTasksGraphs(rootElement = document) {
                 [egoMode, viewerState.model, ganttEnabled, activeContextId]
             );
             const [contextLoading, setContextLoading] = React.useState(false);
-            const [contextDiffEnabled, setContextDiffEnabled] = React.useState(false);
-            const [contextDiffLoading, setContextDiffLoading] = React.useState(false);
-            const [contextDiff, setContextDiff] = React.useState({ from: '', to: '', node_ids: [] });
-            React.useEffect(() => {
-                const schemaPath = String(sourceModel?.kg_schema || '').trim();
-                if (!contextDiffEnabled || !schemaPath || !activeContextId || activeContextIndex <= 0) {
-                    setContextDiff({ from: '', to: activeContextId, node_ids: [] });
-                    return undefined;
-                }
-                let cancelled = false;
-                setContextDiffLoading(true);
-                loadTasksContextDiff({ schemaPath, contextId: activeContextId })
-                    .then((payload) => {
-                        if (cancelled) return;
-                        setContextDiff(payload);
-                        logTasksDebug('contextDiffLoaded', {
-                            widgetId,
-                            from: payload.from || '',
-                            to: payload.to || activeContextId,
-                            nodeIds: payload.node_ids || [],
-                        });
-                    })
-                    .catch((error) => {
-                        if (!cancelled) window.alert(error instanceof Error ? error.message : String(error));
-                    })
-                    .finally(() => {
-                        if (!cancelled) setContextDiffLoading(false);
-                    });
-                return () => { cancelled = true; };
-            }, [contextDiffEnabled, activeContextId, activeContextIndex, sourceModel?.kg_schema]);
+            const gitHistoryAvailable = String(sourceModel?.kg_history?.source || '').trim() === 'git';
+            const [gitReviewEnabled, setGitReviewEnabled] = React.useState(false);
+            const [gitHistoryLoading, setGitHistoryLoading] = React.useState(false);
+            const [gitReviewLoading, setGitReviewLoading] = React.useState(false);
+            const [gitHistoryError, setGitHistoryError] = React.useState('');
+            const [gitHistory, setGitHistory] = React.useState({ commits: [], worktree: { changed_paths: [], parent: '' } });
+            const reviewRestoreRef = React.useRef(null);
             const storedProjectionPrefsRef = React.useRef(sourcePrefsRef.current?.projectionPrefs && typeof sourcePrefsRef.current.projectionPrefs === 'object'
                 ? sourcePrefsRef.current.projectionPrefs
                 : {});
@@ -763,7 +756,7 @@ async function renderTasksGraphs(rootElement = document) {
             const nodeReferenceKeyHeldRef = React.useRef(false);
             React.useEffect(() => {
                 const syncNodeReferenceModifier = (event) => {
-                    if (event.type !== 'blur' && String(event.key || '').toLowerCase() !== 'd') return;
+                    if (event.type !== 'blur' && String(event.key || '').toLowerCase() !== 'r') return;
                     const target = event.target instanceof Element ? event.target : null;
                     const editing = target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
                     const held = event.type === 'keydown' && !editing;
@@ -822,7 +815,6 @@ async function renderTasksGraphs(rootElement = document) {
             const codeModePinnedRef = React.useRef(null);
             const edgePinBloomIdRef = React.useRef(0);
             const [edgePinBloom, setEdgePinBloom] = React.useState(null);
-            const contextDiffSelectionRef = React.useRef({ key: '', ids: new Set() });
             const [dragSelection, setDragSelection] = React.useState(null);
             const [hoveredNodeId, setHoveredNodeId] = React.useState(null);
             // The keydown handler does not re-register on hover, so shortcuts read
@@ -962,33 +954,6 @@ async function renderTasksGraphs(rootElement = document) {
             React.useEffect(() => {
                 selectedEdgeIdRef.current = selectedEdgeId;
             }, [selectedEdgeId]);
-            React.useEffect(() => {
-                const owned = contextDiffSelectionRef.current;
-                if (!contextDiffEnabled) {
-                    const current = selectedNodeIdsRef.current;
-                    const stillOwned = !selectedNodeIdRef.current
-                        && current.size === owned.ids.size
-                        && Array.from(current).every((id) => owned.ids.has(id));
-                    if (stillOwned && owned.key) {
-                        selectedNodeIdsRef.current = new Set();
-                        setSelectedNodeIds(new Set());
-                    }
-                    contextDiffSelectionRef.current = { key: '', ids: new Set() };
-                    return;
-                }
-                if (contextDiffLoading || contextDiff.to !== activeContextId) return;
-                const changedIds = new Set((contextDiff.node_ids || []).map(String));
-                const key = `${activeContextId}:${activeProjectionId}:${Array.from(changedIds).sort().join(',')}`;
-                if (owned.key === key) return;
-                const nextIds = tasksContextDiffSelectionIds(model, graphBaseRef.current.nodes, changedIds);
-                if (changedIds.size && !nextIds.size && !graphBaseRef.current.nodes.length) return;
-                contextDiffSelectionRef.current = { key, ids: nextIds };
-                selectedNodeIdRef.current = null;
-                selectedNodeIdsRef.current = nextIds;
-                setSelectedNodeId(null);
-                setSelectedNodeIds(new Set(nextIds));
-                logTasksDebug('contextDiffSelected', { widgetId, changedIds: Array.from(changedIds), selectedIds: Array.from(nextIds) });
-            }, [contextDiffEnabled, contextDiffLoading, contextDiff, activeContextId, activeProjectionId, model, graphRevision, widgetId]);
             React.useEffect(() => {
                 logTasksPerfShellOnce(widgetId, wrapper, tasksPerfContext(widgetId, flowWrapperRef.current || wrapper, model, graphBaseRef.current));
                 logTasksPerfSurfaceOnce(widgetId, flowWrapperRef.current || wrapper, tasksPerfContext(widgetId, flowWrapperRef.current || wrapper, model, graphBaseRef.current));
@@ -2265,11 +2230,78 @@ async function renderTasksGraphs(rootElement = document) {
                 if (options?.resetSlideIndex) setSlideIndex((index) => index >= 0 ? 0 : -1);
                 pendingFitActionRef.current = 'mode';
             }, [sourceModel, activeProjectionId, ganttEnabled]);
+            const loadGitReviewRefs = React.useCallback(async ({ baseRef, headRef, contextId }) => {
+                const schemaPath = String((reviewRestoreRef.current?.model || sourceModel)?.kg_schema || '').trim();
+                if (!schemaPath || !headRef || !baseRef) {
+                    setGitHistoryError('This revision has no parent to compare.');
+                    return;
+                }
+                setGitReviewLoading(true);
+                setGitHistoryError('');
+                try {
+                    const payload = await loadTasksGitReview({ schemaPath, baseRef, headRef, contextId });
+                    applyLoadedSource(payload, activeProjectionId, { resetSlideIndex: true });
+                } catch (error) {
+                    setGitHistoryError(error instanceof Error ? error.message : String(error));
+                } finally {
+                    setGitReviewLoading(false);
+                }
+            }, [activeProjectionId, applyLoadedSource, sourceModel]);
+            const loadGitReviewSelection = React.useCallback((row, historyPayload = gitHistory) => {
+                const headRef = String(row?.sha || '').trim();
+                const baseRef = String((row?.parents || [])[0] || (headRef === 'WORKTREE' ? historyPayload?.worktree?.parent : '') || '').trim();
+                return loadGitReviewRefs({ baseRef, headRef, contextId: activeContextId });
+            }, [activeContextId, gitHistory, loadGitReviewRefs]);
+            const handleSelectGitCommit = React.useCallback((row) => {
+                loadGitReviewSelection(row);
+            }, [loadGitReviewSelection]);
+            const handleSelectGitBase = React.useCallback((row) => {
+                loadGitReviewRefs({
+                    baseRef: String(row?.sha || '').trim(),
+                    headRef: String(sourceModel?.kg_review?.head || '').trim(),
+                    contextId: activeContextId,
+                });
+            }, [activeContextId, loadGitReviewRefs, sourceModel]);
+            const toggleGitReview = React.useCallback(async () => {
+                if (gitReviewEnabled) {
+                    const restore = reviewRestoreRef.current;
+                    setGitReviewEnabled(false);
+                    setGitHistoryError('');
+                    reviewRestoreRef.current = null;
+                    if (restore) applyLoadedSource({ model: restore.model, graph: restore.graph }, restore.projectionId, { resetSlideIndex: false });
+                    return;
+                }
+                const schemaPath = String(sourceModel?.kg_schema || '').trim();
+                if (!gitHistoryAvailable || !schemaPath) return;
+                reviewRestoreRef.current = { model: sourceModel, graph: sourceGraph, projectionId: activeProjectionId };
+                setGitReviewEnabled(true);
+                setGitHistoryLoading(true);
+                setGitHistoryError('');
+                try {
+                    const payload = await loadTasksGitHistory({ schemaPath });
+                    setGitHistory(payload);
+                    const rows = tasksGitHistoryRows(payload);
+                    const initial = rows.find((row) => row.sha === 'WORKTREE')
+                        || rows.find((row) => row.sha === payload.head && (row.parents || []).length)
+                        || rows.find((row) => (row.parents || []).length);
+                    if (initial) await loadGitReviewSelection(initial, payload);
+                    else setGitHistoryError('Git history has no comparable revision.');
+                } catch (error) {
+                    setGitHistoryError(error instanceof Error ? error.message : String(error));
+                } finally {
+                    setGitHistoryLoading(false);
+                }
+            }, [activeProjectionId, applyLoadedSource, gitHistoryAvailable, gitReviewEnabled, loadGitReviewSelection, sourceGraph, sourceModel]);
             const handleSwitchContext = React.useCallback(async (contextId, projectionId = null) => {
                 const schemaPath = String(sourceModel?.kg_schema || '').trim();
                 if (!schemaPath || !contextId) return;
                 if (contextId === activeContextId) {
                     if (projectionId !== null) setActiveProjectionId(String(projectionId || ''));
+                    return;
+                }
+                const review = gitReviewEnabled ? sourceModel?.kg_review : null;
+                if (review) {
+                    await loadGitReviewRefs({ baseRef: review.base, headRef: review.head, contextId });
                     return;
                 }
                 setContextLoading(true);
@@ -2285,7 +2317,7 @@ async function renderTasksGraphs(rootElement = document) {
                 } finally {
                     setContextLoading(false);
                 }
-            }, [sourceModel, activeContextId, applyLoadedSource]);
+            }, [sourceModel, activeContextId, applyLoadedSource, gitReviewEnabled, loadGitReviewRefs]);
             const handledEdgeHashRef = React.useRef('');
             React.useEffect(() => {
                 const hash = String(window.location.hash || '');
@@ -2692,9 +2724,9 @@ async function renderTasksGraphs(rootElement = document) {
                     // A pair is drawn in one element, so the call needs its mate's colour
                     // as well as its own. Resolve every colour up front rather than
                     // reaching back into the map from inside it.
-                    const pairMateColors = new Map(anchored.edges.map((item) => [item.id, resolveTasksEdgeColor(item, model, model?.edge_color_by, edgeColorPalette)]));
+                    const pairMateColors = new Map(anchored.edges.map((item) => [item.id, tasksKgReviewEdgeColor(item.__kg_review_change__, resolveTasksEdgeColor(item, model, model?.edge_color_by, edgeColorPalette))]));
                     const baseEdges = anchored.edges.map((edge) => {
-                        const edgeColor = resolveTasksEdgeColor(edge, model, model?.edge_color_by, edgeColorPalette);
+                        const edgeColor = tasksKgReviewEdgeColor(edge.__kg_review_change__, resolveTasksEdgeColor(edge, model, model?.edge_color_by, edgeColorPalette));
                         const resolvedLabel = resolveTasksEdgeLabel(edge, model, activeProjection);
                         const rowLabel = edge.__sequence_step__
                             ? `${edge.__sequence_step__} \u00b7 ${resolvedLabel}`.trim()
@@ -2709,6 +2741,7 @@ async function renderTasksGraphs(rootElement = document) {
                             data: {
                                 ...(edge.data || {}),
                                 edgeColor,
+                                __kg_review_change__: edge.__kg_review_change__ || '',
                                 // Both halves of a pair share a row, so their labels
                                 // must not share a side of it.
                                 __sequence_label_lift__: mode === 'sequence'
@@ -2738,6 +2771,8 @@ async function renderTasksGraphs(rootElement = document) {
                                 stroke: edgeColor || 'currentColor',
                                 ...(edge.__sequence_standing__ ? { strokeDasharray: '6 5', strokeWidth: 1.8 } : {}),
                                 ...(edge.__pair_half__ ? { strokeWidth: 1.9 } : {}),
+                                ...(edge.__kg_review_change__ === 'removed' ? { strokeDasharray: '6 5' } : {}),
+                                ...(edge.__kg_review_change__ === 'unchanged' ? { opacity: edgeOpacity * 0.28 } : {}),
                             },
                         };
                     });
@@ -2926,9 +2961,9 @@ async function renderTasksGraphs(rootElement = document) {
                 // A pair is drawn in one element, so the call needs its mate's colour
                 // as well as its own. Resolve every colour up front rather than
                 // reaching back into the map from inside it.
-                const pairMateColors = new Map(anchored.edges.map((item) => [item.id, resolveTasksEdgeColor(item, model, model?.edge_color_by, edgeColorPalette)]));
+                const pairMateColors = new Map(anchored.edges.map((item) => [item.id, tasksKgReviewEdgeColor(item.__kg_review_change__, resolveTasksEdgeColor(item, model, model?.edge_color_by, edgeColorPalette))]));
                 const baseEdges = anchored.edges.map((edge) => {
-                    const edgeColor = resolveTasksEdgeColor(edge, model, model?.edge_color_by, edgeColorPalette);
+                    const edgeColor = tasksKgReviewEdgeColor(edge.__kg_review_change__, resolveTasksEdgeColor(edge, model, model?.edge_color_by, edgeColorPalette));
                     const resolvedLabel = resolveTasksEdgeLabel(edge, model, activeProjection);
                     const branchOpacity = (unspecifiedProjectionBranchIds.has(edge.source) || unspecifiedProjectionBranchIds.has(edge.target))
                         ? projectionUnspecifiedContentOpacity
@@ -2940,6 +2975,7 @@ async function renderTasksGraphs(rootElement = document) {
                         data: {
                             ...(edge.data || {}),
                             edgeColor,
+                            __kg_review_change__: edge.__kg_review_change__ || '',
                             __projection_branch_opacity__: branchOpacity,
                             __pair_half__: edge.__pair_half__ || '',
                             __pair_mate__: edge.__pair_mate__ || '',
@@ -2964,7 +3000,12 @@ async function renderTasksGraphs(rootElement = document) {
                         labelMaxWidth: layoutConfig.edgeLabelWidth,
                         labelStyle: { fontSize: hoverFontSize, fontWeight: 600, fill: edgeColor || TASKS_EDGE_LABEL_TEXT, opacity: edgeOpacity * branchOpacity },
                         labelBgStyle: { fill: TASKS_EDGE_LABEL_BG, fillOpacity: 0.82 },
-                        style: { strokeWidth: 2.5, opacity: edgeOpacity * branchOpacity, stroke: edgeColor || 'currentColor' },
+                        style: {
+                            strokeWidth: 2.5,
+                            opacity: edgeOpacity * branchOpacity * (edge.__kg_review_change__ === 'unchanged' ? 0.28 : 1),
+                            stroke: edgeColor || 'currentColor',
+                            ...(edge.__kg_review_change__ === 'removed' ? { strokeDasharray: '6 5' } : {}),
+                        },
                     };
                 });
                 const anchoredNodes = baseNodes.map((node) => ({
@@ -3813,7 +3854,7 @@ async function renderTasksGraphs(rootElement = document) {
                         // handler ever sees the key. So this handler listens in the
                         // capture phase and claims its own keys while the graph is
                         // focused, leaving every other key to the document.
-                        if (optionEdgeFit || TASKS_SHORTCUT_KEYS.has(key) || isTasksHopCode(event.code)) event.stopPropagation();
+                        if (optionEdgeFit || (TASKS_SHORTCUT_KEYS.has(key) && (key !== 'd' || gitHistoryAvailable)) || isTasksHopCode(event.code)) event.stopPropagation();
                         if (event.repeat) return;
                         if (TASKS_HOP_GROW_CODES.has(event.code)) {
                             event.preventDefault();
@@ -3894,6 +3935,11 @@ async function renderTasksGraphs(rootElement = document) {
                         if (key === 's') {
                             event.preventDefault();
                             setFiltersCollapsedGuarded((current) => !current, 'shortcut-toggle-filters');
+                            return;
+                        }
+                        if (key === 'd' && gitHistoryAvailable) {
+                            event.preventDefault();
+                            toggleGitReview();
                             return;
                         }
                         if (key === 'e' && event.shiftKey) {
@@ -4021,7 +4067,7 @@ async function renderTasksGraphs(rootElement = document) {
                         window.removeEventListener('blur', stopMomentum);
                         stopMomentum();
                     };
-                }, [reactFlow, currentGraphEdges, currentSelectionIds, growSelectionOneHop, shrinkSelectionOneHop, model, rawGraph, sourceModel, egoMode, helpOpen, edgeCardOpen, edgeCardField, selectEdgeRecord, setFiltersCollapsedGuarded, setGroupHoverCardsEnabledGlobal, setHoverCardScrollModeGlobal, fitCurrentHighlight, fitSelectedEdgeConnection, focusDetailCard, panViewport, graphMinZoom]);
+                }, [reactFlow, currentGraphEdges, currentSelectionIds, growSelectionOneHop, shrinkSelectionOneHop, model, rawGraph, sourceModel, egoMode, helpOpen, edgeCardOpen, edgeCardField, selectEdgeRecord, setFiltersCollapsedGuarded, setGroupHoverCardsEnabledGlobal, setHoverCardScrollModeGlobal, fitCurrentHighlight, fitSelectedEdgeConnection, focusDetailCard, panViewport, graphMinZoom, gitHistoryAvailable, toggleGitReview]);
                 return null;
             };
             const handlePinnedCardKeyDown = (event, notesRef, navigate) => {
@@ -4030,31 +4076,33 @@ async function renderTasksGraphs(rootElement = document) {
                 event.stopPropagation();
                 if (event.shiftKey) navigate(); else notesRef.current?.focus();
             };
-            const { SelectedNodePanel, SelectedEdgePanel, FilterPanel } = createTasksPanels(() => ({
+            const { SelectedNodePanel, SelectedEdgePanel, FilterPanel, GitHistoryRail, GitReviewBar } = createTasksPanels(() => ({
                 React, TASKS_ADD_VIEW_OPTION_ID, aclViewerOptions, activeAclViewer, activeColorHierarchy,
                 activeContextId, activeContextIndex, activeEdgeTypes, activeFilters, activeGroupByHierarchy,
                 activeProjectionId, activeSwatchFilters, allClearedNotes, buildProjectionConfigText, clearedNote,
-                contextDiffEnabled, contextDiffLoading, contextLoading, contextOptions,
+                contextLoading, contextOptions,
                 detailCardRef, detailCardScrollRef, edgeCardError, edgeCardOpen, edgeNodeLabels,
                 edgeNodesById, edgeNoteTextareaRef, edgeNotes, edgeOpacity, edgeTypeColors,
                 edgeTypeFilterEnabled, edgeTypeMenuOpen, edgeTypeOptions, edgeTypeQuery, effectiveEdgeTypes,
                 egoMode, filterPanelMaxHeight, filterPanelRef, filterPanelWidthSetting, filtersCollapsed,
+                gitHistory, gitHistoryAvailable, gitHistoryError, gitHistoryLoading, gitReviewEnabled, gitReviewLoading,
                 fitSelectedEdgeConnection, focusGraphNode, graphBaseRef, groupByDisabledSet, groupByEnabled,
                 groupByHierarchy, handleAddView, handleClearAllNotes, handleCopyNodeNotes, handleDefaultViewPaste,
                 handleExportNodeNotes, handleImportNodeNotes, handlePinnedCardKeyDown, handleSwitchContext, handleUndoClearAllNotes,
+                handleSelectGitBase, handleSelectGitCommit,
                 hoverCardScrollMode, hoverCardScrollRef, hoverInactiveNodes, model, nodeCardContentScale,
                 nodeNotes, noteInputValue, noteTextareaRef, optionEdgeNodeIdRef, pendingFitActionRef,
                 projectionOptions, projectionUnspecifiedContentOpacity, queryBuilderEnabled, queryBuilderReady, reactFlowApiRef,
                 reorderActiveColorLevel, reorderGroupByLevel, resetProjectionControls, searchEnabled, searchInputRef,
                 searchInputValue, searchMatches, selectedEdgeIdRef, selectedEdgeRecord, selectedNodeId,
                 setActiveAclViewer, setActiveColorLevel, setActiveEdgeTypes, setActiveFilters, setActiveProjectionId,
-                setClearedNote, setContextDiffEnabled, setDragSelection, setEdgeCardField, setEdgeCardOpen,
+                setClearedNote, setDragSelection, setEdgeCardField, setEdgeCardOpen,
                 setEdgeOpacity, setEdgeStatus, setEdgeTypeFilterEnabled, setEdgeTypeMenuOpen, setEdgeTypeQuery,
                 setFiltersCollapsedGuarded, setGroupByDisabledKeys, setGroupByEnabled, setGroupByHierarchy, setHoverInactiveNodes,
                 setHoveredNodeId, setNoteInputValue, setProjectionUnspecifiedContentOpacity, setQueryBuilderEnabled, setSearchEnabled,
                 setSearchInputValue, setSearchQuery, setSelectedEdgeId, setSelectedEdgeRecord, setSelectedNodeId,
                 setSelectedNodeIds, setViewMode, slideIndex, slideNotes, sourceModel,
-                tasksCaptionElement, toggleFilterValue, updateEdgeNote, updateNodeNote, viewMode,
+                tasksCaptionElement, toggleFilterValue, toggleGitReview, updateEdgeNote, updateNodeNote, viewMode,
                 widgetId
             }));
 
@@ -4706,6 +4754,7 @@ async function renderTasksGraphs(rootElement = document) {
             const flowWrapperClassName = [
                 hoveredNodeId || selectedEdgeId ? 'vyasa-tasks-hovering-edge-labels' : '',
                 'vyasa-tasks-active-pulse',
+                gitReviewEnabled ? 'vyasa-kg-review-mode' : '',
             ].filter(Boolean).join(' ');
             const buildProjectionConfigText = (projection) => {
                 const pid = String(projection?.id || '');
@@ -4785,7 +4834,7 @@ async function renderTasksGraphs(rootElement = document) {
                     style: {
                         position: 'absolute',
                         right: '12px',
-                        top: '12px',
+                        top: gitReviewEnabled ? '58px' : '12px',
                         bottom: '12px',
                         zIndex: 34,
                         width: nodeCardWidth,
@@ -4869,7 +4918,7 @@ async function renderTasksGraphs(rootElement = document) {
                     row('Click node', 'select card or group'),
                     row('Click edge', 'open edge details'),
                     row('Click canvas', 'clear selection'),
-                    row('D + click [[node]]', 'go to referenced node'),
+                    row('R + click [[node]]', 'go to referenced node'),
                     row('Drag canvas', 'pan, cursor stays put'),
                     row('Shift + drag', 'box select'),
                     row('Cmd + drag', 'lasso select'),
@@ -4878,6 +4927,7 @@ async function renderTasksGraphs(rootElement = document) {
                     row('Drag canvas', 'pan'),
                     sep(),
                     heading('Keys'),
+                    row('D', 'toggle Git diff review'),
                     row('?', 'toggle this help'),
                     row('[ / ]', 'select previous / next visible edge'),
                     row('Enter', 'pin hovered node / open selected edge'),
@@ -5013,20 +5063,10 @@ async function renderTasksGraphs(rootElement = document) {
                 });
             };
             const filterPanelElement = FilterPanel();
+            const gitHistoryRailElement = GitHistoryRail();
             const paneClick = () => {
                 if (suppressNextGraphClickRef.current) {
                     suppressNextGraphClickRef.current = false;
-                    return;
-                }
-                const diffSelection = contextDiffSelectionRef.current;
-                const diffOwnsSelection = contextDiffEnabled
-                    && Boolean(diffSelection.key)
-                    && diffSelection.ids.size > 0
-                    && !selectedNodeIdRef.current
-                    && selectedNodeIdsRef.current.size === diffSelection.ids.size
-                    && Array.from(selectedNodeIdsRef.current).every((id) => diffSelection.ids.has(id));
-                if (diffOwnsSelection) {
-                    logTasksDebug('selectionClearBlocked', { widgetId, reason: 'contextDiffPaneClick' });
                     return;
                 }
                 if (slideIndex >= 0 && slides[slideIndex]) {
@@ -5196,6 +5236,7 @@ async function renderTasksGraphs(rootElement = document) {
             return rf.ReactFlowProvider ? window.React.createElement(rf.ReactFlowProvider, null,
                 window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', flex: '1 1 auto', minHeight: 0, display: 'flex', alignItems: 'stretch', position: 'relative' } },
                     filterPanelElement,
+                    gitHistoryRailElement,
                     window.React.createElement(EdgeLiveStatus),
                     SlideShow(),
                     window.React.createElement('div', { ref: flowWrapperRef, 'data-tasks-canvas': 'true', 'data-vyasa-review-surface': 'knowledge-graph', className: flowWrapperClassName, tabIndex: 0, style: flowWrapperStyle, ...flowPointerHandlers },
@@ -5210,6 +5251,7 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement(RestoreEgoViewport),
                     window.React.createElement(FitOnNodesReady)
                     ),
+                    GitReviewBar(),
                     RightRail(),
                     window.React.createElement(HelpPopup),
                     GroupHoverTooltip(),
@@ -5217,6 +5259,7 @@ async function renderTasksGraphs(rootElement = document) {
                 ))
             ) : window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', flex: '1 1 auto', minHeight: 0, display: 'flex', alignItems: 'stretch', position: 'relative' } },
                 filterPanelElement,
+                gitHistoryRailElement,
                 window.React.createElement(EdgeLiveStatus),
                 window.React.createElement('div', { ref: flowWrapperRef, 'data-tasks-canvas': 'true', 'data-vyasa-review-surface': 'knowledge-graph', className: flowWrapperClassName, tabIndex: 0, style: flowWrapperStyle, ...flowPointerHandlers },
                     window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: nodeConnectionExperiment, onNodesChange: moveExperimentNodes, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onEdgeClick: selectGraphEdge, onNodeDoubleClick: doubleClickGraphNode, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
@@ -5230,6 +5273,7 @@ async function renderTasksGraphs(rootElement = document) {
                         window.React.createElement(RestoreEgoViewport),
                         window.React.createElement(FitOnNodesReady)
                     ),
+                    GitReviewBar(),
                     RightRail(),
                     window.React.createElement(HelpPopup),
                     GroupHoverTooltip(),

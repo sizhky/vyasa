@@ -76,6 +76,19 @@ def test_git_backend_reads_refs_in_isolation(repo):
     assert b.mtime("", "main") > 0
 
 
+def test_git_backend_history_preserves_topology_and_marks_path_scope(repo):
+    _, bare = repo
+    history = GitBackend(bare, "docs").history(paths=("sub",), limit=20)
+
+    assert [entry.message for entry in history] == ["c2", "c1"]
+    assert history[0].parents == (history[1].sha,)
+    assert history[0].refs == ("feature",)
+    assert history[1].refs == ("main", "v1")
+    assert history[0].affects_scope is False
+    assert history[1].affects_scope is True
+    assert history[1].changed_paths == ("a.md", "sub/b.md")
+
+
 def test_git_backend_lists_remote_branches_by_remote_count(tmp_path):
     upstream = tmp_path / "upstream"
     upstream.mkdir()

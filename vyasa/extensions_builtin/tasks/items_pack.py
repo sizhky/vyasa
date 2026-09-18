@@ -121,6 +121,7 @@ class KgSchema:
     attrs: str = ""
     # Where the code files a node links live, relative to the pack folder.
     code_source: str = ""
+    history: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -168,6 +169,7 @@ def read_kg_pack(schema_path: PathLike, context_id: str = "") -> dict[str, Any]:
         "edge_hidden_attrs": _list_value(schema.graph.get("edge_hidden_attrs", "")),
         "card_states": _list_value(schema.graph.get("card_states", "")),
         "acl": _acl_payload(schema),
+        "kg_history": dict(schema.history),
     }
     nodes_by_id: dict[str, dict] = {}
     edges_by_id: dict[str, dict] = {}
@@ -290,6 +292,7 @@ def _read_context_kg_pack(schema_path: PathLike, schema: KgSchema, context_id: s
         "acl": _acl_payload(schema),
         "kg_context": {"id": active.id, "seq": active.seq, "label": active.label, "stage": active.stage, "caption": active.caption},
         "kg_contexts": [{"id": item.id, "seq": item.seq, "label": item.label, "stage": item.stage, "caption": item.caption} for item in contexts],
+        "kg_history": dict(schema.history),
     }
     if active.palette or schema.palette:
         graph["color_palette_source"] = str(_resolve(schema_path, active.palette or schema.palette))
@@ -700,6 +703,8 @@ def read_schema(path: PathLike) -> KgSchema:
                 schema.nodes = payload.get("pool", schema.nodes)
                 schema.attrs = payload.get("attrs", schema.attrs)
                 schema.palette = payload.get("palette", schema.palette)
+            elif section == "@history":
+                schema.history.update(_assignments(parts[1:]))
             elif section == "@views":
                 views, consumed = _read_views(raw_lines, raw_index)
                 schema.views.extend(views)
@@ -711,6 +716,9 @@ def read_schema(path: PathLike) -> KgSchema:
             schema.nodes = payload.get("pool", schema.nodes)
             schema.attrs = payload.get("attrs", schema.attrs)
             schema.palette = payload.get("palette", schema.palette)
+            continue
+        if section == "@history":
+            schema.history.update(_assignments(shlex.split(line)))
             continue
         if raw.startswith((" ", "\t")):
             if section == "@sources" and current_source:

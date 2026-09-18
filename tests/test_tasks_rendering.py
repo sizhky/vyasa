@@ -1808,8 +1808,8 @@ def test_tasks_node_reference_navigation_preserves_zoom():
     assert ".react-flow__node:not(.vyasa-tasks-pulse):has(" in css
     assert "title: 'Center node', onClick: focusPanelNode" in source
     assert "window.addEventListener('keydown', syncNodeReferenceModifier, true);" in source
-    assert "String(event.key || '').toLowerCase() !== 'd'" in source
-    assert "row('D + click [[node]]', 'go to referenced node')" in source
+    assert "String(event.key || '').toLowerCase() !== 'r'" in source
+    assert "row('R + click [[node]]', 'go to referenced node')" in source
     assert "renderTasksInlineLinks(data?.label || id" in source
     drag_selection = source.split("const startDragSelection", 1)[1].split("const updateDragSelection", 1)[0]
     assert "[data-vyasa-node-reference]" in drag_selection
@@ -2141,32 +2141,33 @@ def test_slide_selection_is_not_reapplied_when_graph_layout_changes():
     assert "}, [slideIndex, slides]);" in selection_effect
 
 
-def test_context_graphs_have_day_switch_contract():
-    source = tasks_static_source("tasks_panels.js", "tasks.js")
+def test_context_graphs_and_git_review_share_the_pack_controls():
+    source = tasks_static_source("tasks_panels.js", "tasks_nodes.js", "tasks.js")
     css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
     api = Path("vyasa/extensions_builtin/tasks/api.py").read_text()
 
     assert "async function loadTasksContext" in source
     assert "fetch('/api/tasks/context'" in source
-    assert "async function loadTasksContextDiff" in source
-    assert "fetch('/api/tasks/context-diff'" in source
-    assert '@rt("/api/tasks/context-diff"' in api
+    assert "async function loadTasksGitHistory" in source
+    assert "fetch('/api/tasks/git-history'" in source
+    assert "async function loadTasksGitReview" in source
+    assert "fetch('/api/tasks/git-review'" in source
+    assert '@rt("/api/tasks/git-history"' in api
+    assert '@rt("/api/tasks/git-review"' in api
     # The panel shares named style constants instead of piling one-off inline
     # styles. Their existence is the contract; their contents are not.
     assert "const filterSectionStyle = {" in source
     assert "const filterInlineControlStyle = {" in source
     assert "const filterChoiceListStyle = {" in source
     assert "const contextOptions = React.useMemo" in source
-    assert "style: filterKeyStyle }, 'Context')" in source
-    assert "'aria-label': 'Select changes from previous context'" in source
-    assert "tasksContextDiffSelectionIds(model, graphBaseRef.current.nodes, changedIds)" in source
-    assert "setSelectedNodeIds(new Set(nextIds));" in source
-    assert "const diffOwnsSelection = contextDiffEnabled" in source
-    assert "reason: 'contextDiffPaneClick'" in source
-    assert "__context_diff__" not in source
-    assert 'data-vyasa-context-diff' not in css
+    assert "contextOptions.length > 1 ? 'Context and review' : 'Review'" in source
+    assert "'aria-label': 'Toggle Git review mode'" in source
+    assert "const GitHistoryRail = () =>" in source
+    assert "const GitReviewBar = () =>" in source
+    assert 'data-vyasa-kg-review-change' in source
+    assert 'vyasa-kg-history-rail' in css
     assert "outline-offset: 3px" in css
-    assert source.index("'Context'") < source.index("'View'")
+    assert source.index("'Context and review'") < source.index("'View'")
     assert "onChange: (event) => handleSwitchContext(event.target.value)" in source
     assert "`${context.seq}. ${context.label || context.caption || context.id}`" in source
     assert "const renderColorLevel = (colorBy, index) => {" in source
@@ -2197,6 +2198,58 @@ def test_view_menu_only_shows_views_resolved_to_the_active_context():
         if (!tasksViewMatchesContext({ resolved_context: 'context-015' }, '')) throw new Error('non-context graph filtered');
     """
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
+def test_git_history_rows_preserve_branch_lanes_and_worktree_parent():
+    script = """
+        import { tasksGitHistoryRows, tasksReviewCountsLabel } from './vyasa/extensions_builtin/tasks/static/tasks_git_review.js';
+        const rows = tasksGitHistoryRows({
+            worktree: { parent: 'merge', changed_paths: ['blueprints.kg/kg.nodes'] },
+            commits: [
+                { sha: 'merge', parents: ['main', 'feature'], message: 'merge', refs: ['main'] },
+                { sha: 'feature', parents: ['root'], message: 'feature' },
+                { sha: 'main', parents: ['root'], message: 'main' },
+                { sha: 'root', parents: [], message: 'root' },
+            ],
+        });
+        if (rows[0].sha !== 'WORKTREE' || rows[0].parents[0] !== 'merge') throw new Error('worktree missing');
+        if (rows[1].connections.length !== 2) throw new Error('merge lanes missing');
+        if (rows[2].lane === rows[3].lane) throw new Error('branch lanes collapsed');
+        if (tasksReviewCountsLabel({ added: 2, modified: 3, removed: 1 }) !== '+2  ~3  −1') throw new Error('counts');
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
+def test_git_review_projection_options_show_counts_and_keep_cross_context_views():
+    script = """
+        import { tasksProjectionOptions } from './vyasa/extensions_builtin/tasks/static/tasks_graph_model.js';
+        const model = {
+            kg_review: { view_counts: { '': { added: 1, modified: 2, removed: 0 }, old: { total: 3, added: 0, modified: 1, removed: 2 } } },
+            view_projections: [{ id: 'old', label: 'Old flow', resolved_context: 'before' }],
+            projection_models: { old: { model: {}, graph: {} } },
+        };
+        const options = tasksProjectionOptions(model, false, 'after');
+        if (options.length !== 2) throw new Error('review view hidden by context');
+        if (!options[0].label.includes('+1 ~2 −0')) throw new Error('base counts missing');
+        if (!options[1].label.includes('+0 ~1 −2')) throw new Error('view counts missing');
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
+def test_git_review_uses_existing_node_panel_for_structured_differences():
+    panels = tasks_static_source("tasks_panels.js")
+    graph = tasks_static_source("tasks.js", "tasks_nodes.js")
+
+    assert "const review = gitReviewEnabled ? selectedNode?.__kg_review__ : null;" in panels
+    assert "Changed fields" in panels
+    assert "Changed edges" in panels
+    assert "vyasa-kg-history-compare" in panels
+    assert "handleSelectGitBase(row)" in panels
+    assert "GitReviewBar()" in graph
+    assert "data-vyasa-kg-review-change" in graph
+    assert "if (key === 'd' && gitHistoryAvailable)" in graph
+    assert "toggleGitReview();" in graph
+    assert "row('D', 'toggle Git diff review')" in graph
 
 
 def test_tasks_block_serializes_document_path_and_stable_storage_id():

@@ -318,6 +318,28 @@ items_schema: roadmap.kg.schema
     assert model["card_states"] == ["Not Done", "Done", "Deferred/Cancelled"]
 
 
+def test_kg_schema_exposes_opt_in_git_history(tmp_path):
+    (tmp_path / "kg.schema").write_text(
+        "@graph id=review\n"
+        "@history source=git\n"
+        "include=pack\n"
+        "compare=parent\n"
+        "@sources\n"
+        "nodes=kg.nodes\n"
+        "base:\n    edges=kg.edges\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "kg.nodes").write_text("a: A\nb: B\n", encoding="utf-8")
+    (tmp_path / "kg.edges").write_text("e1: a -> b links\n", encoding="utf-8")
+
+    model = parse_tasks_text(
+        "```items\n---\nitems_schema: kg.schema\n---\n```",
+        current_path=tmp_path / "review.md",
+    )
+
+    assert model["kg_history"] == {"source": "git", "include": "pack", "compare": "parent"}
+
+
 def test_items_parser_reads_multiline_graph_header(tmp_path):
     (tmp_path / "roadmap.kg.schema").write_text(
         """@graph id=roadmap title=Roadmap

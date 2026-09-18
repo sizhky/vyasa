@@ -13,6 +13,7 @@ import {
     tasksLogicalNodeId, tasksNodeMetaEntries, tasksNodeMetaLabel, tasksProjectionLayout,
 } from './tasks_graph_model.js';
 import { tasksIsFixedMode, tasksLayoutById } from './tasks_layouts.js';
+import { tasksGitHistoryRows, tasksGitLaneColor, tasksReviewCountsLabel, tasksReviewFieldText } from './tasks_git_review.js';
 import {
     normalizeTasksGradientStops, resolveTasksEdgeColor, tasksColorOptions, tasksColorPaletteEntries,
     tasksColorPaletteFor, tasksDisplayPaletteColor, tasksEdgeColorPaletteFor, tasksEdgeOpacityLabel,
@@ -22,7 +23,7 @@ import {
 // Panels read current state when called, after the app has built its actions.
 export function createTasksPanels(getState) {
     const SelectedNodePanel = (panelGraphNodeId, readOnly = false, hoverCard = null) => {
-        const { React, clearedNote, detailCardRef, detailCardScrollRef, edgeNodeLabels, focusGraphNode, graphBaseRef, handlePinnedCardKeyDown, hoverCardScrollMode, hoverCardScrollRef, model, nodeCardContentScale, nodeNotes, noteInputValue, noteTextareaRef, selectedNodeId, setClearedNote, setNoteInputValue, sourceModel, updateNodeNote } = getState();
+        const { React, clearedNote, detailCardRef, detailCardScrollRef, edgeNodeLabels, focusGraphNode, gitReviewEnabled, graphBaseRef, handlePinnedCardKeyDown, hoverCardScrollMode, hoverCardScrollRef, model, nodeCardContentScale, nodeNotes, noteInputValue, noteTextareaRef, selectedNodeId, setClearedNote, setNoteInputValue, sourceModel, updateNodeNote } = getState();
         if (panelGraphNodeId === undefined) panelGraphNodeId = selectedNodeId;
 
         const selectedNode = (graphBaseRef.current.nodes || []).find((node) => node.id === panelGraphNodeId)?.data || null;
@@ -36,6 +37,7 @@ export function createTasksPanels(getState) {
         const panelNodeId = sourceNodeId || selectedNode.id || '';
         const openDecisionEntry = tasksOpenDecisionEntry(selectedNode);
         const entries = openDecisionEntry ? [openDecisionEntry, ...baseEntries] : baseEntries;
+        const review = gitReviewEnabled ? selectedNode?.__kg_review__ : null;
         logTasksDebug('nodeCardAttrOrder', {
             contextId: String(sourceModel?.kg_context?.id || ''),
             viewId: String(model?.active_projection || ''),
@@ -106,6 +108,9 @@ export function createTasksPanels(getState) {
                             renderTasksInlineLinks(selectedNode.label || selectedNode.id, { currentPath: sourceModel?.document_path || '', nodeLabels: edgeNodeLabels }))
                     ),
                     panelNodeId ? React.createElement('div', { title: panelNodeId, style: { fontSize: '12px', lineHeight: 1.3, fontWeight: 600, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', opacity: 0.7, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }, panelNodeId) : null,
+                    review ? React.createElement('div', {
+                        style: { marginTop: '5px', display: 'inline-flex', width: 'fit-content', borderRadius: '999px', padding: '2px 7px', fontSize: '10px', fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', background: `color-mix(in srgb, ${review.change === 'added' ? '#16a34a' : review.change === 'removed' ? '#dc2626' : '#d97706'} 16%, transparent)`, color: review.change === 'added' ? '#15803d' : review.change === 'removed' ? '#b91c1c' : '#b45309' },
+                    }, review.change) : null,
                 ),
                 panelHref ? React.createElement('a', {
                     href: panelHref,
@@ -115,10 +120,110 @@ export function createTasksPanels(getState) {
                     style: { display: 'inline-block', marginTop: '6px', fontSize: '12px', lineHeight: 1.3, textDecoration: 'underline', textUnderlineOffset: '2px', color: 'inherit', overflowWrap: 'anywhere', wordBreak: 'break-word' },
                 }, panelHref) : null,
             ),
-            renderTasksDetailEntries(React, entries, { copyValues: true, currentPath: sourceModel?.document_path || '' })
+            review ? React.createElement('div', { className: 'vyasa-kg-review-inspector' },
+                React.createElement('div', { className: 'vyasa-kg-review-revisions' },
+                    React.createElement('span', null, String(sourceModel?.kg_review?.base || '').slice(0, 8)),
+                    React.createElement('span', { 'aria-hidden': 'true' }, '→'),
+                    React.createElement('span', null, sourceModel?.kg_review?.head === 'WORKTREE' ? 'Worktree' : String(sourceModel?.kg_review?.head || '').slice(0, 8)),
+                    sourceModel?.kg_review?.context ? React.createElement('span', null, sourceModel.kg_review.context) : null
+                ),
+                (review.fields || []).length ? React.createElement('section', null,
+                    React.createElement('h4', null, 'Changed fields'),
+                    ...(review.fields || []).map((field) => React.createElement('details', { key: field.field, open: true, className: 'vyasa-kg-review-field' },
+                        React.createElement('summary', null, React.createElement('span', { className: `vyasa-kg-review-mark vyasa-kg-review-mark--${field.change}` }, field.change === 'added' ? '+' : field.change === 'removed' ? '−' : '~'), field.field),
+                        React.createElement('div', { className: 'vyasa-kg-review-values' },
+                            React.createElement('div', null, React.createElement('b', null, 'Before'), React.createElement('pre', null, tasksReviewFieldText(field.before))),
+                            React.createElement('div', null, React.createElement('b', null, 'After'), React.createElement('pre', null, tasksReviewFieldText(field.after)))
+                        )
+                    ))
+                ) : null,
+                (review.edges || []).length ? React.createElement('section', null,
+                    React.createElement('h4', null, 'Changed edges'),
+                    React.createElement('div', { className: 'vyasa-kg-review-edges' }, ...(review.edges || []).map((edge, index) => React.createElement('div', { key: `${edge.id}-${index}`, className: `vyasa-kg-review-edge vyasa-kg-review-edge--${edge.change}` },
+                        React.createElement('span', null, edge.change === 'added' ? '+' : edge.change === 'removed' ? '−' : '~'),
+                        React.createElement('code', null, `${edge.source} --${edge.relation}--> ${edge.target}`)
+                    )))
+                ) : null
+            ) : renderTasksDetailEntries(React, entries, { copyValues: true, currentPath: sourceModel?.document_path || '' })
             ),
-            notes: nodeNotesEditor,
+            notes: review ? null : nodeNotesEditor,
         });
+    };
+
+    const GitHistoryRail = () => {
+        const { React, gitHistory, gitHistoryError, gitHistoryLoading, gitReviewEnabled, gitReviewLoading, handleSelectGitBase, handleSelectGitCommit, sourceModel } = getState();
+        if (!gitReviewEnabled) return null;
+        const rows = tasksGitHistoryRows(gitHistory);
+        const selectedHead = String(sourceModel?.kg_review?.head || '');
+        const selectedBase = String(sourceModel?.kg_review?.base || '');
+        const rowHeight = 68;
+        const laneWidth = 15;
+        const laneInset = 13;
+        return React.createElement('aside', { className: 'vyasa-kg-history-rail', 'aria-label': 'Git history' },
+            React.createElement('div', { className: 'vyasa-kg-history-header' },
+                React.createElement('div', null, React.createElement('strong', null, 'History'), React.createElement('span', null, gitReviewLoading ? 'Comparing…' : `${rows.length} revisions`)),
+                sourceModel?.kg_review ? React.createElement('code', null, tasksReviewCountsLabel(sourceModel.kg_review.counts)) : null
+            ),
+            gitHistoryLoading ? React.createElement('div', { className: 'vyasa-kg-history-state' }, 'Loading Git history…') : null,
+            gitHistoryError ? React.createElement('div', { className: 'vyasa-kg-history-state vyasa-kg-history-state--error', role: 'alert' }, gitHistoryError) : null,
+            React.createElement('div', { className: 'vyasa-kg-history-list', role: 'listbox', 'aria-label': 'Commits' }, ...rows.map((row) => {
+                const selected = selectedHead === row.sha;
+                const isBase = selectedBase === row.sha;
+                const width = Math.max(44, laneInset * 2 + Math.max(row.before.length, row.after.length, 1) * laneWidth);
+                return React.createElement('div', { key: row.sha, className: 'vyasa-kg-history-entry' },
+                    React.createElement('button', {
+                        type: 'button',
+                        role: 'option',
+                        'aria-selected': selected ? 'true' : 'false',
+                        className: `vyasa-kg-history-row${selected ? ' is-selected' : ''}${row.affects_scope === false ? ' is-context-only' : ''}`,
+                        onClick: () => handleSelectGitCommit(row),
+                    },
+                    React.createElement('svg', { className: 'vyasa-kg-history-lanes', width, height: rowHeight, viewBox: `0 0 ${width} ${rowHeight}`, 'aria-hidden': 'true' },
+                        ...row.connections.map((connection, index) => {
+                            const x1 = laneInset + connection.from * laneWidth;
+                            const x2 = laneInset + connection.to * laneWidth;
+                            const color = tasksGitLaneColor(connection.from);
+                            return React.createElement('path', { key: `${connection.parent}-${index}`, d: `M ${x1} 0 C ${x1} 30, ${x2} 38, ${x2} ${rowHeight}`, fill: 'none', stroke: color, strokeWidth: 2 });
+                        }),
+                        React.createElement('circle', { cx: laneInset + row.lane * laneWidth, cy: rowHeight / 2, r: row.worktree ? 5 : 4, fill: row.worktree ? 'var(--vyasa-paper)' : tasksGitLaneColor(row.lane), stroke: tasksGitLaneColor(row.lane), strokeWidth: 2 })
+                    ),
+                    React.createElement('span', { className: 'vyasa-kg-history-copy' },
+                        React.createElement('span', { className: 'vyasa-kg-history-subject' }, row.message || '(no commit message)'),
+                        React.createElement('span', { className: 'vyasa-kg-history-meta' },
+                            React.createElement('span', null, row.author || (row.worktree ? 'Working tree' : 'Unknown author')),
+                            React.createElement('span', null, row.worktree ? `${row.changed_paths.length} files` : new Date(Number(row.timestamp || 0) * 1000).toLocaleString())
+                        ),
+                        React.createElement('span', { className: 'vyasa-kg-history-labels' },
+                            ...((row.refs || []).map((ref) => React.createElement('span', { key: ref }, ref))),
+                            isBase ? React.createElement('span', { className: 'vyasa-kg-history-base' }, 'base') : null,
+                            React.createElement('code', null, row.worktree ? 'WIP' : String(row.sha || '').slice(0, 8))
+                        )
+                    )),
+                    selected || isBase || row.worktree ? null : React.createElement('div', { className: 'vyasa-kg-history-compare' },
+                        React.createElement('button', {
+                            type: 'button',
+                            'aria-label': `Compare against ${String(row.sha || '').slice(0, 8)}`,
+                            onClick: () => handleSelectGitBase(row),
+                        }, 'Compare from here')
+                    )
+                );
+            }))
+        );
+    };
+
+    const GitReviewBar = () => {
+        const { React, gitReviewEnabled, gitReviewLoading, sourceModel } = getState();
+        const review = sourceModel?.kg_review;
+        if (!gitReviewEnabled || !review) return null;
+        const revision = (value) => value === 'WORKTREE' ? 'Worktree' : String(value || '').slice(0, 8);
+        return React.createElement('div', { className: 'vyasa-kg-review-bar', role: 'status' },
+            React.createElement('span', null, React.createElement('b', null, 'Base'), ` ${revision(review.base)}`, review.base_context_absent ? ` (no ${review.context})` : ''),
+            React.createElement('span', { 'aria-hidden': 'true' }, '→'),
+            React.createElement('span', null, React.createElement('b', null, 'Head'), ` ${revision(review.head)}`),
+            review.context ? React.createElement('span', null, '·', React.createElement('b', null, ` ${review.context}`)) : null,
+            React.createElement('code', null, tasksReviewCountsLabel(review.counts)),
+            gitReviewLoading ? React.createElement('span', null, 'Updating…') : null
+        );
     };
 
     const SelectedEdgePanel = () => {
@@ -189,7 +294,7 @@ export function createTasksPanels(getState) {
     };
 
     const FilterPanel = () => {
-        const { React, TASKS_ADD_VIEW_OPTION_ID, aclViewerOptions, activeAclViewer, activeColorHierarchy, activeContextId, activeContextIndex, activeEdgeTypes, activeFilters, activeGroupByHierarchy, activeProjectionId, activeSwatchFilters, allClearedNotes, buildProjectionConfigText, contextDiffEnabled, contextDiffLoading, contextLoading, contextOptions, edgeOpacity, edgeTypeColors, edgeTypeFilterEnabled, edgeTypeMenuOpen, edgeTypeOptions, edgeTypeQuery, effectiveEdgeTypes, egoMode, filterPanelMaxHeight, filterPanelRef, filterPanelWidthSetting, filtersCollapsed, groupByDisabledSet, groupByEnabled, groupByHierarchy, handleAddView, handleClearAllNotes, handleCopyNodeNotes, handleDefaultViewPaste, handleExportNodeNotes, handleImportNodeNotes, handleSwitchContext, handleUndoClearAllNotes, hoverInactiveNodes, model, nodeNotes, pendingFitActionRef, projectionOptions, projectionUnspecifiedContentOpacity, queryBuilderEnabled, queryBuilderReady, reorderActiveColorLevel, reorderGroupByLevel, resetProjectionControls, searchEnabled, searchInputRef, searchInputValue, searchMatches, setActiveAclViewer, setActiveColorLevel, setActiveEdgeTypes, setActiveFilters, setActiveProjectionId, setContextDiffEnabled, setDragSelection, setEdgeOpacity, setEdgeTypeFilterEnabled, setEdgeTypeMenuOpen, setEdgeTypeQuery, setFiltersCollapsedGuarded, setGroupByDisabledKeys, setGroupByEnabled, setGroupByHierarchy, setHoverInactiveNodes, setHoveredNodeId, setProjectionUnspecifiedContentOpacity, setQueryBuilderEnabled, setSearchEnabled, setSearchInputValue, setSearchQuery, setSelectedNodeId, setSelectedNodeIds, setViewMode, slideIndex, slideNotes, sourceModel, tasksCaptionElement, toggleFilterValue, viewMode, widgetId } = getState();
+        const { React, TASKS_ADD_VIEW_OPTION_ID, aclViewerOptions, activeAclViewer, activeColorHierarchy, activeContextId, activeContextIndex, activeEdgeTypes, activeFilters, activeGroupByHierarchy, activeProjectionId, activeSwatchFilters, allClearedNotes, buildProjectionConfigText, contextLoading, contextOptions, edgeOpacity, edgeTypeColors, edgeTypeFilterEnabled, edgeTypeMenuOpen, edgeTypeOptions, edgeTypeQuery, effectiveEdgeTypes, egoMode, filterPanelMaxHeight, filterPanelRef, filterPanelWidthSetting, filtersCollapsed, gitHistoryAvailable, gitHistoryLoading, gitReviewEnabled, gitReviewLoading, groupByDisabledSet, groupByEnabled, groupByHierarchy, handleAddView, handleClearAllNotes, handleCopyNodeNotes, handleDefaultViewPaste, handleExportNodeNotes, handleImportNodeNotes, handleSwitchContext, handleUndoClearAllNotes, hoverInactiveNodes, model, nodeNotes, pendingFitActionRef, projectionOptions, projectionUnspecifiedContentOpacity, queryBuilderEnabled, queryBuilderReady, reorderActiveColorLevel, reorderGroupByLevel, resetProjectionControls, searchEnabled, searchInputRef, searchInputValue, searchMatches, setActiveAclViewer, setActiveColorLevel, setActiveEdgeTypes, setActiveFilters, setActiveProjectionId, setDragSelection, setEdgeOpacity, setEdgeTypeFilterEnabled, setEdgeTypeMenuOpen, setEdgeTypeQuery, setFiltersCollapsedGuarded, setGroupByDisabledKeys, setGroupByEnabled, setGroupByHierarchy, setHoverInactiveNodes, setHoveredNodeId, setProjectionUnspecifiedContentOpacity, setQueryBuilderEnabled, setSearchEnabled, setSearchInputValue, setSearchQuery, setSelectedNodeId, setSelectedNodeIds, setViewMode, slideIndex, slideNotes, sourceModel, tasksCaptionElement, toggleFilterValue, toggleGitReview, viewMode, widgetId } = getState();
         if (egoMode || slideIndex >= 0) return null;
         const options = tasksFilterOptions(model);
         const colorOptions = tasksColorOptions(model, nodeNotes);
@@ -565,40 +670,40 @@ export function createTasksPanels(getState) {
                     paddingBottom: '2px',
                 },
             },
-                contextOptions.length > 1 ? React.createElement('div', { style: { ...filterSectionStyle, marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
+                (contextOptions.length > 1 || gitHistoryAvailable) ? React.createElement('div', { style: { ...filterSectionStyle, marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
                     React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' } },
-                        React.createElement('span', { style: filterKeyStyle }, 'Context'),
+                        React.createElement('span', { style: filterKeyStyle }, contextOptions.length > 1 ? 'Context and review' : 'Review'),
                         React.createElement('label', {
                             className: 'vyasa-tasks-toggle-label',
-                            title: activeContextIndex <= 0 ? 'The first context has no previous context' : 'Glow changes from previous context',
+                            title: gitHistoryAvailable ? 'Review Knowledge Graph changes across Git revisions' : 'Add @history source=git to enable Git review',
                             style: { fontSize: '11px', fontWeight: 650 },
                         },
                             React.createElement('input', {
                                 type: 'checkbox',
                                 className: 'vyasa-tasks-switch-input',
-                                'aria-label': 'Select changes from previous context',
-                                checked: contextDiffEnabled && activeContextIndex > 0,
-                                disabled: contextLoading || contextDiffLoading || activeContextIndex <= 0,
-                                onChange: (event) => setContextDiffEnabled(event.target.checked),
+                                'aria-label': 'Toggle Git review mode',
+                                checked: gitReviewEnabled,
+                                disabled: !gitHistoryAvailable || contextLoading || gitHistoryLoading || gitReviewLoading,
+                                onChange: toggleGitReview,
                             }),
                             React.createElement('span', { className: 'vyasa-tasks-switch-track', 'aria-hidden': 'true' }),
-                            React.createElement('span', null, contextDiffLoading ? 'Loading' : 'Diff')
+                            React.createElement('span', null, gitHistoryLoading || gitReviewLoading ? 'Loading' : 'Diff')
                         )
                     ),
-                    (() => {
+                    contextOptions.length > 1 ? (() => {
                         const ctxIndex = activeContextIndex;
                         const ctxNavBtn = (disabled) => ({ flex: '0 0 34px', width: '34px', height: '34px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 24%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 88%, transparent)', color: 'inherit', borderRadius: '8px', padding: 0, fontSize: '18px', lineHeight: 1, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.4 : 1 });
                         const goContext = (delta) => {
                             const target = contextOptions[ctxIndex + delta];
                             if (target) handleSwitchContext(target.id);
                         };
-                        const prevDisabled = contextLoading || ctxIndex <= 0;
-                        const nextDisabled = contextLoading || ctxIndex < 0 || ctxIndex >= contextOptions.length - 1;
+                        const prevDisabled = contextLoading || gitReviewEnabled || ctxIndex <= 0;
+                        const nextDisabled = contextLoading || gitReviewEnabled || ctxIndex < 0 || ctxIndex >= contextOptions.length - 1;
                         return React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 } },
                             React.createElement('button', { type: 'button', 'aria-label': 'Previous context', onClick: () => goContext(-1), disabled: prevDisabled, style: ctxNavBtn(prevDisabled) }, '‹'),
                             React.createElement('select', {
                                     value: activeContextId,
-                                    disabled: contextLoading,
+                                    disabled: contextLoading || gitReviewEnabled,
                                     onChange: (event) => handleSwitchContext(event.target.value),
                                     style: {
                                         flex: '1 1 auto',
@@ -619,7 +724,7 @@ export function createTasksPanels(getState) {
                                 ),
                             React.createElement('button', { type: 'button', 'aria-label': 'Next context', onClick: () => goContext(1), disabled: nextDisabled, style: ctxNavBtn(nextDisabled) }, '›')
                         );
-                    })(),
+                    })() : null,
                     tasksCaptionElement(sourceModel?.kg_context, {
                         padding: '9px 10px',
                         borderRadius: '8px',
@@ -1167,5 +1272,5 @@ export function createTasksPanels(getState) {
         );
     };
 
-    return { SelectedNodePanel, SelectedEdgePanel, FilterPanel };
+    return { SelectedNodePanel, SelectedEdgePanel, FilterPanel, GitHistoryRail, GitReviewBar };
 }

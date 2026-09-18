@@ -8,11 +8,14 @@ from typing import Iterable, cast
 from starlette.responses import Response
 
 from ...markdown_fence import items_code_source, items_link_base_path
+from ...content_backend import classify_root, discover_git_backend, uncommitted_paths
 from .layout import build_collapsed_graph
 from .items_pack import _tmp_view_sidecar_dir
+from .items_pack import read_schema
 from .model import parse_tasks_text
 from .query import KnowledgeGraphQuery
 from .render import _attach_rendered_node_attrs, _attach_rendered_prose_attrs
+from .review import build_git_review
 
 ALNUM = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
@@ -80,6 +83,82 @@ def _perf_log_path(host: str, path: str) -> Path:
 
 
 def register_tasks_routes(rt, runtime) -> None:
+    @rt("/api/tasks/git-history", methods=["POST"])
+    async def git_history(request):
+        try:
+            payload = json.loads((await request.body()).decode("utf-8"))
+            schema_path = _safe_schema_path(runtime, str(payload.get("schema_path") or ""))
+            history_config = read_schema(schema_path).history
+            if history_config.get("source") != "git":
+                return Response("Knowledge Graph does not enable Git history", status_code=400)
+            discovered = discover_git_backend(schema_path)
+            if discovered is None:
+                return Response("Knowledge Graph history requires a Git repository", status_code=400)
+            backend, repo_root = discovered
+            pack_rel = schema_path.parent.relative_to(repo_root).as_posix()
+            pack_rel = "" if pack_rel == "." else pack_rel
+            limit = min(max(int(payload.get("limit") or 200), 1), 500)
+            commits = backend.history(paths=(pack_rel,) if pack_rel else (), limit=limit)
+            dirty = sorted(
+                path for path in uncommitted_paths(classify_root(repo_root))
+                if not pack_rel or path == pack_rel or path.startswith(f"{pack_rel}/")
+            )
+            result = {
+                "ok": True,
+                "default_ref": backend.default_ref(),
+                "head": backend.resolve_ref("") or "",
+                "worktree": {"changed_paths": dirty, "parent": backend.resolve_ref("") or ""},
+                "commits": [
+                    {
+                        "sha": item.sha,
+                        "parents": list(item.parents),
+                        "message": item.message,
+                        "author": item.author,
+                        "timestamp": item.timestamp,
+                        "refs": list(item.refs),
+                        "changed_paths": list(item.changed_paths),
+                        "affects_scope": item.affects_scope,
+                    }
+                    for item in commits
+                ],
+            }
+        except (ValueError, OSError) as exc:
+            return Response(str(exc), status_code=400)
+        except Exception as exc:
+            runtime.logger.exception("[tasks] failed to load Git history")
+            return Response(str(exc), status_code=500)
+        return Response(json.dumps(result), media_type="application/json", headers={"Cache-Control": "no-store"})
+
+    @rt("/api/tasks/git-review", methods=["POST"])
+    async def git_review(request):
+        try:
+            payload = json.loads((await request.body()).decode("utf-8"))
+            schema_path = _safe_schema_path(runtime, str(payload.get("schema_path") or ""))
+            base_ref = str(payload.get("base_ref") or "").strip()
+            head_ref = str(payload.get("head_ref") or "").strip()
+            if not base_ref or not head_ref:
+                return Response("Git review requires base and head revisions", status_code=400)
+            model, graph = build_git_review(
+                schema_path,
+                base_ref=base_ref,
+                head_ref=head_ref,
+                context_id=str(payload.get("context_id") or "").strip(),
+            )
+            link_path_value = items_link_base_path(model, str(schema_path))
+            link_path = str(link_path_value) if link_path_value is not None else None
+            _attach_rendered_node_attrs(model, link_path, items_code_source(model))
+            _attach_rendered_prose_attrs(model, link_path, items_code_source(model))
+        except (ValueError, OSError) as exc:
+            return Response(str(exc), status_code=400)
+        except Exception as exc:
+            runtime.logger.exception("[tasks] failed to compile Git review")
+            return Response(str(exc), status_code=500)
+        return Response(
+            json.dumps({"ok": True, "model": model, "graph": graph}),
+            media_type="application/json",
+            headers={"Cache-Control": "no-store"},
+        )
+
     @rt("/api/tasks/context-diff", methods=["POST"])
     async def context_diff(request):
         try:

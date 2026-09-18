@@ -36,6 +36,7 @@ export function createTasksNodeRenderer(getState) {
                             'data-vyasa-review-target': JSON.stringify(tasksReviewTarget(data, id, widgetId)),
                             'data-vyasa-highlight-active': !['none', 'dim'].includes(highlightMode) ? 'true' : undefined,
                             'data-vyasa-hover-outline': data?.__hover_outline__ === true ? 'true' : undefined,
+                            'data-vyasa-kg-review-change': data?.__kg_review_change__ || undefined,
                         };
                         const isChecked = data?.__checked__ === true;
                         const debugPosition = data?.__debug_position__;
