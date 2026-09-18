@@ -14,6 +14,7 @@ from typing import Any, cast
 from ...content_backend import VirtualPath, discover_git_backend, ref_read_scope
 from .layout import build_collapsed_graph
 from .model import parse_tasks_text
+from .projections import build_projection_model
 
 
 _NODE_IGNORED_FIELDS = {
@@ -259,8 +260,12 @@ def build_git_review(
         if after_entry is None:
             continue
         if before_entry is None:
-            empty = {"groups": [], "tasks": [], "dependency_edges": []}
-            projection_counts = _merge_review_level(empty, after_entry["model"])
+            # A view added at head still shows records the base already had, so
+            # project the base data through the head's view rather than against
+            # nothing. Comparing to an empty graph called every record added.
+            config = projection_configs.get(projection_id)
+            before_model = build_projection_model(base, config) if config else _empty_side()
+            projection_counts = _merge_review_level(before_model, after_entry["model"])
         else:
             projection_counts = _merge_review_level(before_entry["model"], after_entry["model"])
         after_entry["graph"] = build_collapsed_graph(after_entry["model"])
