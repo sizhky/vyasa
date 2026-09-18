@@ -68,16 +68,21 @@ def _head_side(schema_path: Path, ref: str, requested: str) -> tuple[dict[str, A
     return model, str(model.get("kg_context", {}).get("id") or "")
 
 
-def _base_side(schema_path: Path, ref: str, context_id: str) -> tuple[dict[str, Any], bool]:
-    """One context is held across both revisions. A context names a variant, not an
-    earlier version of another variant, so an absent one never substitutes another.
-    It contributes nothing instead, the way a view present on one side does."""
+def _base_side(schema_path: Path, ref: str, context_id: str) -> tuple[dict[str, Any], str]:
+    """One context is held across both revisions when the base has it.
+
+    A context the base never had is not an empty graph. Contexts in one pack
+    share the node and edge definitions, so the records a new context selects
+    are mostly records the base already held. Comparing against nothing called
+    every one of them added, so the base falls back to the context it does have
+    and the caller names both."""
     model = _compile_ref_model(schema_path, ref)
-    if context_id and context_id not in _context_ids(model):
-        return _empty_side(), True
-    if context_id and str(model.get("kg_context", {}).get("id") or "") != context_id:
+    resolved = str(model.get("kg_context", {}).get("id") or "")
+    if not context_id or context_id not in _context_ids(model):
+        return model, resolved
+    if resolved != context_id:
         model = _compile_ref_model(schema_path, ref, context_id)
-    return model, False
+    return model, context_id
 
 
 def _public_record(record: dict[str, Any], ignored: set[str]) -> dict[str, Any]:
@@ -237,7 +242,7 @@ def build_git_review(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Compile and compare two complete pack revisions."""
     head, context = _head_side(schema_path, head_ref, context_id)
-    base, base_absent = _base_side(schema_path, base_ref, context)
+    base, base_context = _base_side(schema_path, base_ref, context)
     review = copy.deepcopy(head)
     counts = _merge_review_level(base, review)
 
@@ -278,7 +283,7 @@ def build_git_review(
         "base": base_ref,
         "head": head_ref,
         "context": context,
-        "base_context_absent": base_absent,
+        "base_context": base_context,
         "counts": counts,
         "view_counts": view_counts,
     }

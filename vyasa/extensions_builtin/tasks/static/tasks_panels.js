@@ -231,10 +231,13 @@ export function createTasksPanels(getState) {
             gitReviewLoading ? React.createElement('span', null, 'Updating…') : null
         ) : null;
         return React.createElement('div', { className: 'vyasa-kg-review-bar', role: 'status' },
-            React.createElement('span', null, React.createElement('b', null, 'Base'), ` ${revision(review.base)}`, review.base_context_absent ? ` (no ${review.context})` : ''),
+            React.createElement('span', null, React.createElement('b', null, 'Base'), ` ${revision(review.base)}`),
             React.createElement('span', { 'aria-hidden': 'true' }, '→'),
             React.createElement('span', null, React.createElement('b', null, 'Head'), ` ${revision(review.head)}`),
-            review.context ? React.createElement('span', null, '·', React.createElement('b', null, ` ${review.context}`)) : null,
+            review.context ? React.createElement('span', null, '·', React.createElement('b', null,
+                review.base_context && review.base_context !== review.context
+                    ? ` ${review.base_context} → ${review.context}`
+                    : ` ${review.context}`)) : null,
             React.createElement('code', null, tasksReviewCountsLabel(review.counts)),
             gitReviewLoading ? React.createElement('span', null, 'Updating…') : null
         );
