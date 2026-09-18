@@ -162,14 +162,20 @@ def _rebuild_indexes(model: dict[str, Any]) -> None:
     model["document_order"] = [str(node["id"]) for bucket in ("groups", "tasks") for node in model.get(bucket, [])]
 
 
-def _merge_review_level(base: dict[str, Any], head: dict[str, Any]) -> dict[str, int]:
-    before_nodes = _node_map(base)
-    after_nodes = _node_map(head)
+def _incident_node_ids(statement: dict[str, Any], before: dict[str, Any] | None) -> set[str]:
+    """Both endpoints on both sides, because a re-pointed edge touches all of them."""
+    ids = {statement["source"], statement["target"]}
+    if before is not None:
+        ids.update((str(before.get("source") or ""), str(before.get("target") or "")))
+    return ids - {""}
+
+
+def _merge_edges(base: dict[str, Any], head: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    """Mark every edge, keep removed ones as ghosts, and collect the changed
+    statements incident to each node."""
     before_edges = _edge_map(base)
     after_edges = _edge_map(head)
     incident: dict[str, list[dict[str, Any]]] = {}
-    counts = {"added": 0, "modified": 0, "removed": 0}
-
     for edge_key in sorted(before_edges.keys() | after_edges.keys()):
         before = before_edges.get(edge_key)
         after = after_edges.get(edge_key)
@@ -190,26 +196,33 @@ def _merge_review_level(base: dict[str, Any], head: dict[str, Any]) -> dict[str,
         # the renderer unable to recede them behind the changed topology.
         if after is not None:
             after["__kg_review_change__"] = change
-        if change != "unchanged":
-            statement = _edge_statement(record, change, fields)
-            affected_nodes = {statement["source"], statement["target"]}
-            if before is not None:
-                affected_nodes.update((str(before.get("source") or ""), str(before.get("target") or "")))
-            for node_id in affected_nodes - {""}:
-                incident.setdefault(node_id, []).append(statement)
+        if change == "unchanged":
+            continue
+        statement = _edge_statement(record, change, fields)
+        for node_id in _incident_node_ids(statement, before):
+            incident.setdefault(node_id, []).append(statement)
+    return incident
 
+
+def _merge_nodes(
+    base: dict[str, Any],
+    head: dict[str, Any],
+    incident: dict[str, list[dict[str, Any]]],
+) -> dict[str, int]:
+    """Mark every node against its own fields and the edges that moved around it."""
+    before_nodes = _node_map(base)
+    after_nodes = _node_map(head)
+    counts = {"added": 0, "modified": 0, "removed": 0}
     for node_id in sorted(before_nodes.keys() | after_nodes.keys()):
         before_entry = before_nodes.get(node_id)
         after_entry = after_nodes.get(node_id)
         fields: list[dict[str, Any]] = []
         if before_entry is None:
-            change = "added"
             assert after_entry is not None
-            target = after_entry[1]
+            change, target = "added", after_entry[1]
         elif after_entry is None:
-            change = "removed"
             bucket, before = before_entry
-            target = copy.deepcopy(before)
+            change, target = "removed", copy.deepcopy(before)
             head.setdefault(bucket, []).append(target)
         else:
             fields = _field_changes(before_entry[1], after_entry[1], _NODE_IGNORED_FIELDS)
@@ -219,7 +232,12 @@ def _merge_review_level(base: dict[str, Any], head: dict[str, Any]) -> dict[str,
         target["__kg_review__"] = {"change": change, "fields": fields, "edges": incident.get(node_id, [])}
         if change in counts:
             counts[change] += 1
+    return counts
 
+
+def _merge_review_level(base: dict[str, Any], head: dict[str, Any]) -> dict[str, int]:
+    """Mark one graph level in place against its base and count what changed."""
+    counts = _merge_nodes(base, head, _merge_edges(base, head))
     _rebuild_indexes(head)
     counts["total"] = counts["added"] + counts["modified"] + counts["removed"]
     return counts
@@ -231,6 +249,53 @@ def build_git_state(schema_path: Path, *, ref: str, context_id: str = "") -> tup
     model["kg_schema"] = str(schema_path)
     model["kg_revision"] = {"ref": ref, "context": context}
     return model, build_collapsed_graph(model)
+
+
+def _merge_projection_configs(base: dict[str, Any], review: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Every view either revision offers, keyed by id and carried on the review."""
+    configs = {str(item.get("id")): item for item in review.get("view_projections", []) if item.get("id")}
+    for item in base.get("view_projections", []):
+        projection_id = str(item.get("id") or "")
+        if projection_id and projection_id not in configs:
+            removed = copy.deepcopy(item)
+            review.setdefault("view_projections", []).append(removed)
+            configs[projection_id] = removed
+    return configs
+
+
+def _projection_base_model(
+    base: dict[str, Any],
+    before_entry: dict[str, Any] | None,
+    config: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """A view added at head still shows records the base already had, so project
+    the base data through that view rather than comparing it against nothing."""
+    if before_entry is not None:
+        return before_entry["model"]
+    return build_projection_model(base, config) if config else _empty_side()
+
+
+def _merge_projections(base: dict[str, Any], review: dict[str, Any]) -> dict[str, dict[str, int]]:
+    """Compare every view between the two revisions and return each view's counts."""
+    base_projections = base.get("projection_models", {})
+    head_projections = review.get("projection_models", {})
+    configs = _merge_projection_configs(base, review)
+    view_counts: dict[str, dict[str, int]] = {}
+    for projection_id in sorted(set(base_projections) | set(head_projections)):
+        before_entry = base_projections.get(projection_id)
+        after_entry = head_projections.get(projection_id)
+        if after_entry is None:
+            if before_entry is None:
+                continue
+            after_entry = copy.deepcopy(before_entry)
+            head_projections[projection_id] = after_entry
+        before_model = _projection_base_model(base, before_entry, configs.get(projection_id))
+        counts = _merge_review_level(before_model, after_entry["model"])
+        after_entry["graph"] = build_collapsed_graph(after_entry["model"])
+        view_counts[projection_id] = counts
+        if projection_id in configs:
+            configs[projection_id]["kg_review_counts"] = counts
+    return view_counts
 
 
 def build_git_review(
@@ -245,39 +310,6 @@ def build_git_review(
     base, base_context = _base_side(schema_path, base_ref, context)
     review = copy.deepcopy(head)
     counts = _merge_review_level(base, review)
-
-    base_projections = base.get("projection_models", {})
-    head_projections = review.get("projection_models", {})
-    projection_configs = {str(item.get("id")): item for item in review.get("view_projections", []) if item.get("id")}
-    for item in base.get("view_projections", []):
-        projection_id = str(item.get("id") or "")
-        if projection_id and projection_id not in projection_configs:
-            removed_config = copy.deepcopy(item)
-            review.setdefault("view_projections", []).append(removed_config)
-            projection_configs[projection_id] = removed_config
-    view_counts: dict[str, dict[str, int]] = {"": counts}
-    for projection_id in sorted(set(base_projections) | set(head_projections)):
-        before_entry = base_projections.get(projection_id)
-        after_entry = head_projections.get(projection_id)
-        if after_entry is None and before_entry is not None:
-            after_entry = copy.deepcopy(before_entry)
-            head_projections[projection_id] = after_entry
-        if after_entry is None:
-            continue
-        if before_entry is None:
-            # A view added at head still shows records the base already had, so
-            # project the base data through the head's view rather than against
-            # nothing. Comparing to an empty graph called every record added.
-            config = projection_configs.get(projection_id)
-            before_model = build_projection_model(base, config) if config else _empty_side()
-            projection_counts = _merge_review_level(before_model, after_entry["model"])
-        else:
-            projection_counts = _merge_review_level(before_entry["model"], after_entry["model"])
-        after_entry["graph"] = build_collapsed_graph(after_entry["model"])
-        view_counts[projection_id] = projection_counts
-        if projection_id in projection_configs:
-            projection_configs[projection_id]["kg_review_counts"] = projection_counts
-
     review["kg_schema"] = str(schema_path)
     review["kg_review"] = {
         "base": base_ref,
@@ -285,6 +317,6 @@ def build_git_review(
         "context": context,
         "base_context": base_context,
         "counts": counts,
-        "view_counts": view_counts,
+        "view_counts": {"": counts, **_merge_projections(base, review)},
     }
     return review, build_collapsed_graph(review)
