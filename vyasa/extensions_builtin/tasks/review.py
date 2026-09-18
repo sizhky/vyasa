@@ -107,12 +107,21 @@ def _edge_map(model: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {_edge_key(edge): edge for edge in model.get("dependency_edges", [])}
 
 
+def _same_value(left: Any, right: Any) -> bool:
+    """A blank field and an absent field read the same, so they compare equal.
+    One compiler path stamps every node with an empty attribute and another
+    leaves it unset, which otherwise reports a change the reader cannot see."""
+    if left == right:
+        return True
+    return left in (None, "") and right in (None, "")
+
+
 def _field_changes(before: dict[str, Any], after: dict[str, Any], ignored: set[str]) -> list[dict[str, Any]]:
     left = _public_record(before, ignored)
     right = _public_record(after, ignored)
     changes: list[dict[str, Any]] = []
     for field in sorted((left.keys() | right.keys()) - {"id"}):
-        if left.get(field) == right.get(field):
+        if _same_value(left.get(field), right.get(field)):
             continue
         change = "added" if field not in left else "removed" if field not in right else "modified"
         changes.append({"field": field, "change": change, "before": left.get(field), "after": right.get(field)})

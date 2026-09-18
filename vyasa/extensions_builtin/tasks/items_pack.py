@@ -1354,14 +1354,17 @@ def _resolve_source(schema: KgSchema, name: str) -> dict[str, Any]:
 
 
 def _source_names_for_views(schema: KgSchema) -> list[str]:
-    names: list[str] = []
+    # The unprojected graph is the base source, so base loads even when every
+    # view names a source of its own. Without this a pack whose views all carry
+    # their own source rendered with no base topology at all.
+    names: list[str] = ["base"]
     for view in schema.views:
         for part in str(view.source or "base").split("+"):
             if part == "all":
                 names.extend(schema.sources)
             elif part:
                 names.append(part)
-    return list(dict.fromkeys(names or ["base"]))
+    return list(dict.fromkeys(names))
 
 
 def _path_list(value: str | None) -> list[str]:
