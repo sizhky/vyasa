@@ -151,18 +151,26 @@ export function createTasksPanels(getState) {
     };
 
     const GitHistoryRail = () => {
-        const { React, gitHistory, gitHistoryError, gitHistoryLoading, gitReviewEnabled, gitReviewLoading, handleSelectGitBase, handleSelectGitCommit, sourceModel } = getState();
+        const { React, gitDiffEnabled, gitHistory, gitHistoryError, gitHistoryLoading, gitReviewEnabled, gitReviewLoading, handleSelectGitBase, handleSelectGitCommit, sourceModel, toggleGitDiff } = getState();
         if (!gitReviewEnabled) return null;
         const rows = tasksGitHistoryRows(gitHistory);
-        const selectedHead = String(sourceModel?.kg_review?.head || '');
-        const selectedBase = String(sourceModel?.kg_review?.base || '');
+        const selectedHead = String(sourceModel?.kg_review?.head || sourceModel?.kg_revision?.ref || '');
+        const selectedBase = gitDiffEnabled ? String(sourceModel?.kg_review?.base || '') : '';
         const rowHeight = 68;
         const laneWidth = 15;
         const laneInset = 13;
         return React.createElement('aside', { className: 'vyasa-kg-history-rail', 'aria-label': 'Git history' },
             React.createElement('div', { className: 'vyasa-kg-history-header' },
-                React.createElement('div', null, React.createElement('strong', null, 'History'), React.createElement('span', null, gitReviewLoading ? 'Comparing…' : `${rows.length} revisions`)),
-                sourceModel?.kg_review ? React.createElement('code', null, tasksReviewCountsLabel(sourceModel.kg_review.counts)) : null
+                React.createElement('div', null, React.createElement('strong', null, 'History'), React.createElement('span', null, gitReviewLoading ? 'Loading…' : `${rows.length} revisions`)),
+                React.createElement('button', {
+                    type: 'button',
+                    className: `vyasa-kg-history-diff${gitDiffEnabled ? ' is-selected' : ''}`,
+                    'aria-pressed': gitDiffEnabled ? 'true' : 'false',
+                    title: 'Compare the selected revision against a base, instead of showing it on its own',
+                    disabled: gitReviewLoading,
+                    onClick: toggleGitDiff,
+                }, 'Diff'),
+                gitDiffEnabled && sourceModel?.kg_review ? React.createElement('code', null, tasksReviewCountsLabel(sourceModel.kg_review.counts)) : null
             ),
             gitHistoryLoading ? React.createElement('div', { className: 'vyasa-kg-history-state' }, 'Loading Git history…') : null,
             gitHistoryError ? React.createElement('div', { className: 'vyasa-kg-history-state vyasa-kg-history-state--error', role: 'alert' }, gitHistoryError) : null,
@@ -199,7 +207,7 @@ export function createTasksPanels(getState) {
                             React.createElement('code', null, row.worktree ? 'WIP' : String(row.sha || '').slice(0, 8))
                         )
                     )),
-                    selected || isBase || row.worktree ? null : React.createElement('div', { className: 'vyasa-kg-history-compare' },
+                    !gitDiffEnabled || selected || isBase || row.worktree ? null : React.createElement('div', { className: 'vyasa-kg-history-compare' },
                         React.createElement('button', {
                             type: 'button',
                             'aria-label': `Compare against ${String(row.sha || '').slice(0, 8)}`,
@@ -214,8 +222,14 @@ export function createTasksPanels(getState) {
     const GitReviewBar = () => {
         const { React, gitReviewEnabled, gitReviewLoading, sourceModel } = getState();
         const review = sourceModel?.kg_review;
-        if (!gitReviewEnabled || !review) return null;
+        const state = sourceModel?.kg_revision;
+        if (!gitReviewEnabled) return null;
         const revision = (value) => value === 'WORKTREE' ? 'Worktree' : String(value || '').slice(0, 8);
+        if (!review) return state ? React.createElement('div', { className: 'vyasa-kg-review-bar', role: 'status' },
+            React.createElement('span', null, React.createElement('b', null, 'Showing'), ` ${revision(state.ref)}`),
+            state.context ? React.createElement('span', null, '·', React.createElement('b', null, ` ${state.context}`)) : null,
+            gitReviewLoading ? React.createElement('span', null, 'Updating…') : null
+        ) : null;
         return React.createElement('div', { className: 'vyasa-kg-review-bar', role: 'status' },
             React.createElement('span', null, React.createElement('b', null, 'Base'), ` ${revision(review.base)}`, review.base_context_absent ? ` (no ${review.context})` : ''),
             React.createElement('span', { 'aria-hidden': 'true' }, '→'),
@@ -687,7 +701,7 @@ export function createTasksPanels(getState) {
                                 onChange: toggleGitReview,
                             }),
                             React.createElement('span', { className: 'vyasa-tasks-switch-track', 'aria-hidden': 'true' }),
-                            React.createElement('span', null, gitHistoryLoading || gitReviewLoading ? 'Loading' : 'Diff')
+                            React.createElement('span', null, gitHistoryLoading || gitReviewLoading ? 'Loading' : 'Review')
                         )
                     ),
                     contextOptions.length > 1 ? (() => {

@@ -20,6 +20,9 @@
 .vyasa-kg-history-row:hover { background: color-mix(in srgb, var(--vyasa-primary) 8%, transparent); }
 .vyasa-kg-history-row.is-selected { background: color-mix(in srgb, var(--vyasa-primary) 15%, transparent); box-shadow: inset 3px 0 var(--vyasa-primary); }
 .vyasa-kg-history-row.is-context-only { opacity: .55; }
+.vyasa-kg-history-diff { border: 1px solid color-mix(in srgb, currentColor 22%, transparent); border-radius: 6px; padding: 3px 9px; background: transparent; color: inherit; font: 700 10px/1.2 ui-monospace, monospace; letter-spacing: .04em; text-transform: uppercase; cursor: pointer; }
+.vyasa-kg-history-diff.is-selected { border-color: var(--vyasa-primary); background: color-mix(in srgb, var(--vyasa-primary) 16%, transparent); color: var(--vyasa-primary); }
+.vyasa-kg-history-diff:disabled { opacity: .45; cursor: default; }
 .vyasa-kg-history-entry { position: relative; }
 .vyasa-kg-history-labels > span.vyasa-kg-history-base { border-color: color-mix(in srgb, var(--vyasa-primary) 55%, transparent); color: var(--vyasa-primary); font-weight: 800; }
 .vyasa-kg-history-compare { position: absolute; inset-inline-end: 9px; top: 50%; transform: translateY(-50%); opacity: 0; pointer-events: none; transition: opacity .12s ease; }
@@ -35,9 +38,20 @@
 .vyasa-kg-history-state { padding: 12px; font-size: 11px; opacity: .72; }
 .vyasa-kg-history-state--error { color: #dc2626; opacity: 1; }
 .vyasa-kg-review-mode [data-vyasa-kg-review-change="unchanged"] { opacity: .26; filter: saturate(.25); }
-.vyasa-kg-review-mode [data-vyasa-kg-review-change="added"] { box-shadow: 0 0 0 3px color-mix(in srgb, #16a34a 72%, transparent), 0 8px 28px color-mix(in srgb, #16a34a 18%, transparent) !important; }
-.vyasa-kg-review-mode [data-vyasa-kg-review-change="modified"] { box-shadow: 0 0 0 3px color-mix(in srgb, #d97706 72%, transparent), 0 8px 28px color-mix(in srgb, #d97706 18%, transparent) !important; }
-.vyasa-kg-review-mode [data-vyasa-kg-review-change="removed"] { opacity: .56; filter: saturate(.25); box-shadow: 0 0 0 3px color-mix(in srgb, #dc2626 72%, transparent) !important; }
+/* Ghosting stays on the card body, where opacity is not clipped. */
+.vyasa-kg-review-mode [data-vyasa-kg-review-change="removed"] { opacity: .66; }
+/* The bloom sits on the React Flow node wrapper instead, because that wrapper
+   sets overflow:hidden and clipped a box-shadow drawn on the body to nothing.
+   A filter escaped the clip but traced the glyphs, haloing the label text. */
+.vyasa-kg-review-mode .react-flow__node:has([data-vyasa-kg-review-change="added"]) { --vyasa-kg-review-bloom: #16a34a; }
+.vyasa-kg-review-mode .react-flow__node:has([data-vyasa-kg-review-change="modified"]) { --vyasa-kg-review-bloom: #d97706; }
+.vyasa-kg-review-mode .react-flow__node:has([data-vyasa-kg-review-change="removed"]) { --vyasa-kg-review-bloom: #dc2626; }
+/* Static, to match the edge halo. No ring either: the change colour belongs to
+   the bloom alone, so the card keeps the border and background its palette
+   colour gave it. !important because the node wrapper sets box-shadow inline. */
+.vyasa-kg-review-mode .react-flow__node:has([data-vyasa-kg-review-change="added"]),
+.vyasa-kg-review-mode .react-flow__node:has([data-vyasa-kg-review-change="modified"]),
+.vyasa-kg-review-mode .react-flow__node:has([data-vyasa-kg-review-change="removed"]) { box-shadow: 0 0 26px 10px color-mix(in srgb, var(--vyasa-kg-review-bloom) 62%, transparent) !important; }
 .vyasa-kg-review-bar { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 36; display: flex; align-items: center; gap: 8px; max-width: calc(100% - 24px); border: 1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent); border-radius: 9px; padding: 7px 10px; background: color-mix(in srgb, var(--vyasa-paper) 94%, transparent); box-shadow: 0 6px 18px rgba(0,0,0,.1); backdrop-filter: blur(8px); font-size: 10px; white-space: nowrap; pointer-events: none; }
 .vyasa-kg-review-bar code { font-size: 10px; color: var(--vyasa-primary); }
 .vyasa-kg-review-inspector { display: grid; gap: 14px; }
@@ -201,7 +215,9 @@ html:not(.vyasa-tasks-edge-labels-on) .vyasa-tasks-flow .vyasa-tasks-edge-label:
 .react-flow__node[data-vyasa-group-toggle-hover="true"] {
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--vyasa-ink) 64%, transparent), 0 24px 72px color-mix(in srgb, var(--vyasa-primary) 16%, transparent) !important;
 }
-.vyasa-tasks-active-pulse .react-flow__node:not(.vyasa-tasks-pulse):has([data-vyasa-highlight-active="true"]) {
+/* Review-tagged nodes keep their bloom while hovered or selected. Without the
+   exclusion this !important strips the bloom's box-shadow on interaction. */
+.vyasa-tasks-active-pulse .react-flow__node:not(.vyasa-tasks-pulse):not(:has([data-vyasa-kg-review-change])):has([data-vyasa-highlight-active="true"]) {
     box-shadow: none !important;
 }
 .react-flow__node.vyasa-tasks-node--passive [data-vyasa-task-control="true"] {

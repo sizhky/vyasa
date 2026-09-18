@@ -171,9 +171,11 @@ def _merge_review_level(base: dict[str, Any], head: dict[str, Any]) -> dict[str,
             change, record = ("modified", after) if fields else ("unchanged", after)
         if record is None:
             continue
+        # Nodes carry this state unconditionally. Edges skipping "unchanged" left
+        # the renderer unable to recede them behind the changed topology.
+        if after is not None:
+            after["__kg_review_change__"] = change
         if change != "unchanged":
-            if after is not None:
-                after["__kg_review_change__"] = change
             statement = _edge_statement(record, change, fields)
             affected_nodes = {statement["source"], statement["target"]}
             if before is not None:
@@ -206,6 +208,14 @@ def _merge_review_level(base: dict[str, Any], head: dict[str, Any]) -> dict[str,
     _rebuild_indexes(head)
     counts["total"] = counts["added"] + counts["modified"] + counts["removed"]
     return counts
+
+
+def build_git_state(schema_path: Path, *, ref: str, context_id: str = "") -> tuple[dict[str, Any], dict[str, Any]]:
+    """One revision with nothing to compare: Review without Diff."""
+    model, context = _head_side(schema_path, ref, context_id)
+    model["kg_schema"] = str(schema_path)
+    model["kg_revision"] = {"ref": ref, "context": context}
+    return model, build_collapsed_graph(model)
 
 
 def build_git_review(

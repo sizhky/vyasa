@@ -573,7 +573,8 @@ def test_tasks_graph_highlights_use_separate_border_layer():
     assert "zIndex: TASKS_EDGE_FOCUS_Z - 1" in source
     assert "outline: `${hoverOutline ? 12 : 4}px solid ${activeBorderColor}`" in source
     assert (
-        '.vyasa-tasks-active-pulse .react-flow__node:not(.vyasa-tasks-pulse):has([data-vyasa-highlight-active="true"]) {\n'
+        '.vyasa-tasks-active-pulse .react-flow__node:not(.vyasa-tasks-pulse)'
+        ':not(:has([data-vyasa-kg-review-change])):has([data-vyasa-highlight-active="true"]) {\n'
         "    box-shadow: none !important;\n"
         "}"
     ) in css_source
@@ -2249,7 +2250,9 @@ def test_git_review_uses_existing_node_panel_for_structured_differences():
     assert "data-vyasa-kg-review-change" in graph
     assert "if (key === 'd' && gitHistoryAvailable)" in graph
     assert "toggleGitReview();" in graph
-    assert "row('D', 'toggle Git diff review')" in graph
+    assert "row('D', 'toggle Git review')" in graph
+    assert "gitReviewEnabled && gitDiffEnabled ? 'vyasa-kg-review-mode' : ''" in graph
+    assert "vyasa-kg-history-diff" in panels
 
 
 def test_tasks_block_serializes_document_path_and_stable_storage_id():

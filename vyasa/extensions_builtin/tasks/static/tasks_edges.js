@@ -3,8 +3,8 @@ import { isTasksEdgeLabelVisible, tasksEdgeLabelZForMode } from './tasks_graph_c
 import {
     TASKS_EDGE_LABEL_FOCUS_Z, TASKS_EDGE_LABEL_SELECTED_Z, TASKS_EDGE_LABEL_TEXT, TASKS_EDGE_LABEL_Z,
     TASKS_NODE_LABEL_FONT_SIZE, TASKS_PAIR_LABEL_LIFT, tasksCssFontSize, tasksOpenArrowHeadPath,
-    tasksPairedEdgePath, tasksProminentEdgeLabelScale, tasksSideWeightedRibbonPath, tasksTaperedArrowHeadPath,
-    tasksTaperedBezierPath, tasksTrimBezierEnd,
+    tasksPairedEdgePath, tasksProminentEdgeLabelScale, tasksReviewBloomColor, tasksSideWeightedRibbonPath,
+    tasksTaperedArrowHeadPath, tasksTaperedBezierPath, tasksTrimBezierEnd,
 } from './tasks_paint.js';
 
 export function createTasksEdgeRenderer(React, rf) {
@@ -114,6 +114,7 @@ export function createTasksEdgeRenderer(React, rf) {
                 // A reply whose label moved back to its call draws no line: the
                 // frame's bottom border already marks where it leaves.
                 const lineOff = props.data?.__line_off__ === true;
+                const reviewBloom = tasksReviewBloomColor(props.data?.__kg_review_change__);
                 const strokeWidth = Number(props.style?.strokeWidth) || 1.25;
                 const fullArrow = Math.max(10, strokeWidth * 3.0);
                 const chord = Math.hypot(props.targetX - props.sourceX, props.targetY - props.sourceY);
@@ -304,12 +305,12 @@ export function createTasksEdgeRenderer(React, rf) {
                         strokeLinejoin: 'round',
                         pointerEvents: 'none',
                     }),
-                    !lineOff && props.data?.edgeCardActive && React.createElement('path', {
+                    !lineOff && (props.data?.edgeCardActive || reviewBloom) && React.createElement('path', {
                         d: path,
                         fill: 'none',
-                        stroke: props.style?.stroke || 'currentColor',
+                        stroke: reviewBloom || props.style?.stroke || 'currentColor',
                         strokeWidth: strokeWidth + 28,
-                        strokeOpacity: 0.36,
+                        strokeOpacity: reviewBloom ? 0.52 : 0.36,
                         strokeLinecap: 'round',
                         strokeLinejoin: 'round',
                         vectorEffect: 'non-scaling-stroke',

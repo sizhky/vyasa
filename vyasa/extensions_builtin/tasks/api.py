@@ -15,7 +15,7 @@ from .items_pack import read_schema
 from .model import parse_tasks_text
 from .query import KnowledgeGraphQuery
 from .render import _attach_rendered_node_attrs, _attach_rendered_prose_attrs
-from .review import build_git_review
+from .review import build_git_review, build_git_state
 
 ALNUM = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
@@ -136,13 +136,13 @@ def register_tasks_routes(rt, runtime) -> None:
             schema_path = _safe_schema_path(runtime, str(payload.get("schema_path") or ""))
             base_ref = str(payload.get("base_ref") or "").strip()
             head_ref = str(payload.get("head_ref") or "").strip()
-            if not base_ref or not head_ref:
-                return Response("Git review requires base and head revisions", status_code=400)
-            model, graph = build_git_review(
-                schema_path,
-                base_ref=base_ref,
-                head_ref=head_ref,
-                context_id=str(payload.get("context_id") or "").strip(),
+            if not head_ref:
+                return Response("Git review requires a head revision", status_code=400)
+            context_id = str(payload.get("context_id") or "").strip()
+            model, graph = (
+                build_git_review(schema_path, base_ref=base_ref, head_ref=head_ref, context_id=context_id)
+                if base_ref
+                else build_git_state(schema_path, ref=head_ref, context_id=context_id)
             )
             link_path_value = items_link_base_path(model, str(schema_path))
             link_path = str(link_path_value) if link_path_value is not None else None
