@@ -576,6 +576,8 @@ async function renderTasksGraphs(rootElement = document) {
             const gitHistoryAvailable = String(sourceModel?.kg_history?.source || '').trim() === 'git';
             const [gitReviewEnabled, setGitReviewEnabled] = React.useState(false);
             const [gitDiffEnabled, setGitDiffEnabled] = React.useState(true);
+            const [gitHistoryVisible, setGitHistoryVisible] = React.useState(true);
+            const [gitReviewCardMode, setGitReviewCardMode] = React.useState('diff');
             const [gitHistoryLoading, setGitHistoryLoading] = React.useState(false);
             const [gitReviewLoading, setGitReviewLoading] = React.useState(false);
             const [gitHistoryError, setGitHistoryError] = React.useState('');
@@ -2285,6 +2287,8 @@ async function renderTasksGraphs(rootElement = document) {
                 const schemaPath = String(sourceModel?.kg_schema || '').trim();
                 if (!gitHistoryAvailable || !schemaPath) return;
                 reviewRestoreRef.current = { model: sourceModel, graph: sourceGraph, projectionId: activeProjectionId };
+                setGitHistoryVisible(true);
+                setGitReviewCardMode('diff');
                 setGitReviewEnabled(true);
                 setGitHistoryLoading(true);
                 setGitHistoryError('');
@@ -2680,9 +2684,9 @@ async function renderTasksGraphs(rootElement = document) {
                                 type: 'vyasaTask',
                                 position: node.position,
                                 data: { ...node, __z__: TASKS_TASK_Z, __sequence_color__: nodeColor, __checked__: isChecked, __has_note__: hasNote, __card_state__: cardState.label, __card_state_color__: cardState.color },
-                                style: { width: node.width, height: node.height, zIndex: TASKS_TASK_Z, background: 'transparent', border: 'none', overflow: 'visible' },
+                                style: { width: node.width, height: node.height, zIndex: TASKS_TASK_Z, background: 'transparent', border: 'none', borderRadius: 8, overflow: 'visible' },
                                 zIndex: TASKS_TASK_Z,
-                                className: 'vyasa-tasks-node--selectable',
+                                className: 'vyasa-tasks-node--selectable vyasa-tasks-node--sequence-lifeline',
                                 draggable: false,
                                 selectable: true,
                             };
@@ -3793,7 +3797,8 @@ async function renderTasksGraphs(rootElement = document) {
                         const key = event.key.toLowerCase();
                         const optionZoom = event.altKey && !event.shiftKey && (key === 'arrowup' || key === 'arrowdown');
                         const optionEdgeFit = event.altKey && !event.shiftKey && event.code === 'KeyF' && Boolean(selectedEdgeIdRef.current);
-                        if (event.metaKey || event.ctrlKey || (event.altKey && !optionZoom && !optionEdgeFit)) return;
+                        const optionReviewCardToggle = event.altKey && !event.shiftKey && event.code === 'KeyD';
+                        if (event.metaKey || event.ctrlKey || (event.altKey && !optionZoom && !optionEdgeFit && !optionReviewCardToggle)) return;
                         // A held key still has to reach the claim below, or the document
                         // shortcuts scroll the page under the graph on every repeat.
                         if (event.repeat && !TASKS_SHORTCUT_KEYS.has(key) && !isTasksHopCode(event.code)) return;
@@ -3864,7 +3869,7 @@ async function renderTasksGraphs(rootElement = document) {
                         // handler ever sees the key. So this handler listens in the
                         // capture phase and claims its own keys while the graph is
                         // focused, leaving every other key to the document.
-                        if (optionEdgeFit || (TASKS_SHORTCUT_KEYS.has(key) && (key !== 'd' || gitHistoryAvailable)) || isTasksHopCode(event.code)) event.stopPropagation();
+                        if (optionEdgeFit || optionReviewCardToggle || (TASKS_SHORTCUT_KEYS.has(key) && (key !== 'd' || gitHistoryAvailable)) || isTasksHopCode(event.code)) event.stopPropagation();
                         if (event.repeat) return;
                         if (TASKS_HOP_GROW_CODES.has(event.code)) {
                             event.preventDefault();
@@ -3945,6 +3950,18 @@ async function renderTasksGraphs(rootElement = document) {
                         if (key === 's') {
                             event.preventDefault();
                             setFiltersCollapsedGuarded((current) => !current, 'shortcut-toggle-filters');
+                            return;
+                        }
+                        if (optionReviewCardToggle) {
+                            if (!gitReviewEnabled) return;
+                            event.preventDefault();
+                            setGitReviewCardMode((current) => current === 'diff' ? 'attributes' : 'diff');
+                            return;
+                        }
+                        if (key === 'd' && event.shiftKey) {
+                            if (!gitReviewEnabled) return;
+                            event.preventDefault();
+                            setGitHistoryVisible((current) => !current);
                             return;
                         }
                         if (key === 'd' && gitHistoryAvailable) {
@@ -4077,7 +4094,7 @@ async function renderTasksGraphs(rootElement = document) {
                         window.removeEventListener('blur', stopMomentum);
                         stopMomentum();
                     };
-                }, [reactFlow, currentGraphEdges, currentSelectionIds, growSelectionOneHop, shrinkSelectionOneHop, model, rawGraph, sourceModel, egoMode, helpOpen, edgeCardOpen, edgeCardField, selectEdgeRecord, setFiltersCollapsedGuarded, setGroupHoverCardsEnabledGlobal, setHoverCardScrollModeGlobal, fitCurrentHighlight, fitSelectedEdgeConnection, focusDetailCard, panViewport, graphMinZoom, gitHistoryAvailable, toggleGitReview]);
+                }, [reactFlow, currentGraphEdges, currentSelectionIds, growSelectionOneHop, shrinkSelectionOneHop, model, rawGraph, sourceModel, egoMode, helpOpen, edgeCardOpen, edgeCardField, selectEdgeRecord, setFiltersCollapsedGuarded, setGroupHoverCardsEnabledGlobal, setHoverCardScrollModeGlobal, fitCurrentHighlight, fitSelectedEdgeConnection, focusDetailCard, panViewport, graphMinZoom, gitHistoryAvailable, gitReviewEnabled, toggleGitReview]);
                 return null;
             };
             const handlePinnedCardKeyDown = (event, notesRef, navigate) => {
@@ -4095,7 +4112,7 @@ async function renderTasksGraphs(rootElement = document) {
                 edgeNodesById, edgeNoteTextareaRef, edgeNotes, edgeOpacity, edgeTypeColors,
                 edgeTypeFilterEnabled, edgeTypeMenuOpen, edgeTypeOptions, edgeTypeQuery, effectiveEdgeTypes,
                 egoMode, filterPanelMaxHeight, filterPanelRef, filterPanelWidthSetting, filtersCollapsed,
-                gitDiffEnabled, gitHistory, gitHistoryAvailable, gitHistoryError, gitHistoryLoading, gitReviewEnabled, gitReviewLoading,
+                gitDiffEnabled, gitHistory, gitHistoryAvailable, gitHistoryError, gitHistoryLoading, gitReviewCardMode, gitReviewEnabled, gitReviewLoading,
                 fitSelectedEdgeConnection, focusGraphNode, graphBaseRef, groupByDisabledSet, groupByEnabled,
                 groupByHierarchy, handleAddView, handleClearAllNotes, handleCopyNodeNotes, handleDefaultViewPaste,
                 handleExportNodeNotes, handleImportNodeNotes, handlePinnedCardKeyDown, handleSwitchContext, handleUndoClearAllNotes,
@@ -4938,6 +4955,8 @@ async function renderTasksGraphs(rootElement = document) {
                     sep(),
                     heading('Keys'),
                     row('D', 'toggle Git review'),
+                    row('Shift + D', 'toggle Git history'),
+                    row('Option + D', 'toggle diff / attribute cards'),
                     row('?', 'toggle this help'),
                     row('[ / ]', 'select previous / next visible edge'),
                     row('Enter', 'pin hovered node / open selected edge'),
@@ -5073,7 +5092,7 @@ async function renderTasksGraphs(rootElement = document) {
                 });
             };
             const filterPanelElement = FilterPanel();
-            const gitHistoryRailElement = GitHistoryRail();
+            const gitHistoryRailElement = gitHistoryVisible ? GitHistoryRail() : null;
             const paneClick = () => {
                 if (suppressNextGraphClickRef.current) {
                     suppressNextGraphClickRef.current = false;

@@ -45,7 +45,7 @@ function renderTasksReviewFields(React, fields, keyPrefix = '') {
 // Panels read current state when called, after the app has built its actions.
 export function createTasksPanels(getState) {
     const SelectedNodePanel = (panelGraphNodeId, readOnly = false, hoverCard = null) => {
-        const { React, clearedNote, detailCardRef, detailCardScrollRef, edgeNodeLabels, focusGraphNode, gitReviewEnabled, graphBaseRef, handlePinnedCardKeyDown, hoverCardScrollMode, hoverCardScrollRef, model, nodeCardContentScale, nodeNotes, noteInputValue, noteTextareaRef, selectedNodeId, setClearedNote, setNoteInputValue, sourceModel, updateNodeNote } = getState();
+        const { React, clearedNote, detailCardRef, detailCardScrollRef, edgeNodeLabels, focusGraphNode, gitReviewCardMode, gitReviewEnabled, graphBaseRef, handlePinnedCardKeyDown, hoverCardScrollMode, hoverCardScrollRef, model, nodeCardContentScale, nodeNotes, noteInputValue, noteTextareaRef, selectedNodeId, setClearedNote, setNoteInputValue, sourceModel, updateNodeNote } = getState();
         if (panelGraphNodeId === undefined) panelGraphNodeId = selectedNodeId;
 
         const selectedNode = (graphBaseRef.current.nodes || []).find((node) => node.id === panelGraphNodeId)?.data || null;
@@ -60,6 +60,7 @@ export function createTasksPanels(getState) {
         const openDecisionEntry = tasksOpenDecisionEntry(selectedNode);
         const entries = openDecisionEntry ? [openDecisionEntry, ...baseEntries] : baseEntries;
         const review = gitReviewEnabled ? selectedNode?.__kg_review__ : null;
+        const showReviewCard = Boolean(review && gitReviewCardMode === 'diff');
         logTasksDebug('nodeCardAttrOrder', {
             contextId: String(sourceModel?.kg_context?.id || ''),
             viewId: String(model?.active_projection || ''),
@@ -142,7 +143,7 @@ export function createTasksPanels(getState) {
                     style: { display: 'inline-block', marginTop: '6px', fontSize: '12px', lineHeight: 1.3, textDecoration: 'underline', textUnderlineOffset: '2px', color: 'inherit', overflowWrap: 'anywhere', wordBreak: 'break-word' },
                 }, panelHref) : null,
             ),
-            review ? React.createElement('div', { className: 'vyasa-kg-review-inspector' },
+            showReviewCard ? React.createElement('div', { className: 'vyasa-kg-review-inspector' },
                 React.createElement('div', { className: 'vyasa-kg-review-revisions' },
                     React.createElement('span', null, String(sourceModel?.kg_review?.base || '').slice(0, 8)),
                     React.createElement('span', { 'aria-hidden': 'true' }, '→'),
@@ -263,7 +264,7 @@ export function createTasksPanels(getState) {
     };
 
     const SelectedEdgePanel = () => {
-        const { React, detailCardRef, detailCardScrollRef, edgeCardError, edgeCardOpen, edgeNodeLabels, edgeNodesById, edgeNoteTextareaRef, edgeNotes, edgeTypeColors, fitSelectedEdgeConnection, gitReviewEnabled, handlePinnedCardKeyDown, hoverCardScrollMode, model, nodeCardContentScale, optionEdgeNodeIdRef, reactFlowApiRef, selectedEdgeIdRef, selectedEdgeRecord, setEdgeCardField, setEdgeCardOpen, setEdgeStatus, setSelectedEdgeId, setSelectedEdgeRecord, sourceModel, updateEdgeNote } = getState();
+        const { React, detailCardRef, detailCardScrollRef, edgeCardError, edgeCardOpen, edgeNodeLabels, edgeNodesById, edgeNoteTextareaRef, edgeNotes, edgeTypeColors, fitSelectedEdgeConnection, gitReviewCardMode, gitReviewEnabled, handlePinnedCardKeyDown, hoverCardScrollMode, model, nodeCardContentScale, optionEdgeNodeIdRef, reactFlowApiRef, selectedEdgeIdRef, selectedEdgeRecord, setEdgeCardField, setEdgeCardOpen, setEdgeStatus, setSelectedEdgeId, setSelectedEdgeRecord, sourceModel, updateEdgeNote } = getState();
         if (!edgeCardOpen) return null;
         if (edgeCardError) return React.createElement('div', {
             role: 'alert',
@@ -284,6 +285,7 @@ export function createTasksPanels(getState) {
             style: { marginLeft: '6px', fontSize: '11px', fontWeight: 600, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', opacity: 0.55 },
         }, `(${String(value || '')})`);
         const edgeReview = gitReviewEnabled ? selectedEdgeRecord.__kg_review__ : null;
+        const showEdgeReviewCard = Boolean(edgeReview && gitReviewCardMode === 'diff');
         const edgeNotesEditor = renderTasksCardNoteEditor(React, {
             ref: edgeNoteTextareaRef,
             value: edgeNotes[selectedEdgeRecord.id] || '',
@@ -327,7 +329,7 @@ export function createTasksPanels(getState) {
                     style: { border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer', fontSize: '18px', lineHeight: 1, padding: 0, opacity: 0.62 },
                 }, '×')
             ),
-            edgeReview ? React.createElement('div', { className: 'vyasa-kg-review-inspector' },
+            showEdgeReviewCard ? React.createElement('div', { className: 'vyasa-kg-review-inspector' },
                 React.createElement('div', { className: 'vyasa-kg-review-revisions' },
                     React.createElement('span', null, String(sourceModel?.kg_review?.base || '').slice(0, 8)),
                     React.createElement('span', { 'aria-hidden': 'true' }, '→'),
@@ -338,8 +340,7 @@ export function createTasksPanels(getState) {
                     React.createElement('h4', null, 'Changed fields'),
                     ...renderTasksReviewFields(React, edgeReview.fields)
                 ) : null
-            ) : null,
-            renderTasksDetailEntries(React, entries, { copyValues: true, edgeFields: true, currentPath: sourceModel?.document_path || '' })
+            ) : renderTasksDetailEntries(React, entries, { copyValues: true, edgeFields: true, currentPath: sourceModel?.document_path || '' })
             ),
             notes: edgeReview ? null : edgeNotesEditor,
         });

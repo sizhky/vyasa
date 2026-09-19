@@ -1245,6 +1245,24 @@ def test_sequence_edge_card_resolves_the_authored_edge_record():
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
 
 
+def test_sequence_lifeline_wrapper_does_not_paint_square_corners():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
+    lifeline = source.split("if (node.__sequence_lifeline__) {", 1)[1].split("className:", 1)[1].split("draggable:", 1)[0]
+
+    assert "vyasa-tasks-node--sequence-lifeline" in lifeline
+    rule = css.split(".react-flow__node.vyasa-tasks-node--sequence-lifeline", 1)[1].split("}", 1)[0]
+    assert "background: transparent !important" in rule
+    assert "background-image: none !important" in rule
+
+
+def test_review_bloom_uses_the_sequence_lifeline_corner_radius():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    lifeline = source.split("if (node.__sequence_lifeline__) {", 1)[1].split("className:", 1)[0]
+
+    assert "borderRadius: 8" in lifeline
+
+
 def test_tasks_card_attr_config_orders_and_hides_attrs():
     script = """
         import { tasksEdgeMetaEntries, tasksNodeMetaEntries } from './vyasa/extensions_builtin/tasks/static/tasks_graph_model.js';
@@ -2253,6 +2271,33 @@ def test_git_review_uses_existing_node_panel_for_structured_differences():
     assert "row('D', 'toggle Git review')" in graph
     assert "gitReviewEnabled && gitDiffEnabled ? 'vyasa-kg-review-mode' : ''" in graph
     assert "vyasa-kg-history-diff" in panels
+
+
+def test_shift_d_toggles_git_history_without_disabling_review():
+    graph = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    shortcut = graph.split("if (key === 's') {", 1)[1].split("if (key === 'e'", 1)[0]
+
+    assert "if (key === 'd' && event.shiftKey)" in shortcut
+    assert "if (!gitReviewEnabled) return;" in shortcut
+    assert "setGitHistoryVisible((current) => !current);" in shortcut
+    assert shortcut.index("if (key === 'd' && event.shiftKey)") < shortcut.index("toggleGitReview();")
+    assert "const gitHistoryRailElement = gitHistoryVisible ? GitHistoryRail() : null;" in graph
+    assert "row('Shift + D', 'toggle Git history')" in graph
+
+
+def test_option_d_toggles_review_cards_between_differences_and_attributes():
+    graph = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    panels = Path("vyasa/extensions_builtin/tasks/static/tasks_panels.js").read_text()
+
+    assert "const [gitReviewCardMode, setGitReviewCardMode] = React.useState('diff');" in graph
+    assert "event.altKey && !event.shiftKey && event.code === 'KeyD'" in graph
+    assert "setGitReviewCardMode((current) => current === 'diff' ? 'attributes' : 'diff');" in graph
+    assert "row('Option + D', 'toggle diff / attribute cards')" in graph
+    assert "gitReviewCardMode" in graph.split("createTasksPanels(() => ({", 1)[1]
+    assert "const showReviewCard = Boolean(review && gitReviewCardMode === 'diff');" in panels
+    assert "const showEdgeReviewCard = Boolean(edgeReview && gitReviewCardMode === 'diff');" in panels
+    assert "showReviewCard ? React.createElement('div', { className: 'vyasa-kg-review-inspector' }" in panels
+    assert "showEdgeReviewCard ? React.createElement('div', { className: 'vyasa-kg-review-inspector' }" in panels
 
 
 def test_tasks_block_serializes_document_path_and_stable_storage_id():
