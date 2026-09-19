@@ -873,6 +873,14 @@ def test_w_enter_pin_blooms_from_the_edge():
     assert "window.vyasaLinkPreview?.pin?.(codeModeEntryRef.current);" in source
 
 
+def test_v_opens_the_active_code_preview_in_vscode():
+    source = tasks_static_source("tasks.js")
+
+    assert "const codePreviewEntry = codeModeEntryRef.current || codeModePinnedRef.current?.entry;" in source
+    assert "window.vyasaVSCode.openAnchor(codePreviewEntry.link)" in source
+    assert "row('V', 'open A code in VS Code; otherwise toggle hover card scroll')" in source
+
+
 def test_kg_pane_drag_pans_with_a_locked_cursor():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
@@ -919,7 +927,7 @@ def test_v_toggles_right_side_hover_card_scroll_mode():
     assert "body.style.transform = `scaleY(${stretch})`" in source
     assert "className: 'vyasa-tasks-card-scroll-body'" in source
     assert "scrollRef: hoverCard ? hoverCardScrollRef : detailCardScrollRef" in source
-    assert "row('V', 'toggle hover card scroll mode')" in source
+    assert "row('V', 'open A code in VS Code; otherwise toggle hover card scroll')" in source
     assert "syncTasksCardScrollToggleButtons(widgetId, hoverCardScrollMode)" in source
     assert "toggleCardScroll: () => setHoverCardScrollModeGlobal" in source
     assert "button.setAttribute(attribute, 'true')" in source

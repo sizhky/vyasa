@@ -3859,6 +3859,7 @@ async function renderTasksGraphs(rootElement = document) {
                         // act on what the cursor is over need their own way past this gate.
                         if (!widgetFocused
                             && !optionEdgeFit
+                            && !(codeModeEntryRef.current || codeModePinnedRef.current?.entry)
                             && !(key === 't' && groupToggleHoverIdRef.current)
                             && !(key === 'v' && (groupHoverTooltipRef.current || edgeCardOpen || selectedNodeIdRef.current))
                             && !(key === 'f' && !event.shiftKey && (groupHoverTooltipRef.current || hoveredNodeIdRef.current))
@@ -3990,6 +3991,14 @@ async function renderTasksGraphs(rootElement = document) {
                             return;
                         }
                         if (key === 'v') {
+                            const codePreviewEntry = codeModeEntryRef.current || codeModePinnedRef.current?.entry;
+                            if (codePreviewEntry && window.vyasaVSCode?.openAnchor) {
+                                event.preventDefault();
+                                window.vyasaVSCode.openAnchor(codePreviewEntry.link).catch((error) => {
+                                    window.__vyasaToast?.(error.message, 'error');
+                                });
+                                return;
+                            }
                             event.preventDefault();
                             setHoverCardScrollModeGlobal((current) => !current);
                             return;
@@ -4977,7 +4986,7 @@ async function renderTasksGraphs(rootElement = document) {
                     row('E', 'toggle edges'),
                     row('Shift + E', 'toggle edge labels'),
                     row('C', 'hover cards: off / right side'),
-                    row('V', 'toggle hover card scroll mode'),
+                    row('V', 'open A code in VS Code; otherwise toggle hover card scroll'),
                     row('Shift + C', 'toggle group hover cards'),
                     row('T', 'toggle hovered group'),
                     row('I / O', 'expand / collapse one depth'),
