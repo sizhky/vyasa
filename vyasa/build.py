@@ -63,7 +63,7 @@ def generate_static_html(title, body_content, blog_title, favicon_href, extra_he
         .dark *::-webkit-scrollbar-thumb { background-color: rgb(71 85 105); }
         .dark *::-webkit-scrollbar-thumb:hover { background-color: rgb(100 116 139); }
         .dark * { scrollbar-color: rgb(71 85 105) transparent; }
-        .vyasa-scroll-progress { position: fixed; top: var(--vyasa-navbar-height, 3.75rem); left: 0; z-index: 1600; width: 0; height: 3px; pointer-events: none; background: linear-gradient(90deg, color-mix(in srgb, var(--vyasa-primary, #2563eb) 78%, white), var(--vyasa-primary, #2563eb)); box-shadow: 0 0 10px color-mix(in srgb, var(--vyasa-primary, #2563eb) 70%, transparent); transition: width 120ms ease; }
+        .vyasa-scroll-progress { position: fixed; top: var(--vyasa-navbar-height, 3.75rem); left: 0; z-index: 1600; width: 100%; height: 3px; pointer-events: none; background: linear-gradient(90deg, color-mix(in srgb, var(--vyasa-primary, #2563eb) 78%, white), var(--vyasa-primary, #2563eb)); box-shadow: 0 0 10px color-mix(in srgb, var(--vyasa-primary, #2563eb) 70%, transparent); transform: scaleX(var(--vyasa-scroll-progress, 0)); transform-origin: left center; will-change: transform; }
         
         /* Tabs styles */
         .tabs-container { 
@@ -276,10 +276,15 @@ def generate_static_html(title, body_content, blog_title, favicon_href, extra_he
             scrollProgress.className = 'vyasa-scroll-progress';
             scrollProgress.setAttribute('aria-hidden', 'true');
             (document.getElementById('page-container') || document.body).appendChild(scrollProgress);
+            let scrollProgressFrame = null;
             const syncScrollProgress = () => {
-                const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-                const progress = Math.min(1, Math.max(0, window.scrollY / max));
-                scrollProgress.style.width = `${Math.round(progress * 100)}%`;
+                if (scrollProgressFrame !== null) return;
+                scrollProgressFrame = window.requestAnimationFrame(() => {
+                    scrollProgressFrame = null;
+                    const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+                    const progress = Math.min(1, Math.max(0, window.scrollY / max));
+                    scrollProgress.style.setProperty('--vyasa-scroll-progress', String(progress));
+                });
             };
             window.addEventListener('scroll', syncScrollProgress, { passive: true });
             window.addEventListener('resize', syncScrollProgress, { passive: true });

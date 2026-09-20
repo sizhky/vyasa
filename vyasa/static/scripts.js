@@ -1313,10 +1313,15 @@ function initScrollProgress(root = document) {
         bar.setAttribute('aria-hidden', 'true');
         page.appendChild(bar);
     }
+    let frame = null;
     const sync = () => {
-        const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-        const progress = Math.min(1, Math.max(0, window.scrollY / max));
-        bar.style.width = `${Math.round(progress * 100)}%`;
+        if (frame !== null) return;
+        frame = window.requestAnimationFrame(() => {
+            frame = null;
+            const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+            const progress = Math.min(1, Math.max(0, window.scrollY / max));
+            bar.style.setProperty('--vyasa-scroll-progress', String(progress));
+        });
     };
     window.__vyasaSyncMobileScrollProgress = sync;
     if (!window.__vyasaMobileScrollProgressBound) {
