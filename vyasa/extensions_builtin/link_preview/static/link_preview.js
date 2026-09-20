@@ -139,11 +139,14 @@ function installResizeHandles(popover, raise) {
 // One owner decides which element inside a popover scrolls. The wheel handler
 // below and the graph's code mode both ask here, so a change to the preview
 // markup moves one line, not two.
-function scrollPreviewBody(popover, deltaX, deltaY) {
+function scrollPreviewBody(popover, deltaX, deltaY, target = null) {
     const body = popover?.querySelector?.('.vyasa-link-preview-body');
     if (!body) return false;
+    const table = target?.closest?.('.vyasa-table-scroll');
+    const tableCanScroll = table && table.scrollWidth > table.clientWidth;
     body.scrollTop += deltaY;
-    body.scrollLeft += deltaX;
+    if (tableCanScroll) table.scrollLeft += deltaX;
+    else body.scrollLeft += deltaX;
     return true;
 }
 
@@ -558,7 +561,7 @@ document.body.addEventListener('pointerout', (event) => {
 }, true);
 document.body.addEventListener('wheel', (event) => {
     const popover = event.target?.closest?.('.vyasa-link-preview-popover');
-    if (!popover || !scrollPreviewBody(popover, event.deltaX, event.deltaY)) return;
+    if (!popover || !scrollPreviewBody(popover, event.deltaX, event.deltaY, event.target)) return;
     event.preventDefault();
     event.stopPropagation();
 }, { capture: true, passive: false });

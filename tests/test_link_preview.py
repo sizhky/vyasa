@@ -450,6 +450,19 @@ def test_link_preview_shadow_is_on_unclipped_outer_popup():
     assert ".vyasa-link-preview-target-line" in css
 
 
+def test_link_preview_keeps_wide_tables_scrollable_inside_the_popup():
+    css = Path("vyasa/extensions_builtin/link_preview/static/link_preview.css").read_text()
+    source = Path("vyasa/extensions_builtin/link_preview/static/link_preview.js").read_text()
+
+    assert ".vyasa-link-preview-body .vyasa-table-scroll.vyasa-table-breakout" in css
+    table_rule = css.split(".vyasa-link-preview-body .vyasa-table-scroll > table", 1)[1].split("}", 1)[0]
+    assert "width: max-content !important;" in table_rule
+    assert "min-width: 100%;" in table_rule
+    assert "const table = target?.closest?.('.vyasa-table-scroll');" in source
+    assert "if (tableCanScroll) table.scrollLeft += deltaX;" in source
+    assert "event.deltaY, event.target))" in source
+
+
 def test_link_preview_pointer_joins_source_to_nearest_popup_edge():
     script = """
         import { linkPreviewPointerPoints } from './vyasa/extensions_builtin/link_preview/static/link_preview_geometry.js';

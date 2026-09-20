@@ -339,6 +339,23 @@
     width: 100%;
 }
 
+.vyasa-link-preview-body .vyasa-table-scroll,
+.vyasa-link-preview-body .vyasa-table-scroll.vyasa-table-breakout {
+    width: 100%;
+    max-width: 100%;
+    position: static;
+    left: auto;
+    transform: none;
+    margin: 1.5rem 0;
+}
+
+.vyasa-link-preview-body .vyasa-table-scroll > table,
+.vyasa-link-preview-body .vyasa-table-scroll > .uk-table {
+    width: max-content !important;
+    min-width: 100%;
+    margin: 0;
+}
+
 .vyasa-link-preview-body .vyasa-heading-action,
 .vyasa-link-preview-body .vyasa-heading-permalink {
     display: none !important;
