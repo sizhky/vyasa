@@ -27,6 +27,10 @@ const feedbackAssetVersion = new URL(import.meta.url).search;
   let banner;
   let annotationToggle;
 
+  function isReviewUiEvent(event) {
+    return event.composedPath().some((node) => node instanceof Element && node.closest?.('[data-lavish-ui]'));
+  }
+
   const pathOf = () => document.getElementById('main-content')?.dataset.feedbackPath || '';
 
   function createUi() {
@@ -427,6 +431,7 @@ const feedbackAssetVersion = new URL(import.meta.url).search;
     if (message.type === 'lavish:snapshot') { snapshot = String(message.snapshot || ''); submitQueued(); }
   });
   window.addEventListener('keydown', (event) => {
+    if (isReviewUiEvent(event)) return;
     const open = document.body.classList.contains('vyasa-feedback-open');
     const editing = isEditableShortcutEvent(event);
     const action = reviewKeyAction({
