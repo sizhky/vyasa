@@ -1,4 +1,5 @@
 .react-flow__node.vyasa-tasks-node--expanded-group { background: transparent !important; background-color: transparent !important; background-image: none !important; box-shadow: 0 0 0 2px color-mix(in srgb, var(--vyasa-ink) 52%, transparent), 0 24px 64px color-mix(in srgb, var(--vyasa-primary) 10%, transparent) !important; }
+.react-flow__node.vyasa-tasks-node--sequence-lifeline { background: transparent !important; background-color: transparent !important; background-image: none !important; }
 .vyasa-task-link-badge { display: inline-flex; align-items: center; justify-content: flex-end; gap: 0.14rem; min-width: 0.8rem; height: 0.8rem; color: color-mix(in srgb, currentColor 58%, transparent); pointer-events: none; opacity: 0.72; }
 .vyasa-task-link-badge svg { width: 0.8rem; height: 0.8rem; stroke: currentColor !important; fill: none !important; }
 .vyasa-tasks-node-reference { color: color-mix(in srgb, var(--vyasa-primary) 78%, currentColor); font-family: inherit; font-weight: inherit; border: 0; background: color-mix(in srgb, var(--vyasa-primary) 22%, transparent); padding: 0.03em 0.2em; border-radius: 3px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
@@ -9,6 +10,72 @@
 }
 .vyasa-tasks-node-reference--broken { color: #ef4444; background: color-mix(in srgb, #ef4444 18%, transparent); text-decoration: wavy underline; text-decoration-thickness: 1px; }
 .vyasa-tasks-pinned-card:focus-visible { outline: 3px solid color-mix(in srgb, var(--vyasa-primary) 72%, transparent); outline-offset: 3px; }
+.vyasa-kg-history-rail { flex: 0 0 min(31%, 390px); min-width: 280px; height: 100%; display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid color-mix(in srgb, currentColor 14%, transparent); background: color-mix(in srgb, var(--vyasa-paper) 97%, var(--vyasa-primary) 3%); z-index: 35; }
+.vyasa-kg-history-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 12px; border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent); }
+.vyasa-kg-history-header > div { display: grid; gap: 1px; }
+.vyasa-kg-history-header strong { font-size: 12px; letter-spacing: .05em; text-transform: uppercase; }
+.vyasa-kg-history-header span { font-size: 10px; opacity: .62; }
+.vyasa-kg-history-header code { font-size: 11px; white-space: nowrap; }
+.vyasa-kg-history-list { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 4px 0 14px; }
+.vyasa-kg-history-row { width: 100%; min-height: 68px; display: flex; align-items: stretch; border: 0; border-bottom: 1px solid color-mix(in srgb, currentColor 7%, transparent); background: transparent; color: inherit; padding: 0; text-align: left; cursor: pointer; }
+.vyasa-kg-history-row:hover { background: color-mix(in srgb, var(--vyasa-primary) 8%, transparent); }
+.vyasa-kg-history-row.is-selected { background: color-mix(in srgb, var(--vyasa-primary) 15%, transparent); box-shadow: inset 3px 0 var(--vyasa-primary); }
+.vyasa-kg-history-row.is-context-only { opacity: .55; }
+.vyasa-kg-history-diff { border: 1px solid color-mix(in srgb, currentColor 22%, transparent); border-radius: 6px; padding: 3px 9px; background: transparent; color: inherit; font: 700 10px/1.2 ui-monospace, monospace; letter-spacing: .04em; text-transform: uppercase; cursor: pointer; }
+.vyasa-kg-history-diff.is-selected { border-color: var(--vyasa-primary); background: color-mix(in srgb, var(--vyasa-primary) 16%, transparent); color: var(--vyasa-primary); }
+.vyasa-kg-history-diff:disabled { opacity: .45; cursor: default; }
+.vyasa-kg-history-entry { position: relative; }
+.vyasa-kg-history-labels > span.vyasa-kg-history-base { border-color: color-mix(in srgb, var(--vyasa-primary) 55%, transparent); color: var(--vyasa-primary); font-weight: 800; }
+.vyasa-kg-history-compare { position: absolute; inset-inline-end: 9px; top: 50%; transform: translateY(-50%); opacity: 0; pointer-events: none; transition: opacity .12s ease; }
+.vyasa-kg-history-entry:hover .vyasa-kg-history-compare, .vyasa-kg-history-compare:focus-within { opacity: 1; pointer-events: auto; }
+.vyasa-kg-history-compare button { border: 1px solid color-mix(in srgb, var(--vyasa-primary) 42%, transparent); border-radius: 5px; padding: 3px 7px; background: var(--vyasa-paper); color: var(--vyasa-primary); font: 700 9px/1.2 ui-monospace, monospace; cursor: pointer; box-shadow: 0 2px 9px rgba(0,0,0,.14); }
+.vyasa-kg-history-lanes { flex: 0 0 auto; overflow: visible; }
+.vyasa-kg-history-copy { flex: 1 1 auto; min-width: 0; display: grid; align-content: center; gap: 4px; padding: 8px 10px 8px 2px; }
+.vyasa-kg-history-subject { font-size: 12px; font-weight: 680; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vyasa-kg-history-meta { display: flex; justify-content: space-between; gap: 8px; font-size: 10px; font-style: italic; opacity: .62; }
+.vyasa-kg-history-labels { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.vyasa-kg-history-labels > span { border: 1px solid color-mix(in srgb, #0ea5e9 48%, transparent); border-radius: 4px; padding: 1px 4px; color: color-mix(in srgb, #0284c7 82%, currentColor); font-size: 9px; line-height: 1.2; }
+.vyasa-kg-history-labels code { margin-left: auto; font-size: 9px; opacity: .62; }
+.vyasa-kg-history-state { padding: 12px; font-size: 11px; opacity: .72; }
+.vyasa-kg-history-state--error { color: #dc2626; opacity: 1; }
+.vyasa-kg-review-mode [data-vyasa-kg-review-change="unchanged"] { opacity: .26; filter: saturate(.25); }
+/* Ghosting stays on the card body, where opacity is not clipped. */
+.vyasa-kg-review-mode [data-vyasa-kg-review-change="removed"] { opacity: .66; }
+/* The bloom sits on the React Flow node wrapper instead, because that wrapper
+   sets overflow:hidden and clipped a box-shadow drawn on the body to nothing.
+   A filter escaped the clip but traced the glyphs, haloing the label text. */
+.vyasa-kg-review-mode .react-flow__node:has([data-vyasa-kg-review-change="added"]) { --vyasa-kg-review-bloom: #16a34a; }
+.vyasa-kg-review-mode .react-flow__node:has([data-vyasa-kg-review-change="modified"]) { --vyasa-kg-review-bloom: #d97706; }
+.vyasa-kg-review-mode .react-flow__node:has([data-vyasa-kg-review-change="removed"]) { --vyasa-kg-review-bloom: #dc2626; }
+/* Static, to match the edge halo. No ring either: the change colour belongs to
+   the bloom alone, so the card keeps the border and background its palette
+   colour gave it. !important because the node wrapper sets box-shadow inline. */
+.vyasa-kg-review-mode .react-flow__node:has([data-vyasa-kg-review-change="added"]),
+.vyasa-kg-review-mode .react-flow__node:has([data-vyasa-kg-review-change="modified"]),
+.vyasa-kg-review-mode .react-flow__node:has([data-vyasa-kg-review-change="removed"]) { box-shadow: 0 0 26px 10px color-mix(in srgb, var(--vyasa-kg-review-bloom) 62%, transparent) !important; }
+.vyasa-kg-review-bar { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 36; display: flex; align-items: center; gap: 8px; max-width: calc(100% - 24px); border: 1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent); border-radius: 9px; padding: 7px 10px; background: color-mix(in srgb, var(--vyasa-paper) 94%, transparent); box-shadow: 0 6px 18px rgba(0,0,0,.1); backdrop-filter: blur(8px); font-size: 10px; white-space: nowrap; pointer-events: none; }
+.vyasa-kg-review-bar code { font-size: 10px; color: var(--vyasa-primary); }
+.vyasa-kg-review-inspector { display: grid; gap: 14px; }
+.vyasa-kg-review-revisions { display: flex; align-items: center; justify-content: space-between; gap: 6px; border-radius: 8px; padding: 7px 8px; background: color-mix(in srgb, var(--vyasa-primary) 8%, transparent); font: 600 10px/1.3 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+.vyasa-kg-review-inspector h4 { margin: 0 0 6px; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; opacity: .66; }
+.vyasa-kg-review-field { border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent); padding: 6px 0; }
+.vyasa-kg-review-field summary { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 11px; font-weight: 700; }
+.vyasa-kg-review-mark { width: 16px; text-align: center; font: 800 12px/1 ui-monospace, monospace; }
+.vyasa-kg-review-mark--added { color: #16a34a; }
+.vyasa-kg-review-mark--modified { color: #d97706; }
+.vyasa-kg-review-mark--removed { color: #dc2626; }
+.vyasa-kg-review-values { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; margin-top: 6px; }
+.vyasa-kg-review-values > div { min-width: 0; border-radius: 7px; padding: 6px; background: color-mix(in srgb, currentColor 5%, transparent); }
+.vyasa-kg-review-values b { display: block; margin-bottom: 3px; font-size: 9px; text-transform: uppercase; opacity: .58; }
+.vyasa-kg-review-values pre { margin: 0; max-height: 180px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 10px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+.vyasa-kg-review-edges { display: grid; gap: 5px; }
+.vyasa-kg-review-edge { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 5px; border-radius: 7px; padding: 6px; background: color-mix(in srgb, currentColor 5%, transparent); font-size: 10px; }
+.vyasa-kg-review-edge .vyasa-kg-review-field { border-top-color: color-mix(in srgb, currentColor 16%, transparent); margin-top: 4px; padding-bottom: 0; }
+.vyasa-kg-review-edge .vyasa-kg-review-field summary { font-size: 10px; }
+.vyasa-kg-review-edge--added > span { color: #16a34a; }
+.vyasa-kg-review-edge--modified > span { color: #d97706; }
+.vyasa-kg-review-edge--removed > span { color: #dc2626; }
+@media (max-width: 800px) { .vyasa-kg-history-rail { flex-basis: 42%; min-width: 220px; } .vyasa-kg-review-values { grid-template-columns: 1fr; } }
 .vyasa-task-node-card-value { display: block; min-width: 0; max-width: 100%; white-space: normal; }
 .vyasa-task-node-card-value :where(p, h1, h2, h3, h4, h5, h6, ul, ol, li, blockquote) { font-size: inherit !important; line-height: inherit !important; color: inherit !important; }
 .vyasa-task-node-card-value :where(p, h1, h2, h3, h4, h5, h6, ul, ol, blockquote) { margin: 0 !important; }
@@ -151,7 +218,9 @@ html:not(.vyasa-tasks-edge-labels-on) .vyasa-tasks-flow .vyasa-tasks-edge-label:
 .react-flow__node[data-vyasa-group-toggle-hover="true"] {
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--vyasa-ink) 64%, transparent), 0 24px 72px color-mix(in srgb, var(--vyasa-primary) 16%, transparent) !important;
 }
-.vyasa-tasks-active-pulse .react-flow__node:not(.vyasa-tasks-pulse):has([data-vyasa-highlight-active="true"]) {
+/* Review-tagged nodes keep their bloom while hovered or selected. Without the
+   exclusion this !important strips the bloom's box-shadow on interaction. */
+.vyasa-tasks-active-pulse .react-flow__node:not(.vyasa-tasks-pulse):not(:has([data-vyasa-kg-review-change])):has([data-vyasa-highlight-active="true"]) {
     box-shadow: none !important;
 }
 .react-flow__node.vyasa-tasks-node--passive [data-vyasa-task-control="true"] {

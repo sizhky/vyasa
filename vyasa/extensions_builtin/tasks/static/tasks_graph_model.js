@@ -1574,21 +1574,29 @@ export function reduceTransitiveEdges(edges) {
 export function tasksProjectionOptions(model, ganttEnabled = false, activeContextId = '') {
     const projections = Array.isArray(model?.view_projections) ? model.view_projections : [];
     const baseViewLabel = String(model?.base_view_label || '').trim() || 'Default';
+    const reviewCounts = model?.kg_review?.view_counts || {};
+    const countLabel = (id) => {
+        const counts = reviewCounts[id];
+        return counts ? `  +${counts.added || 0} ~${counts.modified || 0} −${counts.removed || 0}` : '';
+    };
+    const projectionOptions = projections
+        .filter((projection) => (
+            projection
+            && projection.id
+            && model?.projection_models?.[projection.id]
+            && (model?.kg_review || tasksViewMatchesContext(projection, activeContextId))
+        ))
+        .map((projection) => ({
+            id: String(projection.id),
+            label: `${String(projection.label || projection.id)}${countLabel(String(projection.id))}`,
+            caption: String(projection.caption || '').trim(),
+            __rendered_attrs__: projection.__rendered_attrs__ || null,
+            __review_total__: Number(reviewCounts[String(projection.id)]?.total || 0),
+        }));
+    if (model?.kg_review) projectionOptions.sort((left, right) => right.__review_total__ - left.__review_total__ || left.label.localeCompare(right.label));
     const options = [
-        { id: '', label: baseViewLabel, caption: '' },
-        ...projections
-            .filter((projection) => (
-                projection
-                && projection.id
-                && model?.projection_models?.[projection.id]
-                && tasksViewMatchesContext(projection, activeContextId)
-            ))
-            .map((projection) => ({
-                id: String(projection.id),
-                label: String(projection.label || projection.id),
-                caption: String(projection.caption || '').trim(),
-                __rendered_attrs__: projection.__rendered_attrs__ || null,
-            })),
+        { id: '', label: `${baseViewLabel}${countLabel('')}`, caption: '' },
+        ...projectionOptions,
     ];
     if (ganttEnabled) options.push({ id: TASKS_GANTT_PROJECTION_ID, label: 'Gantt', caption: '' });
     return options;

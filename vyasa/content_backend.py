@@ -16,7 +16,7 @@ import threading
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Protocol, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
 EntryKind = Literal["file", "dir"]
 
@@ -58,6 +58,20 @@ class RefInfo:
     kind: Literal["branch", "tag"]
     is_default: bool = False
     remote: str = ""
+
+
+@dataclass(frozen=True)
+class CommitInfo:
+    """One commit in a reusable Git history graph."""
+
+    sha: str
+    parents: tuple[str, ...]
+    message: str
+    author: str
+    timestamp: int
+    refs: tuple[str, ...] = ()
+    changed_paths: tuple[str, ...] = ()
+    affects_scope: bool = True
 
 
 @runtime_checkable
@@ -311,6 +325,66 @@ class GitBackend:
             for old, new in self.changed_paths(base, head)
             if new == rel and old and old != rel
         ]
+
+    def history(self, *, paths: tuple[str, ...] = (), limit: int = 200) -> list[CommitInfo]:
+        """Return one topology-preserving history across every branch and tag.
+
+        ``paths`` marks commits that affect an artifact without removing the
+        intervening commits needed to draw correct lanes. Callers decide
+        whether to hide unaffected rows.
+        """
+        from dulwich.diff_tree import tree_changes
+
+        refs_by_sha: dict[str, list[str]] = {}
+        tips: list[Any] = []
+        for ref in self.list_refs():
+            sha = self.resolve_ref(ref.name)
+            if not sha:
+                continue
+            refs_by_sha.setdefault(sha, []).append(ref.name)
+            raw = sha.encode()
+            if raw not in tips:
+                tips.append(raw)
+        head = self.resolve_ref("")
+        if head and head.encode() not in tips:
+            tips.append(head.encode())
+        if not tips:
+            return []
+
+        scopes = tuple(path.strip("/") for path in paths if path.strip("/"))
+        out: list[CommitInfo] = []
+        for entry in self._repo.get_walker(include=tips, order="topo", max_entries=max(1, limit)):
+            commit = entry.commit
+            sha = commit.id.decode()
+            parent = commit.parents[0].decode() if commit.parents else ""
+            base_tree = self._tree_at(parent) if parent else None
+            changed: set[str] = set()
+            for change in tree_changes(
+                self._repo.object_store,
+                base_tree.id if base_tree is not None else None,
+                commit.tree,
+            ):
+                for side in (change.old, change.new):
+                    if side and side.path:
+                        changed.add(side.path.decode("utf-8", "replace"))
+            affects_scope = not scopes or any(
+                path == scope or path.startswith(f"{scope}/")
+                for path in changed
+                for scope in scopes
+            )
+            message = commit.message.decode("utf-8", "replace").splitlines()[0] if commit.message else ""
+            author = commit.author.decode("utf-8", "replace") if commit.author else ""
+            out.append(CommitInfo(
+                sha=sha,
+                parents=tuple(value.decode() for value in commit.parents),
+                message=message,
+                author=author,
+                timestamp=int(commit.commit_time),
+                refs=tuple(sorted(refs_by_sha.get(sha, ()))),
+                changed_paths=tuple(sorted(changed)),
+                affects_scope=affects_scope,
+            ))
+        return out
 
 
 def discover_git_backend(path: Path) -> "tuple[GitBackend, Path] | None":

@@ -51,6 +51,20 @@ async function openCodeReference(reference) {
     window.__vyasaToast?.(`Opened ${reference.path.split('/').pop()} in VS Code`, 'success');
 }
 
+if (typeof window !== 'undefined') {
+    window.vyasaVSCode = {
+        openAnchor: (anchor) => {
+            const reference = editorReferenceFromAnchor(
+                anchor,
+                window.location.href,
+                configuredCodeSuffixes(),
+            );
+            if (!reference) return Promise.resolve(false);
+            return openCodeReference(reference).then(() => true);
+        },
+    };
+}
+
 if (typeof document !== 'undefined' && !window.__vyasaVSCodeBound) {
     window.__vyasaVSCodeBound = true;
     document.addEventListener('click', (event) => {

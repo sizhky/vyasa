@@ -204,6 +204,47 @@
     color: var(--vyasa-primary);
 }
 
+.vyasa-link-preview-tabs {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 0.25rem;
+    padding: 0.4rem 0.55rem;
+    overflow-x: auto;
+    border-top: 1px solid var(--vyasa-link-preview-border);
+    border-bottom: 1px solid var(--vyasa-link-preview-border);
+    background: color-mix(in srgb, var(--vyasa-paper) 72%, var(--vyasa-primary) 28%);
+}
+
+.vyasa-link-preview-tabs[hidden] { display: none; }
+.vyasa-link-preview-tabs button {
+    flex: 0 0 auto;
+    max-width: 18rem;
+    overflow: hidden;
+    border: 1px solid var(--vyasa-link-preview-border);
+    border-radius: 0.35rem;
+    padding: 0.35rem 0.55rem;
+    background: var(--vyasa-link-preview-surface);
+    color: var(--vyasa-ink);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.vyasa-link-preview-tabs button[aria-selected="true"] {
+    border-color: var(--vyasa-primary);
+    background: color-mix(in srgb, var(--vyasa-primary) 28%, var(--vyasa-paper) 72%);
+    box-shadow: inset 0 -2px 0 var(--vyasa-primary);
+    color: var(--vyasa-ink);
+}
+.vyasa-link-preview-tabs button.vyasa-link-preview-tab-attribute {
+    border-color: color-mix(in srgb, #d97706 48%, var(--vyasa-link-preview-border));
+    background: color-mix(in srgb, #f59e0b 13%, var(--vyasa-link-preview-surface));
+}
+.vyasa-link-preview-tabs button.vyasa-link-preview-tab-attribute[aria-selected="true"] {
+    border-color: #d97706;
+    background: color-mix(in srgb, #f59e0b 30%, var(--vyasa-paper));
+    box-shadow: inset 0 -2px 0 #d97706;
+}
+
 .vyasa-link-preview-content {
     display: flex;
     flex: 1 1 auto;
@@ -305,6 +346,23 @@
 
 .vyasa-link-preview-body .w-full {
     width: 100%;
+}
+
+.vyasa-link-preview-body .vyasa-table-scroll,
+.vyasa-link-preview-body .vyasa-table-scroll.vyasa-table-breakout {
+    width: 100%;
+    max-width: 100%;
+    position: static;
+    left: auto;
+    transform: none;
+    margin: 1.5rem 0;
+}
+
+.vyasa-link-preview-body .vyasa-table-scroll > table,
+.vyasa-link-preview-body .vyasa-table-scroll > .uk-table {
+    width: max-content !important;
+    min-width: 100%;
+    margin: 0;
 }
 
 .vyasa-link-preview-body .vyasa-heading-action,

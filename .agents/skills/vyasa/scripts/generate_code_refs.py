@@ -33,6 +33,9 @@ List the generated file first in `@sources`, so an authored key always wins:
 
 The script also strips `code` from the authored files, because one
 fact needs one owner.
+
+Use `--edges-only` to scan marker comments without changing node references.
+Use `--nodes-only` to read Python symbols without changing edge references.
 """
 
 from __future__ import annotations
@@ -40,15 +43,17 @@ from __future__ import annotations
 import argparse
 import ast
 import re
+import shlex
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-MARKER = re.compile(r"kg:([A-Za-z0-9][A-Za-z0-9._-]*)(?:\s+([\d.]+)\s*->\s*([\d.]+))?")
+MARKER = re.compile(r"kg:([A-Za-z0-9][A-Za-z0-9._-]*)(?:\s+([A-Za-z0-9_.-]+)\s*->\s*([A-Za-z0-9_.-]+))?")
+CODE_SUFFIXES = {".py", ".swift", ".js", ".jsx", ".ts", ".tsx", ".rs", ".go", ".java", ".kt", ".rb", ".sh"}
+CODE_NAMES = {"Makefile"}
 NODE_LINE = re.compile(r"^(\s*)([A-Za-z0-9_-]+):\s+(.*)$")
 EDGE_HEAD = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*):\s+([A-Za-z0-9_-]+)\s+->\s+([A-Za-z0-9_-]+)\s+(\S+)(.*)$")
 ORDER = re.compile(r"^(\d+(?:\.\d+)*)\b")
-ATTR = re.compile(r"(\w+)=(?:\"([^\"]*)\"|(\S+))")
 # A quote closes `focus="`, and a bracket closes `match[` early. Nothing else breaks an anchor.
 UNSAFE = ('"', "]")
 
@@ -159,8 +164,10 @@ def collect_markers(code_root: Path) -> tuple[dict[str, tuple[str, int, str, str
     """Return each edge marker found in the code, and any duplicate report."""
     markers: dict[str, tuple[str, int, str, str]] = {}
     duplicates: list[str] = []
-    for path in sorted(code_root.rglob("*.py")):
-        if any(part.startswith((".", "__pycache__")) for part in path.parts):
+    for path in sorted(code_root.rglob("*")):
+        if not path.is_file() or (path.suffix not in CODE_SUFFIXES and path.name not in CODE_NAMES):
+            continue
+        if any(part.startswith((".", "__pycache__")) for part in path.relative_to(code_root).parts):
             continue
         rel = path.relative_to(code_root).as_posix()
         for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
@@ -253,7 +260,12 @@ def edge_rows(path: Path) -> list[tuple[str, str, str, str, dict[str, str]]]:
         match = EDGE_HEAD.match(line)
         if not match:
             continue
-        attrs = {m.group(1): (m.group(2) if m.group(2) is not None else m.group(3)) for m in ATTR.finditer(match.group(5))}
+        attrs = {
+            key: value
+            for item in shlex.split(match.group(5))
+            for key, separator, value in [item.partition("=")]
+            if separator
+        }
         rows.append((match.group(1), match.group(2), match.group(3), match.group(4), attrs))
     return rows
 
@@ -285,8 +297,8 @@ def newest_context(pack: Path) -> Context | None:
         if newest is not None and int(seq.group(1)) <= newest:
             continue
         newest = int(seq.group(1))
-        block = re.search(r"^@edges\n((?:[ \t]+.*\n?)+)", text, re.MULTILINE)
-        nodes = re.search(r"^\s*nodes=(\S+)\s*$", text, re.MULTILINE) or re.search(r"\bnodes=(\S+)", header.group(0))
+        edge_section = text.partition("@edges\n")[2].split("\n@", 1)[0]
+        nodes = re.search(r"\bnodes=(\S+)", header.group(0)) or re.search(r"^\s*nodes=(\S+)\s*$", text, re.MULTILINE)
         files = nodes.group(1).split("+") if nodes else []
         code_files = [item for item in files if item.endswith(".code.nodes")]
         if len(code_files) > 1:
@@ -294,7 +306,7 @@ def newest_context(pack: Path) -> Context | None:
         named = re.search(r"\bid=(\S+)", header.group(0))
         found = Context(
             id=named.group(1) if named else path.stem,
-            live=set(re.findall(r"^[ \t]+([A-Za-z0-9][A-Za-z0-9._-]*):", block.group(1), re.MULTILINE)) if block else set(),
+            live=set(re.findall(r"^[ \t]+([A-Za-z0-9][A-Za-z0-9._-]*):", edge_section, re.MULTILINE)),
             code_file=code_files[0] if code_files else "",
         )
     return found
@@ -323,16 +335,13 @@ def build_edge_file(
     out: list[str] = []
     live = live_edge_ids(path.parent)
     for edge_id, source, target, relation, attrs in edge_rows(path):
-        if attrs.get("role", "") not in {"call", "reply", "standing"}:
-            continue
         if live is not None and edge_id not in live:
             continue
         marker = markers.get(edge_id)
         if not marker:
-            report.missing.append(f"{path.name} {edge_id}: no `kg:{edge_id}` marker in the code")
             continue
         rel, lineno, arrow_source, arrow_target = marker
-        want = (numbers.get(source, ""), numbers.get(target, ""))
+        want = (numbers.get(source, source), numbers.get(target, target))
         if arrow_source and (arrow_source, arrow_target) != want:
             report.missing.append(
                 f"{rel}:{lineno}: marker kg:{edge_id} says {arrow_source} -> {arrow_target},"
@@ -340,14 +349,11 @@ def build_edge_file(
             )
             continue
         holder = enclosing_symbol(defs, rel, lineno)
-        if not holder:
-            report.missing.append(f"{rel}:{lineno}: marker kg:{edge_id} sits outside any function")
-            continue
-        name, kind = holder
         label = attrs.get("note", edge_id).strip("→← ")
         focus = f'focus="match[kg:{edge_id}]"'
         out.append(f"{edge_id}: {source} -> {target} {relation}")
-        out.append(f"\tcode=[{label}]({depth}{rel}){{show=symbol symbol={name} kind={kind} {focus}}}")
+        shown = f"show=symbol symbol={holder[0]} kind={holder[1]}" if holder else "show=file"
+        out.append(f"\tcode=[{label}]({depth}{rel}){{{shown} {focus}}}")
     for edge_id in sorted(set(markers) - {row[0] for row in edge_rows(path)}):
         rel, lineno, _, _ = markers[edge_id]
         if not any(edge_id == row[0] for other in path.parent.glob("*.edges") for row in edge_rows(other)):
@@ -360,6 +366,9 @@ def main() -> int:
     parser.add_argument("pack", type=Path, help="the KG pack directory")
     parser.add_argument("code", type=Path, help="the codebase root")
     parser.add_argument("--check", action="store_true", help="fail when a generated file would change")
+    target = parser.add_mutually_exclusive_group()
+    target.add_argument("--edges-only", action="store_true", help="update edge references only")
+    target.add_argument("--nodes-only", action="store_true", help="update node references only")
     args = parser.parse_args()
 
     pack, code_root = args.pack.resolve(), args.code.resolve()
@@ -371,12 +380,12 @@ def main() -> int:
     by_number, labels = read_nodes(pack)
     numbers = {node_id: number for number, node_id in by_number.items()}
     report = Report()
-    markers, duplicates = collect_markers(code_root)
+    markers, duplicates = collect_markers(code_root) if not args.nodes_only else ({}, [])
     report.missing.extend(duplicates)
     defs = collect_defs(code_root)
 
     by_node: dict[str, list[Symbol]] = {}
-    for symbol in collect_symbols(code_root):
+    for symbol in ([] if args.edges_only else collect_symbols(code_root)):
         node_id = by_number.get(symbol.number)
         if not node_id:
             report.orphans.append(f"{symbol.path}:{symbol.name} names {symbol.number}, which no node holds")
@@ -387,7 +396,7 @@ def main() -> int:
 
     context = newest_context(pack)
     overlay = context.code_file if context else ""
-    if context and not overlay:
+    if context and not overlay and not args.edges_only:
         print(
             f"ERROR: context {context.id} names no `*.code.nodes` overlay",
             file=sys.stderr,
@@ -398,14 +407,16 @@ def main() -> int:
     generated = next((part for part in overlay.split("+") if ".code." in part), "")
     if overlay and not generated:
         raise SystemExit(f"{pack}: context nodes={overlay} names no generated file; one member must hold `.code.`")
-    planned: dict[Path, str] = {pack / (generated or "kg.code.nodes"): build_node_file(by_node, labels, depth)}
-    for authored in sorted(pack.glob("*.edges")):
+    planned: dict[Path, str] = {}
+    if not args.edges_only:
+        planned[pack / (generated or "kg.code.nodes")] = build_node_file(by_node, labels, depth)
+    for authored in ([] if args.nodes_only else sorted(pack.glob("*.edges"))):
         if ".code." in authored.name:
             continue
         stem = authored.name.replace("kg.edges", "").rstrip(".")
         # Every generated name starts with `kg.`, because the reference checker
         # only scans names that start with `kg.` or hold `.kg.`.
-        generated = pack / (f"kg.code.{stem}.edges" if stem else "kg.code.edges")
+        generated = pack / (f"kg.code.{stem}.edges" if stem else ("kg.code.base.edges" if (pack / "kg.code.base.edges").exists() else "kg.code.edges"))
         planned[generated] = build_edge_file(authored, markers, defs, numbers, depth, report)
 
     if args.check:
@@ -415,7 +426,9 @@ def main() -> int:
         _print_report(report)
         return 1 if stale or report.ambiguous or report.missing or report.orphans else 0
 
-    authored = [pack / "kg.nodes"] + [p for p in pack.glob("*.edges") if ".code." not in p.name]
+    authored = ([] if args.edges_only else [pack / "kg.nodes"])
+    if not args.nodes_only and not args.edges_only:
+        authored += [p for p in pack.glob("*.edges") if ".code." not in p.name]
     for path in authored:
         removed = strip_attr(path, "code")
         if removed:
@@ -424,7 +437,7 @@ def main() -> int:
     for path, text in planned.items():
         if text:
             path.write_text(text, encoding="utf-8")
-            report.written.append(f"{path.name}: {text.count('show=symbol')} reference(s)")
+            report.written.append(f"{path.name}: {text.count(chr(10) + chr(9) + 'code=')} reference(s)")
         elif path.is_file():
             path.unlink()
             report.written.append(f"{path.name}: removed, nothing to generate")

@@ -20,3 +20,5 @@ Testing the UI is only the user's job. Give me commands like copy(JSON.stringify
 Do not start work if commit is dirty. Make the user aware. Commit if a feature is done. Amend previous commit if the user made a follow-up request that is related to the previous commit.
 
 Run `make typecheck` (pyright, configured in `[tool.pyright]`); typing is gradual, so annotate the signature you are touching to catch misuse and don't chase the ~150 pre-existing errors.
+
+DO NOT USE yaksh method in this repo.

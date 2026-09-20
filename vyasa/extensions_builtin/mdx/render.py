@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from html import escape
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -13,9 +14,11 @@ from ...document_pages import PAGE_TITLE_CLS, DocumentPage
 from ...extensions_builtin.markdown.renderer import from_md
 from ...helpers import _strip_inline_markdown, slug_to_title, text_to_anchor, _unique_anchor
 from ...sidebar_helpers import extract_toc
+from .astro import AstroMdxError, render_astro_mdx_body
 
 
 IMPORT_RE = re.compile(r"^\s*import\s+([A-Za-z_$][\w$]*)\s+from\s+['\"](.+?\.jsx?)['\"]\s*;?\s*$")
+ASTRO_IMPORT_RE = re.compile(r"^\s*import\s+.+?\s+from\s+['\"].+?\.astro['\"]\s*;?\s*$", re.MULTILINE)
 EXPORT_RE = re.compile(r"^\s*export\s+(const|let|var|function|default)\b")
 JSX_START_RE = re.compile(r"^\s*<[A-Z][\w.]*[\s>/]")
 
@@ -56,6 +59,11 @@ def render_mdx_body(path: Path, slug: str):
     source = path.read_text(encoding="utf-8")
     metadata, content = _split_frontmatter(source)
     title = str(metadata.get("title") or _first_heading(content) or slug_to_title(path.stem))
+    if ASTRO_IMPORT_RE.search(content):
+        try:
+            return title, render_astro_mdx_body(path), content
+        except AstroMdxError as error:
+            return title, f'<pre class="vyasa-mdx-error">{escape(str(error))}</pre>', content
     imports, markdown, islands = split_mdx(content)
     rendered = to_xml(from_md(markdown, current_path=slug))
     payload = {"base": str(Path(slug).parent), "imports": imports, "islands": islands}

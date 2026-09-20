@@ -142,3 +142,11 @@ def test_vscode_link_detection():
         if (module.codePathFromHref('https://example.com/app.py', base, suffixes) !== null) process.exit(3);
     """
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
+def test_vscode_runtime_exposes_anchor_opener():
+    source = Path("vyasa/extensions_builtin/vscode/static/vscode.js").read_text()
+
+    assert "window.vyasaVSCode =" in source
+    assert "openAnchor: (anchor) =>" in source
+    assert "return openCodeReference(reference).then(() => true);" in source

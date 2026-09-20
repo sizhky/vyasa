@@ -573,7 +573,8 @@ def test_tasks_graph_highlights_use_separate_border_layer():
     assert "zIndex: TASKS_EDGE_FOCUS_Z - 1" in source
     assert "outline: `${hoverOutline ? 12 : 4}px solid ${activeBorderColor}`" in source
     assert (
-        '.vyasa-tasks-active-pulse .react-flow__node:not(.vyasa-tasks-pulse):has([data-vyasa-highlight-active="true"]) {\n'
+        '.vyasa-tasks-active-pulse .react-flow__node:not(.vyasa-tasks-pulse)'
+        ':not(:has([data-vyasa-kg-review-change])):has([data-vyasa-highlight-active="true"]) {\n'
         "    box-shadow: none !important;\n"
         "}"
     ) in css_source
@@ -872,6 +873,14 @@ def test_w_enter_pin_blooms_from_the_edge():
     assert "window.vyasaLinkPreview?.pin?.(codeModeEntryRef.current);" in source
 
 
+def test_v_opens_the_active_code_preview_in_vscode():
+    source = tasks_static_source("tasks.js")
+
+    assert "const codePreviewEntry = codeModeEntryRef.current || codeModePinnedRef.current?.entry;" in source
+    assert "window.vyasaVSCode.openAnchor(codePreviewEntry.link)" in source
+    assert "row('V', 'open A code in VS Code; otherwise toggle hover card scroll')" in source
+
+
 def test_kg_pane_drag_pans_with_a_locked_cursor():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
@@ -918,7 +927,7 @@ def test_v_toggles_right_side_hover_card_scroll_mode():
     assert "body.style.transform = `scaleY(${stretch})`" in source
     assert "className: 'vyasa-tasks-card-scroll-body'" in source
     assert "scrollRef: hoverCard ? hoverCardScrollRef : detailCardScrollRef" in source
-    assert "row('V', 'toggle hover card scroll mode')" in source
+    assert "row('V', 'open A code in VS Code; otherwise toggle hover card scroll')" in source
     assert "syncTasksCardScrollToggleButtons(widgetId, hoverCardScrollMode)" in source
     assert "toggleCardScroll: () => setHoverCardScrollModeGlobal" in source
     assert "button.setAttribute(attribute, 'true')" in source
@@ -941,6 +950,54 @@ def test_tasks_kg_links_use_link_preview_contract():
     assert "'data-vyasa-link-preview-current-path': currentPath || undefined" in source
     assert "renderTasksInlineLinks(selectedNode.label || selectedNode.id" in source
     assert "renderTasksDetailEntries(React, entries, { copyValues: true, currentPath: sourceModel?.document_path || '' })" in source
+
+
+def test_tasks_attribute_preview_orders_code_urls_before_other_attributes():
+    script = r'''
+        globalThis.document = {
+            createElement(tag) {
+                if (tag === 'div') {
+                    return {
+                        html: '',
+                        set innerHTML(value) { this.html = value; },
+                        querySelectorAll() {
+                            return [...this.html.matchAll(/<a href="([^"]+)"/g)].map((match) => ({
+                                dataset: {},
+                                getAttribute(name) { return name === 'href' ? match[1] : ''; },
+                                setAttribute() {},
+                            }));
+                        },
+                    };
+                }
+                return {
+                    dataset: {},
+                    setAttribute(name, value) { this.href = value; },
+                    getAttribute(name) { return name === 'href' ? this.href : ''; },
+                };
+            },
+        };
+        const { tasksAttributeLinks } = await import('./vyasa/extensions_builtin/tasks/static/tasks_cards.js');
+        const links = tasksAttributeLinks({
+            note: 'https://note.example',
+            code: 'https://code.example',
+            owner: 'https://owner.example',
+            __rendered_attrs__: {
+                note: '<a href="https://note.example">Note</a>',
+                code: '<a href="https://code.example">Code</a>',
+                owner: '<a href="https://owner.example">Owner</a>',
+            },
+        });
+        const hrefs = links.map((link) => link.getAttribute('href')).join(',');
+        const kinds = links.map((link) => link.dataset.vyasaLinkPreviewTabKind).join(',');
+        if (hrefs !== 'https://code.example,https://note.example,https://owner.example') throw new Error(hrefs);
+        if (kinds !== 'code,attribute,attribute') throw new Error(kinds);
+    '''
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+    source = tasks_static_source("tasks_cards.js", "tasks.js")
+    css = Path("vyasa/extensions_builtin/link_preview/static/link_preview.css").read_text()
+    assert "tasksAttributeLinks(codeModeRecord())" in source
+    assert "groups.map((group) => group.links[0].dataset.vyasaLinkPreviewTabKind" in source
+    assert ".vyasa-link-preview-tab-attribute" in css
 
 
 def test_tasks_filter_reset_button_stays_in_filter_card_header():
@@ -1242,6 +1299,24 @@ def test_sequence_edge_card_resolves_the_authored_edge_record():
         if (record?.code !== '<a>redraw</a>') throw new Error('edge card metadata did not resolve');
     """
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
+def test_sequence_lifeline_wrapper_does_not_paint_square_corners():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
+    lifeline = source.split("if (node.__sequence_lifeline__) {", 1)[1].split("className:", 1)[1].split("draggable:", 1)[0]
+
+    assert "vyasa-tasks-node--sequence-lifeline" in lifeline
+    rule = css.split(".react-flow__node.vyasa-tasks-node--sequence-lifeline", 1)[1].split("}", 1)[0]
+    assert "background: transparent !important" in rule
+    assert "background-image: none !important" in rule
+
+
+def test_review_bloom_uses_the_sequence_lifeline_corner_radius():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    lifeline = source.split("if (node.__sequence_lifeline__) {", 1)[1].split("className:", 1)[0]
+
+    assert "borderRadius: 8" in lifeline
 
 
 def test_tasks_card_attr_config_orders_and_hides_attrs():
@@ -1808,8 +1883,8 @@ def test_tasks_node_reference_navigation_preserves_zoom():
     assert ".react-flow__node:not(.vyasa-tasks-pulse):has(" in css
     assert "title: 'Center node', onClick: focusPanelNode" in source
     assert "window.addEventListener('keydown', syncNodeReferenceModifier, true);" in source
-    assert "String(event.key || '').toLowerCase() !== 'd'" in source
-    assert "row('D + click [[node]]', 'go to referenced node')" in source
+    assert "String(event.key || '').toLowerCase() !== 'r'" in source
+    assert "row('R + click [[node]]', 'go to referenced node')" in source
     assert "renderTasksInlineLinks(data?.label || id" in source
     drag_selection = source.split("const startDragSelection", 1)[1].split("const updateDragSelection", 1)[0]
     assert "[data-vyasa-node-reference]" in drag_selection
@@ -2141,32 +2216,33 @@ def test_slide_selection_is_not_reapplied_when_graph_layout_changes():
     assert "}, [slideIndex, slides]);" in selection_effect
 
 
-def test_context_graphs_have_day_switch_contract():
-    source = tasks_static_source("tasks_panels.js", "tasks.js")
+def test_context_graphs_and_git_review_share_the_pack_controls():
+    source = tasks_static_source("tasks_panels.js", "tasks_nodes.js", "tasks.js")
     css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
     api = Path("vyasa/extensions_builtin/tasks/api.py").read_text()
 
     assert "async function loadTasksContext" in source
     assert "fetch('/api/tasks/context'" in source
-    assert "async function loadTasksContextDiff" in source
-    assert "fetch('/api/tasks/context-diff'" in source
-    assert '@rt("/api/tasks/context-diff"' in api
+    assert "async function loadTasksGitHistory" in source
+    assert "fetch('/api/tasks/git-history'" in source
+    assert "async function loadTasksGitReview" in source
+    assert "fetch('/api/tasks/git-review'" in source
+    assert '@rt("/api/tasks/git-history"' in api
+    assert '@rt("/api/tasks/git-review"' in api
     # The panel shares named style constants instead of piling one-off inline
     # styles. Their existence is the contract; their contents are not.
     assert "const filterSectionStyle = {" in source
     assert "const filterInlineControlStyle = {" in source
     assert "const filterChoiceListStyle = {" in source
     assert "const contextOptions = React.useMemo" in source
-    assert "style: filterKeyStyle }, 'Context')" in source
-    assert "'aria-label': 'Select changes from previous context'" in source
-    assert "tasksContextDiffSelectionIds(model, graphBaseRef.current.nodes, changedIds)" in source
-    assert "setSelectedNodeIds(new Set(nextIds));" in source
-    assert "const diffOwnsSelection = contextDiffEnabled" in source
-    assert "reason: 'contextDiffPaneClick'" in source
-    assert "__context_diff__" not in source
-    assert 'data-vyasa-context-diff' not in css
+    assert "contextOptions.length > 1 ? 'Context and review' : 'Review'" in source
+    assert "'aria-label': 'Toggle Git review mode'" in source
+    assert "const GitHistoryRail = () =>" in source
+    assert "const GitReviewBar = () =>" in source
+    assert 'data-vyasa-kg-review-change' in source
+    assert 'vyasa-kg-history-rail' in css
     assert "outline-offset: 3px" in css
-    assert source.index("'Context'") < source.index("'View'")
+    assert source.index("'Context and review'") < source.index("'View'")
     assert "onChange: (event) => handleSwitchContext(event.target.value)" in source
     assert "`${context.seq}. ${context.label || context.caption || context.id}`" in source
     assert "const renderColorLevel = (colorBy, index) => {" in source
@@ -2197,6 +2273,87 @@ def test_view_menu_only_shows_views_resolved_to_the_active_context():
         if (!tasksViewMatchesContext({ resolved_context: 'context-015' }, '')) throw new Error('non-context graph filtered');
     """
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
+def test_git_history_rows_preserve_branch_lanes_and_worktree_parent():
+    script = """
+        import { tasksGitHistoryRows, tasksReviewCountsLabel } from './vyasa/extensions_builtin/tasks/static/tasks_git_review.js';
+        const rows = tasksGitHistoryRows({
+            worktree: { parent: 'merge', changed_paths: ['blueprints.kg/kg.nodes'] },
+            commits: [
+                { sha: 'merge', parents: ['main', 'feature'], message: 'merge', refs: ['main'] },
+                { sha: 'feature', parents: ['root'], message: 'feature' },
+                { sha: 'main', parents: ['root'], message: 'main' },
+                { sha: 'root', parents: [], message: 'root' },
+            ],
+        });
+        if (rows[0].sha !== 'WORKTREE' || rows[0].parents[0] !== 'merge') throw new Error('worktree missing');
+        if (rows[1].connections.length !== 2) throw new Error('merge lanes missing');
+        if (rows[2].lane === rows[3].lane) throw new Error('branch lanes collapsed');
+        if (tasksReviewCountsLabel({ added: 2, modified: 3, removed: 1 }) !== '+2  ~3  −1') throw new Error('counts');
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
+def test_git_review_projection_options_show_counts_and_keep_cross_context_views():
+    script = """
+        import { tasksProjectionOptions } from './vyasa/extensions_builtin/tasks/static/tasks_graph_model.js';
+        const model = {
+            kg_review: { view_counts: { '': { added: 1, modified: 2, removed: 0 }, old: { total: 3, added: 0, modified: 1, removed: 2 } } },
+            view_projections: [{ id: 'old', label: 'Old flow', resolved_context: 'before' }],
+            projection_models: { old: { model: {}, graph: {} } },
+        };
+        const options = tasksProjectionOptions(model, false, 'after');
+        if (options.length !== 2) throw new Error('review view hidden by context');
+        if (!options[0].label.includes('+1 ~2 −0')) throw new Error('base counts missing');
+        if (!options[1].label.includes('+0 ~1 −2')) throw new Error('view counts missing');
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
+def test_git_review_uses_existing_node_panel_for_structured_differences():
+    panels = tasks_static_source("tasks_panels.js")
+    graph = tasks_static_source("tasks.js", "tasks_nodes.js")
+
+    assert "const review = gitReviewEnabled ? selectedNode?.__kg_review__ : null;" in panels
+    assert "Changed fields" in panels
+    assert "Changed edges" in panels
+    assert "vyasa-kg-history-compare" in panels
+    assert "handleSelectGitBase(row)" in panels
+    assert "GitReviewBar()" in graph
+    assert "data-vyasa-kg-review-change" in graph
+    assert "if (key === 'd' && gitHistoryAvailable)" in graph
+    assert "toggleGitReview();" in graph
+    assert "row('D', 'toggle Git review')" in graph
+    assert "gitReviewEnabled && gitDiffEnabled ? 'vyasa-kg-review-mode' : ''" in graph
+    assert "vyasa-kg-history-diff" in panels
+
+
+def test_shift_d_toggles_git_history_without_disabling_review():
+    graph = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    shortcut = graph.split("if (key === 's') {", 1)[1].split("if (key === 'e'", 1)[0]
+
+    assert "if (key === 'd' && event.shiftKey)" in shortcut
+    assert "if (!gitReviewEnabled) return;" in shortcut
+    assert "setGitHistoryVisible((current) => !current);" in shortcut
+    assert shortcut.index("if (key === 'd' && event.shiftKey)") < shortcut.index("toggleGitReview();")
+    assert "const gitHistoryRailElement = gitHistoryVisible ? GitHistoryRail() : null;" in graph
+    assert "row('Shift + D', 'toggle Git history')" in graph
+
+
+def test_option_d_toggles_review_cards_between_differences_and_attributes():
+    graph = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    panels = Path("vyasa/extensions_builtin/tasks/static/tasks_panels.js").read_text()
+
+    assert "const [gitReviewCardMode, setGitReviewCardMode] = React.useState('diff');" in graph
+    assert "event.altKey && !event.shiftKey && event.code === 'KeyD'" in graph
+    assert "setGitReviewCardMode((current) => current === 'diff' ? 'attributes' : 'diff');" in graph
+    assert "row('Option + D', 'toggle diff / attribute cards')" in graph
+    assert "gitReviewCardMode" in graph.split("createTasksPanels(() => ({", 1)[1]
+    assert "const showReviewCard = Boolean(review && gitReviewCardMode === 'diff');" in panels
+    assert "const showEdgeReviewCard = Boolean(edgeReview && gitReviewCardMode === 'diff');" in panels
+    assert "showReviewCard ? React.createElement('div', { className: 'vyasa-kg-review-inspector' }" in panels
+    assert "showEdgeReviewCard ? React.createElement('div', { className: 'vyasa-kg-review-inspector' }" in panels
 
 
 def test_tasks_block_serializes_document_path_and_stable_storage_id():

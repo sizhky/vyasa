@@ -280,31 +280,66 @@ export function tasksHeldKeyApplies(event, flowWrapper, active) {
     return !editable && Boolean(flowWrapper?.matches(':hover') || active);
 }
 
-// Code mode reads the `code` attribute of a node or an edge and hands the link
-// preview an anchor for its first URL. The server already rendered that
-// attribute to HTML under `__rendered_attrs__`, and only that anchor carries the
-// `{show=symbol ...}` payload as `data-vyasa-code-reference`. Re-parsing the
-// Markdown here would drop it and preview the whole file, so read the rendered
-// anchor first and fall back to the raw text only when the render step is off.
-export function tasksCodeAttributeLink(record) {
-    if (!record) return null;
-    const key = Object.keys(record).find((name) => String(name).toLowerCase() === 'code');
-    if (!key) return null;
+function tasksAttributeRenderedLinks(record, key) {
     const rendered = record.__rendered_attrs__?.[key];
-    const html = Array.isArray(rendered) ? rendered[0] : rendered;
-    if (typeof html === 'string' && html.trim()) {
+    const links = [];
+    for (const html of (Array.isArray(rendered) ? rendered : [rendered])) {
+        if (typeof html !== 'string' || !html.trim()) continue;
         const holder = document.createElement('div');
         holder.innerHTML = html;
-        const anchor = holder.querySelector('a[href]');
-        if (anchor) return anchor;
+        links.push(...holder.querySelectorAll('a[href]'));
     }
-    const value = Array.isArray(record[key]) ? record[key][0] : record[key];
-    const href = tasksExtractUrls(value)[0] || '';
-    if (!href) return null;
-    const anchor = document.createElement('a');
-    anchor.setAttribute('href', href);
-    return anchor;
+    return links;
 }
+
+// A preview reads rendered anchors first, preserving code-reference metadata.
+// Raw values remain the fallback for inline graphs without rendered attributes.
+export function tasksAttributeLinks(record) {
+    if (!record) return [];
+    const keys = Object.keys(record).filter((key) => key !== '__rendered_attrs__' && !key.startsWith('__'));
+    const codeKey = keys.find((key) => String(key).toLowerCase() === 'code');
+    const orderedKeys = codeKey ? [codeKey, ...keys.filter((key) => key !== codeKey)] : keys;
+    return orderedKeys.flatMap((key) => {
+        const kind = key === codeKey ? 'code' : 'attribute';
+        const renderedLinks = tasksAttributeRenderedLinks(record, key);
+        const links = renderedLinks.length
+            ? renderedLinks
+            : (Array.isArray(record[key]) ? record[key] : [record[key]])
+                .flatMap(tasksExtractUrls)
+                .map((href) => {
+                    const anchor = document.createElement('a');
+                    anchor.setAttribute('href', href);
+                    return anchor;
+                });
+        links.forEach((link) => link.dataset.vyasaLinkPreviewTabKind = kind);
+        return links;
+    });
+}
+
+export function tasksCodeAttributeLinks(record) {
+    return tasksAttributeLinks(record).filter((link) => link.dataset.vyasaLinkPreviewTabKind === 'code');
+}
+
+export function tasksCodeAttributeLink(record) {
+    return tasksCodeAttributeLinks(record)[0] || null;
+}
+
+export function tasksGroupPreviewLinks(links) {
+    const groups = [];
+    const byHref = new Map();
+    links.forEach((link, index) => {
+        const href = link.getAttribute('href') || '';
+        if (byHref.has(href)) byHref.get(href).links.push(link);
+        else {
+            const group = { href, links: [link], index };
+            groups.push(group);
+            byHref.set(href, group);
+        }
+    });
+    return groups;
+}
+
+export const tasksGroupCodeLinks = tasksGroupPreviewLinks;
 
 function tasksHrefKind(href) {
     const text = String(href || '').trim();

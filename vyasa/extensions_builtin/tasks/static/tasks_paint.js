@@ -77,6 +77,14 @@ export const TASKS_PAIR_LABEL_LIFT = 13;
 
 const TASKS_SPECIAL_COLOR_MODE_KEYS = new Set(['connectivity', 'rank']);
 
+// Review state colours the bloom only. A node or edge keeps its own palette
+// colour, so the change signal never competes with what the colour encodes.
+const TASKS_REVIEW_BLOOM_COLORS = { added: '#16a34a', modified: '#d97706', removed: '#dc2626' };
+
+export function tasksReviewBloomColor(change) {
+    return TASKS_REVIEW_BLOOM_COLORS[String(change || '')] || '';
+}
+
 export function tasksOpacityPctLabel(value) {
     return `${Math.round(clampTasksProjectionDisplayOpacity(value) * 100)}%`;
 }

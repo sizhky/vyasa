@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from ...extensions import AssetBundle, ExtensionMeta, VyasaExtensionBase
+from ...extensions import AssetBundle, DocumentType, ExtensionMeta, VyasaExtensionBase
 from .catalog import register_mdx_catalog_routes
 from .excalidraw_routes import register_excalidraw_routes
 from .file_routes import register_mdx_events_routes, register_mdx_file_routes
@@ -9,6 +9,7 @@ from .render import is_mdx_path, render_mdx_document, render_static_mdx_document
 
 class MdxExtension(VyasaExtensionBase):
     def register(self, app) -> None:
+        app.documents.document_type(DocumentType(".mdx", "mdx", "file-code"))
         app.documents.kind_resolver("mdx", "file-code", is_mdx_path)
         app.documents.renderer("mdx", render_mdx_document)
         app.documents.static_renderer("mdx", render_static_mdx_document)

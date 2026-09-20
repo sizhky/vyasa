@@ -1,6 +1,7 @@
 ---
 name: vyasa
 description: Use for Vyasa project work, Vyasa site authoring, .vyasa config, markdown features, diagrams, theming, static builds, extensions, auth/RBAC, slides, and repo-aware implementation.
+version: "0.1"
 ---
 
 # Vyasa
