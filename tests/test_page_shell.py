@@ -303,6 +303,18 @@ def test_sidebar_controls_cycle_closed_overlay_and_docked_states():
     assert "data-vyasa-sidebar-state-toc=\"docked\"" in css
 
 
+def test_scroll_progress_is_horizontal_and_hides_page_scrollbar():
+    source = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
+    css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
+    build = Path("vyasa/build.py").read_text(encoding="utf-8")
+
+    assert "bar.style.width = `${Math.round(progress * 100)}%`;" in source
+    assert ".vyasa-scroll-progress" in css
+    assert "top: var(--vyasa-navbar-height, 3.75rem);" in css
+    assert "html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }" in css
+    assert "scrollProgress.style.width = `${Math.round(progress * 100)}%`;" in build
+
+
 def test_document_heading_spacing_uses_shared_before_and_after_gaps():
     css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
 

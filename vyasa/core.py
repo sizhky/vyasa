@@ -330,8 +330,7 @@ hdrs = (
         .dark .vyasa-table-scroll.has-left-overflow.has-right-overflow { box-shadow: inset 18px 0 16px -14px rgba(2, 6, 23, 0.62), inset -18px 0 16px -14px rgba(2, 6, 23, 0.62); }
         .vyasa-table-scroll > table, .vyasa-table-scroll > .uk-table { width: max-content !important; min-width: 0; table-layout: auto; margin: 0 auto; }
         .vyasa-table-scroll th, .vyasa-table-scroll td { max-width: var(--vyasa-table-col-max, 45vw); white-space: normal; overflow-wrap: anywhere; word-break: normal; }
-        .vyasa-mobile-scroll-progress { position: fixed; top: 0; left: 0; z-index: 1600; width: 5px; height: 0; pointer-events: none; background: var(--vyasa-primary, #2563eb); opacity: 0; transition: opacity 120ms ease; }
-        @media (max-width: 1279px) { .vyasa-mobile-scroll-progress { opacity: 1; } }
+        .vyasa-scroll-progress { position: fixed; top: var(--vyasa-navbar-height, 3.75rem); left: 0; z-index: 1600; width: 0; height: 3px; pointer-events: none; background: linear-gradient(90deg, color-mix(in srgb, var(--vyasa-primary, #2563eb) 78%, white), var(--vyasa-primary, #2563eb)); box-shadow: 0 0 10px color-mix(in srgb, var(--vyasa-primary, #2563eb) 70%, transparent); transition: width 120ms ease; }
         """
     ),
     Link(

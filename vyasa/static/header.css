@@ -915,6 +915,20 @@ details { border: none !important; box-shadow: none !important; }
 h1, h2, h3, h4, h5, h6 { scroll-margin-top: 7rem; }
 
 * { scrollbar-width: thin; scrollbar-color: rgb(203 213 225) transparent; }
+html, body { scrollbar-width: none; }
+html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
+.vyasa-scroll-progress {
+    position: fixed;
+    top: var(--vyasa-navbar-height, 3.75rem);
+    left: 0;
+    z-index: 1600;
+    width: 0;
+    height: 3px;
+    pointer-events: none;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--vyasa-primary, #2563eb) 78%, white), var(--vyasa-primary, #2563eb));
+    box-shadow: 0 0 10px color-mix(in srgb, var(--vyasa-primary, #2563eb) 70%, transparent);
+    transition: width 120ms ease;
+}
 *::-webkit-scrollbar { width: 3px; height: 3px; }
 *::-webkit-scrollbar-track { background: transparent; }
 *::-webkit-scrollbar-thumb { background-color: rgb(203 213 225); border-radius: 2px; }
