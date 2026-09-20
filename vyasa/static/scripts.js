@@ -1552,17 +1552,32 @@ function initMobileMenus() {
         });
     };
 
-    const toggleDockedSidebar = (kind) => {
-        const sidebar = document.getElementById(`${kind}-sidebar`);
-        if (!sidebar) return false;
+    const sidebarState = (kind) => {
+        const state = document.documentElement.dataset[`vyasaSidebarState${kind[0].toUpperCase()}${kind.slice(1)}`];
+        if (state === 'closed' || state === 'overlay' || state === 'docked') return state;
+        return document.documentElement.hasAttribute(`data-vyasa-hide-${kind}-sidebar`) ? 'closed' : 'overlay';
+    };
+
+    const applySidebarState = (kind, state) => {
+        const root = document.documentElement;
         const attr = `data-vyasa-hide-${kind}-sidebar`;
-        const hidden = !document.documentElement.hasAttribute(attr);
-        document.documentElement.toggleAttribute(attr, hidden);
-        if (hidden) pulseNavbarToggle(kind);
+        const dataKey = `vyasaSidebarState${kind[0].toUpperCase()}${kind.slice(1)}`;
+        root.dataset[dataKey] = state;
+        root.toggleAttribute(attr, state === 'closed');
         try {
-            if (hidden) localStorage.setItem(`vyasa-${kind}-sidebar-hidden`, '1');
+            if (state === 'closed') localStorage.setItem(`vyasa-${kind}-sidebar-hidden`, '1');
             else localStorage.setItem(`vyasa-${kind}-sidebar-hidden`, '0');
         } catch (_) {}
+        document.querySelectorAll(`#${kind}-sidebar details[data-sidebar="${kind}"]`).forEach((sidebar) => {
+            sidebar.open = state !== 'closed';
+        });
+        if (state === 'closed') pulseNavbarToggle(kind);
+    };
+
+    const toggleDockedSidebar = (kind) => {
+        const current = sidebarState(kind);
+        const next = current === 'closed' ? 'overlay' : current === 'overlay' ? 'docked' : 'closed';
+        applySidebarState(kind, next);
         syncContentResize();
         return true;
     };

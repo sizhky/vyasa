@@ -294,6 +294,15 @@ def test_sidebars_bound_main_content_width():
     assert "window.dispatchEvent(new Event('resize'));" in source
 
 
+def test_sidebar_controls_cycle_closed_overlay_and_docked_states():
+    source = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
+    css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
+
+    assert "current === 'closed' ? 'overlay' : current === 'overlay' ? 'docked' : 'closed'" in source
+    assert "data-vyasa-sidebar-state-posts=\"docked\"" in css
+    assert "data-vyasa-sidebar-state-toc=\"docked\"" in css
+
+
 def test_document_heading_spacing_uses_shared_before_and_after_gaps():
     css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
 

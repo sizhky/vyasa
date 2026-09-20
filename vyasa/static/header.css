@@ -276,6 +276,12 @@ body {
     width: var(--vyasa-toc-sidebar-width, var(--vyasa-sidebar-width, 22rem));
     margin-left: min(0px, calc(var(--vyasa-sidebar-width, 22rem) - var(--vyasa-toc-sidebar-width, var(--vyasa-sidebar-width, 22rem))));
 }
+html[data-vyasa-sidebar-state-posts="docked"] #content-with-sidebars {
+    padding-left: var(--vyasa-posts-sidebar-width, var(--vyasa-sidebar-width, 22rem));
+}
+html[data-vyasa-sidebar-state-toc="docked"] #content-with-sidebars {
+    padding-right: var(--vyasa-toc-sidebar-width, var(--vyasa-sidebar-width, 22rem));
+}
 #content-with-sidebars .vyasa-main-shell > *,
 #content-with-sidebars .tasks-container,
 #content-with-sidebars .mermaid-container,
