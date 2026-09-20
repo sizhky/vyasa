@@ -1,5 +1,5 @@
 import {
-    copyTasksText, tasksCodeAttributeLinks, tasksGroupCodeLinks, tasksHeldKeyApplies, tasksInlineReferenceHtml,
+    copyTasksText, tasksAttributeLinks, tasksGroupPreviewLinks, tasksHeldKeyApplies, tasksInlineReferenceHtml,
     tasksNodeLinkKinds,
 } from './tasks_cards.js';
 import {
@@ -1296,8 +1296,8 @@ async function renderTasksGraphs(rootElement = document) {
                     window.removeEventListener('blur', clearKeys);
                 };
             }, [clearOptionEdgePreview, focusDetailCard, selectNodeCard, widgetId]);
-            // Code mode. Holding A over a node or an edge shows the first link in
-            // its `code` attribute as a link preview, and sends the wheel to that
+            // Attribute mode. Holding A over a node or an edge shows its attribute
+            // links in a code-first link preview, and sends the wheel to that
             // preview instead of the graph. Releasing A closes it, so the preview
             // never outlives the key. Same shape as the W edge preview above.
             React.useEffect(() => {
@@ -1357,13 +1357,14 @@ async function renderTasksGraphs(rootElement = document) {
                     return null;
                 };
                 const showCodeTabs = (entry, links, index) => {
-                    const groups = tasksGroupCodeLinks(links);
+                    const groups = tasksGroupPreviewLinks(links);
                     const active = groups.findIndex((group) => group.links.includes(links[index]));
                     window.vyasaLinkPreview?.setTabs?.(
                         entry,
                         groups.map((group) => group.links[0]),
                         active,
                         (target) => switchCodeLink(groups[target].index),
+                        groups.map((group) => group.links[0].dataset.vyasaLinkPreviewTabKind || 'attribute'),
                     );
                 };
                 const openCodePreviewAt = (links, index, pinned = false) => {
@@ -1383,13 +1384,13 @@ async function renderTasksGraphs(rootElement = document) {
                 };
                 const openCodePreview = () => {
                     if (codeModeEntryRef.current) return;
-                    const links = tasksCodeAttributeLinks(codeModeRecord());
+                    const links = tasksAttributeLinks(codeModeRecord());
                     if (!links.length) {
-                        setEdgeStatus('No code link here. Point at a node or edge that has a Code attribute.');
+                        setEdgeStatus('No link here. Point at a node or edge with a URL attribute.');
                         return;
                     }
                     const entry = openCodePreviewAt(links, 0);
-                    setEdgeStatus(entry ? 'Code preview open. Hold A and scroll to read it, Enter to pin it.' : 'Link preview is not available on this page.');
+                    setEdgeStatus(entry ? 'Attribute preview open. Hold A and scroll to read it, Enter to pin it.' : 'Link preview is not available on this page.');
                 };
                 const closeCodePreview = () => {
                     if (!codeModeEntryRef.current) return;
@@ -1403,7 +1404,7 @@ async function renderTasksGraphs(rootElement = document) {
                     codeModePinnedRef.current = { entry: codeModeEntryRef.current, links: codeModeLinksRef.current, index: codeModeIndexRef.current };
                     codeModeEntryRef.current = null;
                     logTasksDebug('codeModePinned', { widgetId });
-                    setEdgeStatus('Code preview pinned. Use Left and Right to switch Code URLs.');
+                    setEdgeStatus('Attribute preview pinned. Use Left and Right to switch URLs.');
                     return true;
                 };
                 const switchCodeLink = (targetIndex) => {
@@ -1422,14 +1423,14 @@ async function renderTasksGraphs(rootElement = document) {
                 const stepCodeUrl = (delta) => {
                     const links = codeModeEntryRef.current ? codeModeLinksRef.current : activePinnedCodePreview()?.links;
                     const index = codeModeEntryRef.current ? codeModeIndexRef.current : codeModePinnedRef.current?.index;
-                    const groups = tasksGroupCodeLinks(links || []);
+                    const groups = tasksGroupPreviewLinks(links || []);
                     const current = groups.findIndex((group) => group.links.includes(links?.[index]));
                     return current >= 0 && switchCodeLink(groups[(current + delta + groups.length) % groups.length].index);
                 };
                 const stepCodeChunk = (delta) => {
                     const links = codeModeEntryRef.current ? codeModeLinksRef.current : activePinnedCodePreview()?.links;
                     const index = codeModeEntryRef.current ? codeModeIndexRef.current : codeModePinnedRef.current?.index;
-                    const group = tasksGroupCodeLinks(links || []).find((item) => item.links.includes(links?.[index]));
+                    const group = tasksGroupPreviewLinks(links || []).find((item) => item.links.includes(links?.[index]));
                     const current = group?.links.indexOf(links[index]) ?? -1;
                     return current >= 0 && switchCodeLink(links.indexOf(group.links[(current + delta + group.links.length) % group.links.length]));
                 };
@@ -4975,7 +4976,7 @@ async function renderTasksGraphs(rootElement = document) {
                     row('Option + F', 'fit highlighted edge'),
                     row('W / Q', 'hold edge preview / opposite node card'),
                     row('W + Enter', 'pin edge details'),
-                    row('A', 'hold code preview of the Code attribute; wheel scrolls it'),
+                    row('A', 'hold attribute link preview; wheel scrolls it'),
                     row('W + A', 'hold code preview of the held edge'),
                     row('A + Enter', 'pin the code preview'),
                     row('A + ← / →', 'previous / next marked code block'),

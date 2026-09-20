@@ -139,13 +139,13 @@ function installResizeHandles(popover, raise) {
 // One owner decides which element inside a popover scrolls. The wheel handler
 // below and the graph's code mode both ask here, so a change to the preview
 // markup moves one line, not two.
-function scrollPreviewBody(popover, deltaX, deltaY, target = null) {
+function scrollPreviewBody(popover, deltaX, deltaY) {
     const body = popover?.querySelector?.('.vyasa-link-preview-body');
     if (!body) return false;
-    const table = target?.closest?.('.vyasa-table-scroll');
-    const tableCanScroll = table && table.scrollWidth > table.clientWidth;
+    const tables = [...body.querySelectorAll('.vyasa-table-scroll')]
+        .filter((table) => table.scrollWidth > table.clientWidth);
     body.scrollTop += deltaY;
-    if (tableCanScroll) table.scrollLeft += deltaX;
+    if (tables.length) tables.forEach((table) => { table.scrollLeft += deltaX; });
     else body.scrollLeft += deltaX;
     return true;
 }
@@ -296,9 +296,9 @@ function createPreviewView({ point, link, onClose }) {
             );
             raise();
         },
-        setTabs: (links, activeIndex, onSelect) => {
+        setTabs: (links, activeIndex, onSelect, tabKinds = []) => {
             selectTab = onSelect;
-            const nextSignature = links.map((item) => item.getAttribute('href') || '').join('\n');
+            const nextSignature = links.map((item, index) => `${item.getAttribute('href') || ''}\n${tabKinds[index] || 'code'}`).join('\n');
             if (nextSignature !== tabSignature) {
                 tabs.replaceChildren();
                 links.forEach((item, index) => {
@@ -306,6 +306,7 @@ function createPreviewView({ point, link, onClose }) {
                     const href = item.getAttribute('href') || '';
                     button.type = 'button';
                     button.setAttribute('role', 'tab');
+                    button.classList.add(`vyasa-link-preview-tab-${tabKinds[index] || 'code'}`);
                     button.textContent = decodeURIComponent(href.split(/[?#]/)[0].split('/').pop() || href);
                     button.title = href;
                     button.addEventListener('click', () => selectTab(index));
@@ -499,7 +500,7 @@ window.vyasaLinkPreview = {
     close: (entry) => previews.close(entry),
     isOpen: (entry) => previews.has(entry),
     replace: (entry, link) => previews.replace(entry, link),
-    setTabs: (entry, links, activeIndex, onSelect) => entry?.view?.setTabs?.(links, activeIndex, onSelect),
+    setTabs: (entry, links, activeIndex, onSelect, tabKinds) => entry?.view?.setTabs?.(links, activeIndex, onSelect, tabKinds),
     scrollBy: (entry, deltaX, deltaY) => entry?.view?.scrollBy?.(deltaX, deltaY) === true,
     stepCodeBlock: (entry, delta) => entry?.view?.stepCodeBlock?.(delta) === true,
 };
@@ -561,7 +562,7 @@ document.body.addEventListener('pointerout', (event) => {
 }, true);
 document.body.addEventListener('wheel', (event) => {
     const popover = event.target?.closest?.('.vyasa-link-preview-popover');
-    if (!popover || !scrollPreviewBody(popover, event.deltaX, event.deltaY, event.target)) return;
+    if (!popover || !scrollPreviewBody(popover, event.deltaX, event.deltaY)) return;
     event.preventDefault();
     event.stopPropagation();
 }, { capture: true, passive: false });

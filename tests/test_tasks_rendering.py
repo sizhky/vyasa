@@ -952,6 +952,54 @@ def test_tasks_kg_links_use_link_preview_contract():
     assert "renderTasksDetailEntries(React, entries, { copyValues: true, currentPath: sourceModel?.document_path || '' })" in source
 
 
+def test_tasks_attribute_preview_orders_code_urls_before_other_attributes():
+    script = r'''
+        globalThis.document = {
+            createElement(tag) {
+                if (tag === 'div') {
+                    return {
+                        html: '',
+                        set innerHTML(value) { this.html = value; },
+                        querySelectorAll() {
+                            return [...this.html.matchAll(/<a href="([^"]+)"/g)].map((match) => ({
+                                dataset: {},
+                                getAttribute(name) { return name === 'href' ? match[1] : ''; },
+                                setAttribute() {},
+                            }));
+                        },
+                    };
+                }
+                return {
+                    dataset: {},
+                    setAttribute(name, value) { this.href = value; },
+                    getAttribute(name) { return name === 'href' ? this.href : ''; },
+                };
+            },
+        };
+        const { tasksAttributeLinks } = await import('./vyasa/extensions_builtin/tasks/static/tasks_cards.js');
+        const links = tasksAttributeLinks({
+            note: 'https://note.example',
+            code: 'https://code.example',
+            owner: 'https://owner.example',
+            __rendered_attrs__: {
+                note: '<a href="https://note.example">Note</a>',
+                code: '<a href="https://code.example">Code</a>',
+                owner: '<a href="https://owner.example">Owner</a>',
+            },
+        });
+        const hrefs = links.map((link) => link.getAttribute('href')).join(',');
+        const kinds = links.map((link) => link.dataset.vyasaLinkPreviewTabKind).join(',');
+        if (hrefs !== 'https://code.example,https://note.example,https://owner.example') throw new Error(hrefs);
+        if (kinds !== 'code,attribute,attribute') throw new Error(kinds);
+    '''
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+    source = tasks_static_source("tasks_cards.js", "tasks.js")
+    css = Path("vyasa/extensions_builtin/link_preview/static/link_preview.css").read_text()
+    assert "tasksAttributeLinks(codeModeRecord())" in source
+    assert "groups.map((group) => group.links[0].dataset.vyasaLinkPreviewTabKind" in source
+    assert ".vyasa-link-preview-tab-attribute" in css
+
+
 def test_tasks_filter_reset_button_stays_in_filter_card_header():
     source = tasks_static_source("tasks_panels.js", "tasks.js")
     panel_source = source.split("const FilterPanel = () => {", 1)[1].split("const SlideShow = () => {", 1)[0]

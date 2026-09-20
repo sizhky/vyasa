@@ -458,9 +458,9 @@ def test_link_preview_keeps_wide_tables_scrollable_inside_the_popup():
     table_rule = css.split(".vyasa-link-preview-body .vyasa-table-scroll > table", 1)[1].split("}", 1)[0]
     assert "width: max-content !important;" in table_rule
     assert "min-width: 100%;" in table_rule
-    assert "const table = target?.closest?.('.vyasa-table-scroll');" in source
-    assert "if (tableCanScroll) table.scrollLeft += deltaX;" in source
-    assert "event.deltaY, event.target))" in source
+    assert "const tables = [...body.querySelectorAll('.vyasa-table-scroll')]" in source
+    assert "tables.forEach((table) => { table.scrollLeft += deltaX; });" in source
+    assert "body.querySelectorAll('.vyasa-table-scroll')" in source
 
 
 def test_link_preview_pointer_joins_source_to_nearest_popup_edge():
