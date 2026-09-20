@@ -8,6 +8,7 @@ agents/
 .github/
 tasks-ui/node_modules/
 docs/*
+!docs/readme-overhaul-20260920.md
 !docs/refactor/
 docs/refactor/*
 !docs/refactor/extensions.md
