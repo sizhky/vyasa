@@ -417,7 +417,7 @@ class FrankenRenderer(mst.HTMLRenderer):
         self.img_dir = img_dir
 
     def render_image(self, token):
-        tpl = '<img src="{}" alt="{}"{} class="vyasa-markdown-image max-w-full rounded-lg mb-6">'
+        tpl = '<img src="{}" alt="{}"{} class="vyasa-markdown-image rounded-lg mb-6">'
         title = f' title="{token.title}"' if hasattr(token, "title") else ""
         src = token.src
         if self.img_dir and not src.startswith(
@@ -992,6 +992,7 @@ def from_md(content: str, img_dir: str | None = None, current_path: str | None =
         "hr": "vyasa-spacer-rule my-10 border-0 h-0", "h1": "vyasa-doc-heading vyasa-doc-h1 text-3xl font-bold mb-6 mt-8", "h2": "vyasa-doc-heading vyasa-doc-h2 text-2xl font-semibold mb-4 mt-6",
         "h3": "vyasa-doc-heading vyasa-doc-h3 text-xl font-semibold mb-3 mt-5", "h4": "vyasa-doc-heading vyasa-doc-h4 text-lg font-semibold mb-2 mt-4",
         "table": "uk-table uk-table-striped uk-table-hover uk-table-divider uk-table-middle my-6",
+        "img": "rounded-lg mb-6",
     }
     with bind_asset_collector(asset_collector):
         with ContentRenderer(

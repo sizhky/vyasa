@@ -267,7 +267,7 @@ def hello_world():
 
 ## Images
 
-Markdown images are centered and default to 30% of the browser height. Add `{width=...}`, `{height=...}`, or both after the image. Bare numbers use pixels.
+Markdown images are centered and capped at 40% of the browser height and 60% of the browser width. Add `{width=...}`, `{height=...}`, or both after the image. Bare numbers use pixels.
 
 :::tabs
 ::tab{title="Rendered"}
@@ -286,7 +286,7 @@ Markdown images are centered and default to 30% of the browser height. Add `{wid
 ![A sized cat](https://cataas.com/cat/cute?width=600&height=400){width=480 height=320}
 ::tab{title="Markdown Source"}
 ```markdown
-Markdown images are centered and default to 30% of the browser height. Add `{width=...}`, `{height=...}`, or both after the image. Bare numbers use pixels.
+Markdown images are centered and capped at 40% of the browser height and 60% of the browser width. Add `{width=...}`, `{height=...}`, or both after the image. Bare numbers use pixels.
 
 ### Inline Image
 

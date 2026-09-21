@@ -4,7 +4,7 @@ Supported extras include collapsible sections, smart typography, print/PDF page 
 
 ## Images
 
-Markdown images are centered and default to 30% of the browser height. A declared width keeps the natural image height. Add width, height, or both after an inline or reference-style image:
+Markdown images are centered and capped at 40% of the browser height and 60% of the browser width. Add width, height, or both after an inline or reference-style image:
 
 ```md
 ![Architecture](architecture.png){width=480 height=320}
