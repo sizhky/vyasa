@@ -30,6 +30,28 @@ def test_single_newlines_follow_soft_break_behavior():
     assert "<p" in html
 
 
+def test_markdown_images_are_centered_and_accept_width_and_height():
+    rendered = to_xml(from_md('![Diagram](diagram.png){width=480 height="12rem"}'))
+
+    assert 'class="vyasa-markdown-image' in rendered
+    assert 'style="width: 480px; height: 12rem;"' in rendered
+    assert "{width=480" not in rendered
+
+
+def test_reference_images_accept_width_and_height():
+    rendered = to_xml(from_md("![Diagram][diagram]{width=50% height=240}\n\n[diagram]: diagram.png"))
+
+    assert 'src="diagram.png"' in rendered
+    assert 'style="width: 50%; height: 240px;"' in rendered
+
+
+def test_image_dimension_syntax_rejects_unknown_or_unsafe_attributes():
+    rendered = to_xml(from_md('![Diagram](diagram.png){width=480 onerror="alert(1)"}'))
+
+    assert "style=\"width: 480px;" not in rendered
+    assert "onerror" in rendered
+
+
 def test_tooltip_definitions_support_markdown_paragraphs():
     source = """Before [term][?why].
 

@@ -267,6 +267,8 @@ def hello_world():
 
 ## Images
 
+Markdown images are centered. Add `{width=...}`, `{height=...}`, or both after the image. Bare numbers use pixels.
+
 :::tabs
 ::tab{title="Rendered"}
 ### Inline Image
@@ -278,8 +280,14 @@ def hello_world():
 ![Another cute cat][image]
 
 [image]: https://cataas.com/cat/cute?width=300&height=300
+
+### Image Size
+
+![A sized cat](https://cataas.com/cat/cute?width=600&height=400){width=480 height=320}
 ::tab{title="Markdown Source"}
 ```markdown
+Markdown images are centered. Add `{width=...}`, `{height=...}`, or both after the image. Bare numbers use pixels.
+
 ### Inline Image
 
 ![A cute cat](https://cataas.com/cat?width=300&height=300)
@@ -289,6 +297,10 @@ def hello_world():
 ![Another cute cat][image]
 
 [image]: https://cataas.com/cat/cute?width=300&height=300
+
+### Image Size
+
+![A sized cat](https://cataas.com/cat/cute?width=600&height=400){width=480 height=320}
 ```
 :::
 
