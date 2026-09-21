@@ -1,6 +1,8 @@
 import { LinkPreviewStack } from './link_preview_stack.js';
 import {
     installLinkPreviewPanTracking,
+    linkPreviewDimpleDisplacement,
+    linkPreviewDimplePath,
     linkPreviewPreferredHeight,
     linkPreviewPreferredPosition,
     linkPreviewPreferredWidth,
@@ -24,6 +26,8 @@ let previewZ = 10500;
 let pointerFrame = null;
 let previewPage = `${window.location.pathname}${window.location.search}`;
 const previewViews = new Set();
+let dimpleFilterSequence = 0;
+let dimpleMapUrl = '';
 
 function schedulePointerRefresh() {
     if (pointerFrame !== null) return;
@@ -31,6 +35,82 @@ function schedulePointerRefresh() {
         pointerFrame = null;
         previewViews.forEach((view) => view.updatePointer());
     });
+}
+
+function getDimpleMapUrl() {
+    if (dimpleMapUrl) return dimpleMapUrl;
+    const size = 96;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const context = canvas.getContext('2d');
+    const pixels = context.createImageData(size, size);
+    for (let y = 0; y < size; y += 1) {
+        for (let x = 0; x < size; x += 1) {
+            const nx = (x + 0.5) * 2 / size - 1;
+            const ny = (y + 0.5) * 2 / size - 1;
+            const [red, green] = linkPreviewDimpleDisplacement(nx, ny);
+            const offset = (y * size + x) * 4;
+            pixels.data[offset] = Math.round(red * 255);
+            pixels.data[offset + 1] = Math.round(green * 255);
+            pixels.data[offset + 2] = 128;
+            pixels.data[offset + 3] = 255;
+        }
+    }
+    context.putImageData(pixels, 0, 0);
+    dimpleMapUrl = canvas.toDataURL();
+    return dimpleMapUrl;
+}
+
+function createDimpleFilter() {
+    const namespace = 'http://www.w3.org/2000/svg';
+    const id = `vyasa-link-preview-dimple-filter-${dimpleFilterSequence += 1}`;
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.style.cssText = 'position:absolute;width:0;height:0;pointer-events:none';
+    const filter = document.createElementNS(namespace, 'filter');
+    filter.id = id;
+    filter.setAttribute('filterUnits', 'userSpaceOnUse');
+    filter.setAttribute('primitiveUnits', 'userSpaceOnUse');
+    filter.setAttribute('color-interpolation-filters', 'sRGB');
+    const neutral = document.createElementNS(namespace, 'feFlood');
+    neutral.setAttribute('flood-color', 'rgb(128,128,128)');
+    neutral.setAttribute('result', 'neutral');
+    const image = document.createElementNS(namespace, 'feImage');
+    image.setAttribute('href', getDimpleMapUrl());
+    image.setAttribute('preserveAspectRatio', 'none');
+    image.setAttribute('result', 'dimple-map');
+    const merge = document.createElementNS(namespace, 'feMerge');
+    for (const source of ['neutral', 'dimple-map']) {
+        const node = document.createElementNS(namespace, 'feMergeNode');
+        node.setAttribute('in', source);
+        merge.appendChild(node);
+    }
+    merge.setAttribute('result', 'displacement-map');
+    const displacement = document.createElementNS(namespace, 'feDisplacementMap');
+    displacement.setAttribute('in', 'SourceGraphic');
+    displacement.setAttribute('in2', 'displacement-map');
+    displacement.setAttribute('xChannelSelector', 'R');
+    displacement.setAttribute('yChannelSelector', 'G');
+    filter.append(neutral, image, merge, displacement);
+    svg.appendChild(filter);
+    document.body.appendChild(svg);
+    return { id, svg, filter, image, displacement };
+}
+
+function updateDimpleFilter(effect, popupRect, dimple, inside) {
+    const radius = inside ? 76 : 58;
+    const x = dimple.x - popupRect.left;
+    const y = dimple.y - popupRect.top;
+    effect.filter.setAttribute('x', String(-radius));
+    effect.filter.setAttribute('y', String(-radius));
+    effect.filter.setAttribute('width', String(popupRect.width + radius * 2));
+    effect.filter.setAttribute('height', String(popupRect.height + radius * 2));
+    effect.image.setAttribute('x', String(x - radius));
+    effect.image.setAttribute('y', String(y - radius));
+    effect.image.setAttribute('width', String(radius * 2));
+    effect.image.setAttribute('height', String(radius * 2));
+    effect.displacement.setAttribute('scale', inside ? '18' : '13');
 }
 
 function inferCurrentPath() {
@@ -150,12 +230,69 @@ function scrollPreviewBody(popover, deltaX, deltaY) {
     return true;
 }
 
+function prepareDimpleCanvas(canvas, width, height, dpr) {
+    if (canvas.width !== width * dpr || canvas.height !== height * dpr) {
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+    }
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+    const context = canvas.getContext('2d');
+    if (!context) return null;
+    context.setTransform(dpr, 0, 0, dpr, 0, 0);
+    context.clearRect(0, 0, width, height);
+    return context;
+}
+
+function drawDimpleCanvas(canvas, pinchCanvas, popupRect, dimple, inside) {
+    const dpr = window.devicePixelRatio || 1;
+    const width = Math.max(1, Math.round(popupRect.width));
+    const height = Math.max(1, Math.round(popupRect.height));
+    const context = prepareDimpleCanvas(canvas, width, height, dpr);
+    const pinchContext = prepareDimpleCanvas(pinchCanvas, width, height, dpr);
+    if (!context || !pinchContext) return;
+    const x = dimple.x - popupRect.left;
+    const y = dimple.y - popupRect.top;
+    const radius = inside ? 76 : 58;
+    context.save();
+    context.beginPath();
+    context.arc(x, y, radius, 0, Math.PI * 2);
+    context.clip();
+    const contact = context.createRadialGradient(x + 5, y + 7, 0, x + 5, y + 7, radius * 0.62);
+    contact.addColorStop(0, 'rgba(15,23,42,0.17)');
+    contact.addColorStop(0.28, 'rgba(15,23,42,0.08)');
+    contact.addColorStop(1, 'rgba(15,23,42,0)');
+    context.fillStyle = contact;
+    context.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+    context.restore();
+    pinchContext.save();
+    pinchContext.beginPath();
+    pinchContext.arc(x, y, radius, 0, Math.PI * 2);
+    pinchContext.clip();
+    const pinch = pinchContext.createRadialGradient(x, y, 0, x, y, radius * 0.3);
+    pinch.addColorStop(0, 'rgba(0,0,0,1)');
+    pinch.addColorStop(0.3, 'rgba(10,10,10,0.5)');
+    pinch.addColorStop(0.8, 'rgba(10,10,10,0.0)');
+    pinch.addColorStop(1, 'rgba(10,10,10,0)');
+    pinchContext.fillStyle = pinch;
+    pinchContext.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+    pinchContext.fillStyle = 'rgba(0,0,0,1)';
+    pinchContext.beginPath();
+    pinchContext.arc(x, y, 1.8, 0, Math.PI * 2);
+    pinchContext.fill();
+    pinchContext.restore();
+}
+
 function createPreviewView({ point, link, onClose }) {
     let activeLink = link;
     const popover = document.createElement('aside');
     const pointer = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     const pointerShape = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
     const pointerOutline = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const pointerDimple = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const dimpleCanvas = document.createElement('canvas');
+    const pinchCanvas = document.createElement('canvas');
+    const dimpleEffect = createDimpleFilter();
     popover.className = 'vyasa-link-preview-popover is-open';
     popover.setAttribute('role', 'dialog');
     popover.setAttribute('aria-label', 'Link preview');
@@ -180,7 +317,15 @@ function createPreviewView({ point, link, onClose }) {
     pointer.setAttribute('aria-hidden', 'true');
     pointer.appendChild(pointerShape);
     pointer.appendChild(pointerOutline);
+    pointerDimple.classList.add('vyasa-link-preview-dimple');
+    pointer.appendChild(pointerDimple);
+    dimpleCanvas.className = 'vyasa-link-preview-dimple-canvas';
+    dimpleCanvas.setAttribute('aria-hidden', 'true');
+    pinchCanvas.className = 'vyasa-link-preview-pinch-canvas';
+    pinchCanvas.setAttribute('aria-hidden', 'true');
     const content = popover.querySelector('[data-vyasa-link-preview-content]');
+    const card = popover.querySelector('.vyasa-link-preview-card');
+    popover.append(dimpleCanvas, pinchCanvas);
     const bar = popover.querySelector('.vyasa-link-preview-bar');
     const tabs = popover.querySelector('.vyasa-link-preview-tabs');
     let tabSignature = '';
@@ -232,8 +377,39 @@ function createPreviewView({ point, link, onClose }) {
         }
         const sourceRect = activeLink.getBoundingClientRect();
         const popupRect = popover.getBoundingClientRect();
-        const geometry = linkPreviewPointerGeometry(sourceRect, popupRect);
+        const sourceHit = document.elementFromPoint?.(
+            sourceRect.left + sourceRect.width / 2,
+            sourceRect.top + sourceRect.height / 2,
+        );
+        const sourceParent = activeLink.closest?.('.vyasa-link-preview-popover');
+        const sourceCovered = sourceHit?.closest?.('.vyasa-link-preview-popover') === popover;
+        const geometry = linkPreviewPointerGeometry(sourceRect, popupRect, 28, 2, {
+            preferDimple: sourceCovered && sourceParent !== popover,
+        });
         pointer.hidden = false;
+        const dimple = geometry.kind === 'dimple' || geometry.kind === 'dimple-inside';
+        const insideDimple = geometry.kind === 'dimple-inside';
+        popover.classList.toggle('has-origin-dimple', dimple);
+        popover.classList.toggle('has-origin-dimple-inside', insideDimple);
+        dimpleCanvas.hidden = !dimple;
+        pinchCanvas.hidden = !dimple;
+        pointerShape.style.display = dimple ? 'none' : '';
+        pointerOutline.style.display = dimple ? 'none' : '';
+        if (dimple) {
+            const path = linkPreviewDimplePath(geometry.dimple);
+            pointerDimple.style.display = path ? '' : 'none';
+            pointerDimple.setAttribute('d', path);
+            updateDimpleFilter(dimpleEffect, popupRect, geometry.dimple, insideDimple);
+            card.style.filter = `url(#${dimpleEffect.id})`;
+            drawDimpleCanvas(dimpleCanvas, pinchCanvas, popupRect, geometry.dimple, insideDimple);
+            return;
+        }
+        pointerDimple.style.display = 'none';
+        card.style.removeProperty('filter');
+        dimpleCanvas.hidden = true;
+        pinchCanvas.hidden = true;
+        dimpleCanvas.getContext('2d')?.clearRect(0, 0, dimpleCanvas.width, dimpleCanvas.height);
+        pinchCanvas.getContext('2d')?.clearRect(0, 0, pinchCanvas.width, pinchCanvas.height);
         pointerShape.setAttribute('points', geometry.fill.map(([x, y]) => `${x},${y}`).join(' '));
         pointerOutline.setAttribute('d', `M ${geometry.outline[0]} L ${geometry.outline[1]} M ${geometry.outline[0]} L ${geometry.outline[2]}`);
     };
@@ -354,6 +530,7 @@ function createPreviewView({ point, link, onClose }) {
             previewViews.delete(view);
             pointer.remove();
             popover.remove();
+            dimpleEffect.svg.remove();
         },
         setMessage: (message) => {
             content.className = 'vyasa-link-preview-content vyasa-link-preview-empty';

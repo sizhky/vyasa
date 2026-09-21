@@ -84,7 +84,31 @@ export function installLinkPreviewPanTracking(target, refresh) {
     target.addEventListener('wheel', refresh, true);
 }
 
-export function linkPreviewPointerGeometry(sourceRect, popupRect, baseWidth = 28, overlap = 2) {
+// User-selected membrane profile (2026-09-21): z(r) = k ln(R/r).
+export function linkPreviewDimpleDisplacement(nx, ny) {
+    const distance = Math.hypot(nx, ny);
+    if (distance === 0 || distance >= 1) return [0.5, 0.5];
+    const tension = Math.min(0.48, 0.55 * Math.log(1 / Math.max(distance, 0.001)));
+    return [
+        0.5 + (nx / distance) * tension,
+        0.5 + (ny / distance) * tension,
+    ];
+}
+
+export function linkPreviewDimplePath({ side, x, y, halfWidth, depth }) {
+    if (side === 'inside') return '';
+    const shoulder = halfWidth * 0.72;
+    const commands = side === 'top'
+        ? [`M ${x - halfWidth} ${y}`, `C ${x - shoulder} ${y}, ${x - shoulder} ${y + depth}, ${x} ${y + depth}`, `C ${x + shoulder} ${y + depth}, ${x + shoulder} ${y}, ${x + halfWidth} ${y}`, 'Z']
+        : side === 'bottom'
+            ? [`M ${x - halfWidth} ${y}`, `C ${x - shoulder} ${y}, ${x - shoulder} ${y - depth}, ${x} ${y - depth}`, `C ${x + shoulder} ${y - depth}, ${x + shoulder} ${y}, ${x + halfWidth} ${y}`, 'Z']
+            : side === 'left'
+                ? [`M ${x} ${y - halfWidth}`, `C ${x} ${y - shoulder}, ${x + depth} ${y - shoulder}, ${x + depth} ${y}`, `C ${x + depth} ${y + shoulder}, ${x} ${y + shoulder}, ${x} ${y + halfWidth}`, 'Z']
+                : [`M ${x} ${y - halfWidth}`, `C ${x} ${y - shoulder}, ${x - depth} ${y - shoulder}, ${x - depth} ${y}`, `C ${x - depth} ${y + shoulder}, ${x} ${y + shoulder}, ${x} ${y + halfWidth}`, 'Z'];
+    return commands.join(' ');
+}
+
+export function linkPreviewPointerGeometry(sourceRect, popupRect, baseWidth = 28, overlap = 2, options = {}) {
     const tip = {
         x: sourceRect.left + sourceRect.width / 2,
         y: sourceRect.top + sourceRect.height / 2,
@@ -97,6 +121,38 @@ export function linkPreviewPointerGeometry(sourceRect, popupRect, baseWidth = 28
     const dy = tip.y - center.y;
     const halfWidth = Math.max(1, popupRect.width / 2);
     const halfHeight = Math.max(1, popupRect.height / 2);
+    const sourceInside = tip.x >= popupRect.left && tip.x <= popupRect.left + popupRect.width
+        && tip.y >= popupRect.top && tip.y <= popupRect.top + popupRect.height;
+    if (sourceInside || options.preferDimple) {
+        if (sourceInside) {
+            return {
+                kind: 'dimple-inside',
+                dimple: { side: 'inside', x: tip.x, y: tip.y, radius: 24 },
+                fill: [],
+                outline: [],
+            };
+        }
+        const side = Math.abs(dx) / halfWidth >= Math.abs(dy) / halfHeight
+            ? dx < 0 ? 'left' : 'right'
+            : dy < 0 ? 'top' : 'bottom';
+        const halfDimple = Math.max(20, baseWidth);
+        const horizontal = side === 'top' || side === 'bottom';
+        const coordinate = horizontal
+            ? Math.min(popupRect.left + popupRect.width - halfDimple - 12, Math.max(popupRect.left + halfDimple + 12, tip.x))
+            : Math.min(popupRect.top + popupRect.height - halfDimple - 12, Math.max(popupRect.top + halfDimple + 12, tip.y));
+        return {
+            kind: 'dimple',
+            dimple: {
+                side,
+                x: horizontal ? coordinate : side === 'left' ? popupRect.left : popupRect.left + popupRect.width,
+                y: horizontal ? side === 'top' ? popupRect.top : popupRect.top + popupRect.height : coordinate,
+                halfWidth: halfDimple,
+                depth: 11,
+            },
+            fill: [],
+            outline: [],
+        };
+    }
     const horizontalSide = Math.abs(dx) / halfWidth >= Math.abs(dy) / halfHeight;
     const halfBase = baseWidth / 2;
     const cornerGap = halfBase + 12;

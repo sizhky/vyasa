@@ -327,7 +327,8 @@ function createArtifactSdk(deriveQueueKey, isNativeInteractive = isNativeInterac
     const path = event.composedPath();
     if (path.some((node) => node instanceof Element && isLavishUi(node))) return;
     const target = path.find((node) => node instanceof Element);
-    if (!isInteractiveControl(target) && !event.metaKey && !event.ctrlKey && !event.altKey) event.preventDefault();
+    if (isInteractiveControl(target)) return;
+    if (!event.metaKey && !event.ctrlKey && !event.altKey) event.preventDefault();
     event.stopImmediatePropagation();
   }
 

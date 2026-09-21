@@ -497,6 +497,71 @@ def test_link_preview_pointer_fill_overlaps_border_but_outline_stops_at_edge():
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
 
 
+def test_link_preview_uses_a_dimple_only_when_the_source_is_covered():
+    script = """
+        import { linkPreviewPointerGeometry } from './vyasa/extensions_builtin/link_preview/static/link_preview_geometry.js';
+        const geometry = linkPreviewPointerGeometry(
+            { left: 250, top: 180, width: 40, height: 20 },
+            { left: 100, top: 20, width: 340, height: 140 },
+        );
+        if (geometry.kind === 'dimple') throw new Error('visible origin incorrectly retained a dimple');
+        const inside = linkPreviewPointerGeometry(
+            { left: 250, top: 80, width: 40, height: 20 },
+            { left: 100, top: 20, width: 340, height: 140 },
+        );
+        if (inside.kind !== 'dimple-inside' || inside.dimple.x !== 270 || inside.dimple.y !== 90) throw new Error('inside origin was not placed at its actual spot');
+        const nested = linkPreviewPointerGeometry(
+            { left: 500, top: 70, width: 40, height: 20 },
+            { left: 100, top: 20, width: 340, height: 140 },
+            28,
+            2,
+            { preferDimple: true },
+        );
+        if (nested.kind !== 'dimple' || nested.dimple.side !== 'right') throw new Error('nested origin did not use the nearest edge');
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
+def test_link_preview_dimple_uses_a_localized_elastic_displacement_field():
+    script = """
+        import { linkPreviewDimpleDisplacement, linkPreviewDimplePath } from './vyasa/extensions_builtin/link_preview/static/link_preview_geometry.js';
+        const center = linkPreviewDimpleDisplacement(0, 0);
+        const edge = linkPreviewDimpleDisplacement(1, 0);
+        const right = linkPreviewDimpleDisplacement(0.5, 0);
+        const left = linkPreviewDimpleDisplacement(-0.5, 0);
+        const near = linkPreviewDimpleDisplacement(0.1, 0);
+        const far = linkPreviewDimpleDisplacement(0.9, 0);
+        if (center[0] !== 0.5 || center[1] !== 0.5) throw new Error(`center is not neutral: ${center}`);
+        if (edge[0] !== 0.5 || edge[1] !== 0.5) throw new Error(`edge is not neutral: ${edge}`);
+        if (right[0] <= 0.8 || left[0] >= 0.2) throw new Error('field does not pull in opposite radial directions');
+        if (!(near[0] > right[0] && right[0] > far[0] && far[0] > 0.5)) {
+            throw new Error(`field is not logarithmic from center to edge: ${near}, ${right}, ${far}`);
+        }
+        const expectedMiddle = 0.5 + Math.min(0.48, 0.55 * Math.log(2));
+        if (Math.abs(right[0] - expectedMiddle) > 1e-9) throw new Error(`wrong logarithmic profile: ${right}`);
+        if (linkPreviewDimplePath({ side: 'inside', x: 20, y: 30, radius: 24 }) !== '') {
+            throw new Error('inside dimple still renders a circular SVG path');
+        }
+        if (!linkPreviewDimplePath({ side: 'top', x: 20, y: 30, halfWidth: 28, depth: 11 })) {
+            throw new Error('edge dimple lost its sheet contour');
+        }
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+    source = Path("vyasa/extensions_builtin/link_preview/static/link_preview.js").read_text()
+    assert "feDisplacementMap" in source
+    assert "feTurbulence" not in source
+    assert "card.style.filter" in source
+    assert "pointerDimple.style.display" in source
+    assert "const pinch = pinchContext.createRadialGradient(x, y, 0, x, y, radius * 0.3)" in source
+    assert "pinchContext.arc(x, y, 1.8, 0, Math.PI * 2)" in source
+    assert "vyasa-link-preview-pinch-canvas" in source
+    dimple_draw = source.split("function drawDimpleCanvas", 1)[1].split("function createPreviewView", 1)[0]
+    assert "createLinearGradient" not in dimple_draw
+    css = Path("vyasa/extensions_builtin/link_preview/static/link_preview.css").read_text()
+    pinch_rule = css.rsplit(".vyasa-link-preview-pinch-canvas", 1)[1].split("}", 1)[0]
+    assert "mix-blend-mode: normal;" in pinch_rule
+
+
 def test_link_preview_refreshes_pointer_during_canvas_pan():
     script = """
         import { installLinkPreviewPanTracking } from './vyasa/extensions_builtin/link_preview/static/link_preview_geometry.js';

@@ -54,6 +54,8 @@ def generate_static_html(title, body_content, blog_title, favicon_href, extra_he
         
         /* Ultra thin scrollbar styles */
         * { scrollbar-width: thin; scrollbar-color: rgb(203 213 225) transparent; }
+        html, body { scrollbar-width: none; }
+        html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
         *::-webkit-scrollbar { width: 3px; height: 3px; }
         *::-webkit-scrollbar-track { background: transparent; }
         *::-webkit-scrollbar-thumb { background-color: rgb(203 213 225); border-radius: 2px; }
@@ -61,8 +63,7 @@ def generate_static_html(title, body_content, blog_title, favicon_href, extra_he
         .dark *::-webkit-scrollbar-thumb { background-color: rgb(71 85 105); }
         .dark *::-webkit-scrollbar-thumb:hover { background-color: rgb(100 116 139); }
         .dark * { scrollbar-color: rgb(71 85 105) transparent; }
-        .vyasa-mobile-scroll-progress { position: fixed; top: 0; left: 0; z-index: 1600; width: 5px; height: 0; pointer-events: none; background: var(--vyasa-primary, #2563eb); opacity: 0; transition: opacity 120ms ease; }
-        @media (max-width: 767px) { .vyasa-mobile-scroll-progress { opacity: 1; } }
+        .vyasa-scroll-progress { position: fixed; top: var(--vyasa-navbar-height, 3.75rem); left: 0; z-index: 1600; width: 100%; height: 3px; pointer-events: none; background: linear-gradient(90deg, color-mix(in srgb, var(--vyasa-primary, #2563eb) 78%, white), var(--vyasa-primary, #2563eb)); box-shadow: 0 0 10px color-mix(in srgb, var(--vyasa-primary, #2563eb) 70%, transparent); transform: scaleX(var(--vyasa-scroll-progress, 0)); transform-origin: left center; will-change: transform; }
         
         /* Tabs styles */
         .tabs-container { 
@@ -271,14 +272,19 @@ def generate_static_html(title, body_content, blog_title, favicon_href, extra_he
         // Set tab container heights based on tallest panel
         document.addEventListener('DOMContentLoaded', function() {
             const scrollProgress = document.createElement('div');
-            scrollProgress.id = 'vyasa-mobile-scroll-progress';
-            scrollProgress.className = 'vyasa-mobile-scroll-progress';
+            scrollProgress.id = 'vyasa-scroll-progress';
+            scrollProgress.className = 'vyasa-scroll-progress';
             scrollProgress.setAttribute('aria-hidden', 'true');
             (document.getElementById('page-container') || document.body).appendChild(scrollProgress);
+            let scrollProgressFrame = null;
             const syncScrollProgress = () => {
-                const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-                const progress = Math.min(1, Math.max(0, window.scrollY / max));
-                scrollProgress.style.height = `${Math.round(progress * window.innerHeight)}px`;
+                if (scrollProgressFrame !== null) return;
+                scrollProgressFrame = window.requestAnimationFrame(() => {
+                    scrollProgressFrame = null;
+                    const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+                    const progress = Math.min(1, Math.max(0, window.scrollY / max));
+                    scrollProgress.style.setProperty('--vyasa-scroll-progress', String(progress));
+                });
             };
             window.addEventListener('scroll', syncScrollProgress, { passive: true });
             window.addEventListener('resize', syncScrollProgress, { passive: true });
