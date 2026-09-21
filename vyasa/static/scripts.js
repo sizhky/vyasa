@@ -1558,6 +1558,9 @@ function initMobileMenus() {
     };
 
     const sidebarState = (kind) => {
+        // closed: sidebar hidden.
+        // overlay: sidebar visible but floats over the main view.
+        // docked: sidebar visible and the main view reserves its width.
         const state = document.documentElement.dataset[`vyasaSidebarState${kind[0].toUpperCase()}${kind.slice(1)}`];
         if (state === 'closed' || state === 'overlay' || state === 'docked') return state;
         return document.documentElement.hasAttribute(`data-vyasa-hide-${kind}-sidebar`) ? 'closed' : 'overlay';
@@ -1570,6 +1573,7 @@ function initMobileMenus() {
         root.dataset[dataKey] = state;
         root.toggleAttribute(attr, state === 'closed');
         try {
+            localStorage.setItem(`vyasa-${kind}-sidebar-state`, state);
             if (state === 'closed') localStorage.setItem(`vyasa-${kind}-sidebar-hidden`, '1');
             else localStorage.setItem(`vyasa-${kind}-sidebar-hidden`, '0');
         } catch (_) {}

@@ -80,9 +80,18 @@
 
     try {
         ['posts', 'toc'].forEach((kind) => {
+            const root = document.documentElement;
+            const dataKey = `vyasaSidebarState${kind[0].toUpperCase()}${kind.slice(1)}`;
+            const hiddenAttr = `data-vyasa-hide-${kind}-sidebar`;
+            const state = localStorage.getItem(`vyasa-${kind}-sidebar-state`);
+            if (state === 'closed' || state === 'overlay' || state === 'docked') {
+                root.dataset[dataKey] = state;
+                root.toggleAttribute(hiddenAttr, state === 'closed');
+                return;
+            }
             const stored = localStorage.getItem(`vyasa-${kind}-sidebar-hidden`);
             if (stored === '1' || (kind === 'toc' && stored !== '0')) {
-                document.documentElement.setAttribute(`data-vyasa-hide-${kind}-sidebar`, '');
+                root.setAttribute(hiddenAttr, '');
             }
         });
     } catch (_) {}

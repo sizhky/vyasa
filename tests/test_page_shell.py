@@ -303,6 +303,18 @@ def test_sidebar_controls_cycle_closed_overlay_and_docked_states():
     assert "data-vyasa-sidebar-state-toc=\"docked\"" in css
 
 
+def test_docked_sidebar_mode_persists_across_a_refresh():
+    head_init = Path("vyasa/static/head-init.js").read_text(encoding="utf-8")
+    scripts = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
+
+    assert "localStorage.setItem(`vyasa-${kind}-sidebar-state`, state)" in scripts
+    assert "const state = localStorage.getItem(`vyasa-${kind}-sidebar-state`);" in head_init
+    assert "root.dataset[dataKey] = state;" in head_init
+    assert "// closed: sidebar hidden." in scripts
+    assert "// overlay: sidebar visible but floats over the main view." in scripts
+    assert "// docked: sidebar visible and the main view reserves its width." in scripts
+
+
 def test_scroll_progress_is_horizontal_and_hides_page_scrollbar():
     source = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
     css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
