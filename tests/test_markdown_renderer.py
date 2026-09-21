@@ -38,6 +38,13 @@ def test_markdown_images_are_centered_and_accept_width_and_height():
     assert "{width=480" not in rendered
 
 
+def test_markdown_image_defaults_are_defined_in_the_shell_stylesheet():
+    css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
+
+    assert ".vyasa-markdown-image { display: block; width: auto; height: 30vh; margin-inline: auto; }" in css
+    assert '.vyasa-markdown-image[style*="width:"] { height: auto; }' in css
+
+
 def test_reference_images_accept_width_and_height():
     rendered = to_xml(from_md("![Diagram][diagram]{width=50% height=240}\n\n[diagram]: diagram.png"))
 

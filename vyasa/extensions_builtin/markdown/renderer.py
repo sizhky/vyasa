@@ -417,7 +417,7 @@ class FrankenRenderer(mst.HTMLRenderer):
         self.img_dir = img_dir
 
     def render_image(self, token):
-        tpl = '<img src="{}" alt="{}"{} class="vyasa-markdown-image max-w-full h-auto rounded-lg mb-6">'
+        tpl = '<img src="{}" alt="{}"{} class="vyasa-markdown-image max-w-full rounded-lg mb-6">'
         title = f' title="{token.title}"' if hasattr(token, "title") else ""
         src = token.src
         if self.img_dir and not src.startswith(
