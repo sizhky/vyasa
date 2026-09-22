@@ -11,6 +11,8 @@ def _module_query() -> str:
     params = []
     if os.environ.get("VYASA_SCROLL_PROXY_RANDOM", "").strip().lower() in {"1", "true", "yes", "on"}:
         params.append("random=1")
+    if os.environ.get("VYASA_SCROLL_PROXY_STILL", "").strip().lower() in {"1", "true", "yes", "on"}:
+        params.append("still=1")
     sources = os.environ.get("VYASA_SCROLL_PROXY_THEMES", "").strip()
     if sources:
         params.append("themes=" + quote(sources, safe=",:/-._~"))
