@@ -350,6 +350,53 @@ def _sanitize_css_size(value):
     return text if re.fullmatch(r"[\w\s.%(),+\-/*]+", text) else ""
 
 
+_IMAGE_DIMENSION_ATTR = re.compile(
+    r'''\s*(width|height)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s}]+))''',
+    re.IGNORECASE,
+)
+_IMAGE_DIMENSIONS = re.compile(r"(?P<image><img\b[^>]*>)\{(?P<attrs>[^{}]+)\}")
+
+
+def _normalize_image_dimension(value: str) -> str:
+    size = _sanitize_css_size(value)
+    if re.fullmatch(r"\d+(?:\.\d+)?", size):
+        return f"{size}px"
+    return size
+
+
+def _parse_image_dimensions(attributes: str) -> dict[str, str]:
+    dimensions: dict[str, str] = {}
+    position = 0
+    while position < len(attributes):
+        match = _IMAGE_DIMENSION_ATTR.match(attributes, position)
+        if not match:
+            return {}
+        value = next(value for value in match.groups()[1:] if value is not None)
+        value = _normalize_image_dimension(value)
+        if not value:
+            return {}
+        dimensions[match.group(1).lower()] = value
+        position = match.end()
+    return dimensions
+
+
+def _render_image_dimensions(html_out: str) -> str:
+    def replace(match: re.Match[str]) -> str:
+        dimensions = _parse_image_dimensions(match.group("attrs"))
+        if not dimensions:
+            return match.group(0)
+        declaration = " ".join(f"{name}: {value};" for name, value in dimensions.items())
+        image = match.group("image")
+        style = re.search(r'''\sstyle=(['"])(.*?)\1''', image, re.IGNORECASE)
+        if style:
+            existing = style.group(2).rstrip()
+            combined = f"{existing.rstrip(';')}; {declaration}" if existing else declaration
+            return image[:style.start()] + f' style="{html.escape(combined, quote=True)}"' + image[style.end():]
+        return image[:-1] + f' style="{html.escape(declaration, quote=True)}">'
+
+    return _IMAGE_DIMENSIONS.sub(replace, html_out)
+
+
 def _wrap_tables(html_out, default_max_col=""):
     pattern = re.compile(
         r"(?:\s*<!--\s*table\s+max-col=(?P<max>[^>]+?)\s*-->\s*)?(?P<table><table\b[\s\S]*?</table>)",
@@ -370,7 +417,7 @@ class FrankenRenderer(mst.HTMLRenderer):
         self.img_dir = img_dir
 
     def render_image(self, token):
-        tpl = '<img src="{}" alt="{}"{}  class="max-w-full h-auto rounded-lg mb-6">'
+        tpl = '<img src="{}" alt="{}"{} class="vyasa-markdown-image rounded-lg mb-6">'
         title = f' title="{token.title}"' if hasattr(token, "title") else ""
         src = token.src
         if self.img_dir and not src.startswith(
@@ -945,6 +992,7 @@ def from_md(content: str, img_dir: str | None = None, current_path: str | None =
         "hr": "vyasa-spacer-rule my-10 border-0 h-0", "h1": "vyasa-doc-heading vyasa-doc-h1 text-3xl font-bold mb-6 mt-8", "h2": "vyasa-doc-heading vyasa-doc-h2 text-2xl font-semibold mb-4 mt-6",
         "h3": "vyasa-doc-heading vyasa-doc-h3 text-xl font-semibold mb-3 mt-5", "h4": "vyasa-doc-heading vyasa-doc-h4 text-lg font-semibold mb-2 mt-4",
         "table": "uk-table uk-table-striped uk-table-hover uk-table-divider uk-table-middle my-6",
+        "img": "rounded-lg mb-6",
     }
     with bind_asset_collector(asset_collector):
         with ContentRenderer(
@@ -1021,6 +1069,7 @@ def from_md(content: str, img_dir: str | None = None, current_path: str | None =
             html_out = re.sub(r"<details(?![^>]*\bopen\b)([^>]*)>", r"<details open\1>", html_out)
         html_out = _render_todo_html(html_out)
         html_out = _render_double_rules(html_out)
+        html_out = _render_image_dimensions(html_out)
         html_out = _wrap_tables(html_out, get_config().get_table_col_max_width() or "")
     bundle_nodes = [
         Link(rel="stylesheet", href=_asset_url(path))

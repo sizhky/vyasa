@@ -1,0 +1,938 @@
+{
+  "themes": [
+    {
+      "id": "new-year",
+      "dates": [
+        {
+          "month": 1,
+          "endDay": 2
+        }
+      ],
+      "particles": [
+        "✦",
+        "✧",
+        "✶",
+        "•"
+      ],
+      "colors": [
+        "#f59e0b",
+        "#f43f5e",
+        "#7c3aed"
+      ],
+      "physics": {
+        "size": 5,
+        "glow": 5
+      }
+    },
+    {
+      "id": "india-republic-day",
+      "priority": 30,
+      "dates": [
+        {
+          "month": 1,
+          "startDay": 26,
+          "endDay": 26
+        }
+      ],
+      "particleCount": 0,
+      "colors": [
+        "#ff9933",
+        "#fff",
+        "#138808"
+      ],
+      "flag": {
+        "src": "./india.svg",
+        "label": "Republic Day"
+      },
+      "link": "https://en.wikipedia.org/wiki/Republic_Day_(India)"
+    },
+    {
+      "id": "lunar-new-year",
+      "dates": [
+        {
+          "month": 1,
+          "startDay": 28,
+          "endDay": 31
+        },
+        {
+          "month": 2,
+          "endDay": 2
+        }
+      ],
+      "particles": [
+        "✦",
+        "✹",
+        "❋",
+        "•"
+      ],
+      "colors": [
+        "#b91c1c",
+        "#dc2626",
+        "#f59e0b",
+        "#fde68a"
+      ],
+      "physics": {
+        "size": 5,
+        "glow": 6
+      }
+    },
+    {
+      "id": "valentines-day",
+      "dates": [
+        {
+          "month": 2,
+          "startDay": 13,
+          "endDay": 15
+        }
+      ],
+      "particles": [
+        "♥",
+        "❥",
+        "●",
+        "•"
+      ],
+      "colors": [
+        "#fecdd3",
+        "#fb7185",
+        "#be185d"
+      ],
+      "physics": {
+        "size": 27,
+        "vx": 19.8,
+        "vy": [
+          -27.0,
+          -9.0
+        ],
+        "gravity": 32.4,
+        "stretch": 0,
+        "glow": 4,
+        "lifetime": [
+          0.88,
+          2.15
+        ],
+        "originSpreadX": 60,
+        "originSpreadY": 12,
+        "colorByAge": false,
+        "colors": [
+          "#fecdd3",
+          "#fb7185",
+          "#be185d"
+        ]
+      },
+      "particleCount": 16
+    },
+    {
+      "id": "international-womens-day",
+      "dates": [
+        {
+          "month": 3,
+          "startDay": 8,
+          "endDay": 8
+        }
+      ],
+      "particles": [
+        "♀",
+        "✿",
+        "❀",
+        "●"
+      ],
+      "colors": [
+        "#9333ea",
+        "#d946ef",
+        "#ec4899"
+      ],
+      "physics": {
+        "size": 25,
+        "vx": 19.8,
+        "vy": [
+          -23.4,
+          -7.2
+        ],
+        "gravity": 28.8,
+        "stretch": 0,
+        "glow": 4,
+        "lifetime": [
+          0.88,
+          2.15
+        ],
+        "originSpreadX": 60,
+        "originSpreadY": 12,
+        "colorByAge": false,
+        "colors": [
+          "#9333ea",
+          "#d946ef",
+          "#ec4899"
+        ]
+      },
+      "particleCount": 16
+    },
+    {
+      "id": "pi-day",
+      "dates": [
+        {
+          "month": 3,
+          "startDay": 14,
+          "endDay": 14
+        }
+      ],
+      "particles": [
+        "π",
+        "∑",
+        "∞",
+        "●"
+      ],
+      "colors": [
+        "#0ea5e9",
+        "#6366f1",
+        "#8b5cf6"
+      ],
+      "physics": {
+        "size": 22,
+        "spin": 3,
+        "stretch": 0,
+        "lifetime": [
+          0.88,
+          2.15
+        ],
+        "vx": 32.4,
+        "vy": [
+          -48.6,
+          -12.6
+        ],
+        "gravity": 72.0,
+        "originSpreadX": 60,
+        "originSpreadY": 12,
+        "colorByAge": false,
+        "colors": [
+          "#0ea5e9",
+          "#6366f1",
+          "#8b5cf6"
+        ]
+      },
+      "particleCount": 16
+    },
+    {
+      "id": "st-patricks-day",
+      "dates": [
+        {
+          "month": 3,
+          "startDay": 17,
+          "endDay": 17
+        }
+      ],
+      "particles": [
+        "☘",
+        "❦",
+        "✦",
+        "●"
+      ],
+      "colors": [
+        "#169b62",
+        "#fff",
+        "#ff883e"
+      ],
+      "physics": {
+        "size": 27,
+        "vx": 23.4,
+        "vy": [
+          -36.0,
+          -10.8
+        ],
+        "gravity": 45.0,
+        "stretch": 0,
+        "glow": 3,
+        "lifetime": [
+          0.88,
+          2.15
+        ],
+        "originSpreadX": 60,
+        "originSpreadY": 12,
+        "colorByAge": false,
+        "colors": [
+          "#169b62",
+          "#fff",
+          "#ff883e"
+        ]
+      },
+      "particleCount": 16
+    },
+    {
+      "id": "spring-equinox",
+      "dates": [
+        {
+          "month": 3,
+          "startDay": 20,
+          "endDay": 22
+        }
+      ],
+      "particles": [
+        "✿",
+        "❀",
+        "❁",
+        "●"
+      ],
+      "colors": [
+        "#ec4899",
+        "#fbbf24",
+        "#65a30d"
+      ],
+      "physics": {
+        "size": 25,
+        "vx": 21.6,
+        "vy": [
+          -19.8,
+          -5.4
+        ],
+        "gravity": 28.8,
+        "stretch": 0,
+        "glow": 3,
+        "lifetime": [
+          0.88,
+          2.15
+        ],
+        "originSpreadX": 60,
+        "originSpreadY": 12,
+        "colorByAge": false,
+        "colors": [
+          "#ec4899",
+          "#fbbf24",
+          "#65a30d"
+        ]
+      },
+      "particleCount": 16
+    },
+    {
+      "id": "april-fools-day",
+      "dates": [
+        {
+          "month": 4,
+          "endDay": 1
+        }
+      ],
+      "particles": [
+        "●",
+        "◆",
+        "★",
+        "✦"
+      ],
+      "colors": [
+        "#facc15",
+        "#22d3ee",
+        "#db2777"
+      ],
+      "physics": {
+        "size": 22,
+        "vx": 43.2,
+        "vy": [
+          -32.4,
+          -3.6
+        ],
+        "gravity": 39.6,
+        "spin": 12,
+        "stretch": 0,
+        "glow": 3,
+        "lifetime": [
+          0.88,
+          2.15
+        ],
+        "originSpreadX": 60,
+        "originSpreadY": 12,
+        "colorByAge": false,
+        "colors": [
+          "#facc15",
+          "#22d3ee",
+          "#db2777"
+        ]
+      },
+      "particleCount": 16
+    },
+    {
+      "id": "earth-day",
+      "dates": [
+        {
+          "month": 4,
+          "startDay": 22,
+          "endDay": 22
+        }
+      ],
+      "particles": [
+        "●",
+        "◉",
+        "❀",
+        "•"
+      ],
+      "colors": [
+        "#2563eb",
+        "#06b6d4",
+        "#16a34a"
+      ],
+      "physics": {
+        "size": 18,
+        "vx": 16.2,
+        "vy": [
+          -23.4,
+          -7.2
+        ],
+        "gravity": 25.2,
+        "stretch": 0,
+        "glow": 4,
+        "lifetime": [
+          0.88,
+          2.15
+        ],
+        "originSpreadX": 60,
+        "originSpreadY": 12,
+        "colorByAge": false,
+        "colors": [
+          "#2563eb",
+          "#06b6d4",
+          "#16a34a"
+        ]
+      },
+      "particleCount": 16
+    },
+    {
+      "id": "may-day",
+      "dates": [
+        {
+          "month": 5,
+          "endDay": 1
+        }
+      ],
+      "particles": [
+        "✿",
+        "❀",
+        "✦",
+        "●"
+      ],
+      "colors": [
+        "#b91c1c",
+        "#ef4444",
+        "#facc15"
+      ],
+      "physics": {
+        "size": 27,
+        "vx": 25.2,
+        "vy": [
+          -23.4,
+          -7.2
+        ],
+        "gravity": 27.0,
+        "stretch": 0,
+        "glow": 3,
+        "lifetime": [
+          0.88,
+          2.15
+        ],
+        "originSpreadX": 60,
+        "originSpreadY": 12,
+        "colorByAge": false,
+        "colors": [
+          "#b91c1c",
+          "#ef4444",
+          "#facc15"
+        ]
+      },
+      "particleCount": 16
+    },
+    {
+      "id": "pride",
+      "dates": [
+        {
+          "month": 6
+        }
+      ],
+      "particles": [
+        "⚧",
+        "⚢",
+        "⚣",
+        "⚥",
+        "♥",
+        "●"
+      ],
+      "colors": [
+        "#e40303",
+        "#ff8c00",
+        "#ffed00",
+        "#008026",
+        "#004dff",
+        "#750787"
+      ],
+      "physics": {
+        "size": 14,
+        "vx": 37.8,
+        "vy": [
+          -52.2,
+          -16.2
+        ],
+        "gravity": 66.6,
+        "glow": 6,
+        "stretch": 0,
+        "lifetime": [
+          0.88,
+          2.15
+        ],
+        "originSpreadX": 60,
+        "originSpreadY": 12,
+        "colorByAge": false,
+        "colors": [
+          "#e40303",
+          "#ff8c00",
+          "#ffed00",
+          "#008026",
+          "#004dff",
+          "#750787"
+        ]
+      },
+      "particleCount": 16
+    },
+    {
+      "id": "summer-solstice",
+      "dates": [
+        {
+          "month": 6,
+          "startDay": 20,
+          "endDay": 22
+        }
+      ],
+      "particles": [
+        "☀",
+        "☼",
+        "●",
+        "◉"
+      ],
+      "colors": [
+        "#fde68a",
+        "#f59e0b",
+        "#f97316"
+      ],
+      "physics": {
+        "size": 27,
+        "vx": 16.2,
+        "vy": [
+          -28.8,
+          -7.2
+        ],
+        "gravity": 36.0,
+        "stretch": 0,
+        "glow": 5,
+        "lifetime": [
+          0.88,
+          2.15
+        ],
+        "originSpreadX": 60,
+        "originSpreadY": 12,
+        "colorByAge": false,
+        "colors": [
+          "#fde68a",
+          "#f59e0b",
+          "#f97316"
+        ]
+      },
+      "priority": 10,
+      "particleCount": 16
+    },
+    {
+      "id": "canada-day",
+      "priority": 31,
+      "dates": [
+        {
+          "month": 7,
+          "endDay": 1
+        }
+      ],
+      "particles": [
+        "✦",
+        "❋",
+        "✶",
+        "•"
+      ],
+      "colors": [
+        "#d80621",
+        "#fff",
+        "#d80621"
+      ],
+      "physics": {
+        "size": 5,
+        "glow": 5
+      }
+    },
+    {
+      "id": "independence-day",
+      "priority": 30,
+      "dates": [
+        {
+          "month": 7,
+          "startDay": 1,
+          "endDay": 7
+        }
+      ],
+      "particles": [
+        "✦",
+        "★",
+        "✶",
+        "•"
+      ],
+      "particleCount": 48,
+      "colors": [
+        "#b22234",
+        "#fff",
+        "#3c3b6e"
+      ],
+      "physics": {
+        "size": 3
+      }
+    },
+    {
+      "id": "bastille-day",
+      "dates": [
+        {
+          "month": 7,
+          "startDay": 14,
+          "endDay": 14
+        }
+      ],
+      "particles": [
+        "✦",
+        "✷",
+        "✶",
+        "•"
+      ],
+      "colors": [
+        "#0055a4",
+        "#fff",
+        "#ef4135"
+      ],
+      "physics": {
+        "size": 5,
+        "glow": 5
+      }
+    },
+    {
+      "id": "perseids",
+      "dates": [
+        {
+          "month": 8,
+          "startDay": 11,
+          "endDay": 13
+        }
+      ],
+      "particles": [
+        "✦",
+        "✧",
+        "★",
+        "•"
+      ],
+      "colors": [
+        "#f8fafc",
+        "#38bdf8",
+        "#1e1b4b"
+      ],
+      "physics": {
+        "size": 5,
+        "vx": 180,
+        "vy": [
+          -185,
+          -65
+        ],
+        "gravity": 110,
+        "glow": 6
+      }
+    },
+    {
+      "id": "india-independence-day",
+      "priority": 30,
+      "dates": [
+        {
+          "month": 8,
+          "startDay": 15,
+          "endDay": 15
+        }
+      ],
+      "particleCount": 0,
+      "colors": [
+        "#ff9933",
+        "#fff",
+        "#138808"
+      ],
+      "flag": {
+        "src": "./india.svg",
+        "label": "Independence Day"
+      },
+      "link": "https://en.wikipedia.org/wiki/Independence_Day_(India)"
+    },
+    {
+      "id": "autumn-equinox",
+      "dates": [
+        {
+          "month": 9,
+          "startDay": 21,
+          "endDay": 23
+        }
+      ],
+      "particles": [
+        "◆",
+        "❦",
+        "❧",
+        "●"
+      ],
+      "colors": [
+        "#fbbf24",
+        "#f97316",
+        "#b45309"
+      ],
+      "physics": {
+        "size": 25,
+        "vx": 19.8,
+        "vy": [
+          -16.2,
+          -3.6
+        ],
+        "gravity": 30.6,
+        "stretch": 0,
+        "glow": 2,
+        "lifetime": [
+          0.88,
+          2.15
+        ],
+        "originSpreadX": 60,
+        "originSpreadY": 12,
+        "colorByAge": false,
+        "colors": [
+          "#fbbf24",
+          "#f97316",
+          "#b45309"
+        ]
+      },
+      "particleCount": 16
+    },
+    {
+      "id": "halloween",
+      "dates": [
+        {
+          "month": 10
+        }
+      ],
+      "particles": [
+        "◆",
+        "●",
+        "☠",
+        "✦"
+      ],
+      "particleCount": 12,
+      "colors": [
+        "#f97316",
+        "#7e22ce",
+        "#171717"
+      ],
+      "physics": {
+        "lifetime": [
+          2.73,
+          5.07
+        ],
+        "vx": 10.8,
+        "vy": [
+          -7.9,
+          -2.9
+        ],
+        "gravity": 10.1,
+        "drag": 1.2,
+        "spin": 5,
+        "stretch": 0,
+        "size": 29,
+        "glow": 1,
+        "colors": [
+          "#f97316",
+          "#7e22ce",
+          "#171717"
+        ],
+        "originSpreadX": 60,
+        "originSpreadY": 12,
+        "colorByAge": false
+      }
+    },
+    {
+      "id": "india-gandhi-jayanti",
+      "priority": 30,
+      "dates": [
+        {
+          "month": 10,
+          "startDay": 2,
+          "endDay": 2
+        }
+      ],
+      "particleCount": 0,
+      "colors": [
+        "#ff9933",
+        "#fff",
+        "#138808"
+      ],
+      "flag": {
+        "src": "./india.svg",
+        "label": "Gandhi Jayanti"
+      },
+      "link": "https://en.wikipedia.org/wiki/Gandhi_Jayanti"
+    },
+    {
+      "id": "bonfire-night",
+      "dates": [
+        {
+          "month": 11,
+          "startDay": 5,
+          "endDay": 5
+        }
+      ],
+      "particles": [
+        "✦",
+        "✷",
+        "✺",
+        "•"
+      ],
+      "colors": [
+        "#fde68a",
+        "#f97316",
+        "#7c2d12"
+      ],
+      "physics": {
+        "size": 5,
+        "glow": 7
+      }
+    },
+    {
+      "id": "diwali",
+      "priority": 25,
+      "dates": [
+        {
+          "month": 11,
+          "startDay": 8,
+          "endDay": 12
+        }
+      ],
+      "particles": [
+        "✦",
+        "✹",
+        "❉",
+        "•"
+      ],
+      "colors": [
+        "#fde68a",
+        "#f59e0b",
+        "#dc2626"
+      ],
+      "physics": {
+        "size": 6,
+        "glow": 7
+      }
+    },
+    {
+      "id": "winter-solstice",
+      "dates": [
+        {
+          "month": 12,
+          "startDay": 20,
+          "endDay": 22
+        }
+      ],
+      "particles": [
+        "✦",
+        "❄",
+        "❅",
+        "•"
+      ],
+      "colors": [
+        "#e0f2fe",
+        "#60a5fa",
+        "#1d4ed8"
+      ],
+      "physics": {
+        "size": 5,
+        "vx": 30,
+        "vy": [
+          0,
+          15
+        ],
+        "gravity": 25,
+        "glow": 4
+      }
+    },
+    {
+      "id": "christmas",
+      "priority": 20,
+      "dates": [
+        {
+          "month": 12,
+          "startDay": 23,
+          "endDay": 26
+        }
+      ],
+      "particles": [
+        "❄",
+        "❅",
+        "❆",
+        "★",
+        "●"
+      ],
+      "particleCount": 16,
+      "colors": [
+        "#dc2626",
+        "#fff",
+        "#16a34a"
+      ],
+      "physics": {
+        "lifetime": [
+          3.9,
+          6.83
+        ],
+        "vx": 6.5,
+        "vy": [
+          1.4,
+          4.3
+        ],
+        "gravity": 7.9,
+        "drag": 1.8,
+        "spin": 2,
+        "stretch": 0,
+        "size": 30,
+        "glow": 1,
+        "colors": [
+          "#dc2626",
+          "#fff",
+          "#16a34a"
+        ],
+        "originSpreadX": 60,
+        "originSpreadY": 12,
+        "colorByAge": false
+      }
+    },
+    {
+      "id": "new-years-eve",
+      "dates": [
+        {
+          "month": 12,
+          "startDay": 30,
+          "endDay": 31
+        }
+      ],
+      "particles": [
+        "✦",
+        "✧",
+        "✶",
+        "•"
+      ],
+      "colors": [
+        "#f59e0b",
+        "#f43f5e",
+        "#7c3aed"
+      ],
+      "physics": {
+        "size": 5,
+        "glow": 5
+      }
+    },
+    {
+      "id": "default",
+      "priority": -1,
+      "particleCount": 0
+    }
+  ]
+}

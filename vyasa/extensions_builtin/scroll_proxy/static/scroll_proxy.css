@@ -1,0 +1,61 @@
+html, body { scrollbar-width: none; }
+html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
+
+.vyasa-scroll-proxy {
+    --vyasa-scroll-proxy-start: color-mix(in srgb, var(--vyasa-primary, #2563eb) 78%, white);
+    --vyasa-scroll-proxy-end: var(--vyasa-primary, #2563eb);
+    --vyasa-scroll-proxy-colors: var(--vyasa-scroll-proxy-start), var(--vyasa-scroll-proxy-end);
+    position: fixed;
+    top: var(--vyasa-navbar-height, 3.75rem);
+    left: 0;
+    z-index: 1600;
+    width: 100%;
+    height: 4px;
+    pointer-events: none;
+}
+
+.vyasa-scroll-proxy-fill {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, var(--vyasa-scroll-proxy-colors));
+    box-shadow: 0 0 10px color-mix(in srgb, var(--vyasa-scroll-proxy-end) 70%, transparent);
+    transform: scaleX(var(--vyasa-scroll-progress, 0));
+    transform-origin: left center;
+    will-change: transform;
+}
+
+.vyasa-scroll-proxy-effects {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 1px;
+    height: 1px;
+}
+
+.vyasa-scroll-proxy-effects > span {
+    position: absolute;
+    opacity: 0;
+    line-height: 1;
+    border-radius: 50%;
+}
+
+.vyasa-scroll-proxy-flag {
+    position: absolute;
+    top: 0;
+    left: calc(var(--vyasa-scroll-position, 0%) - 160px);
+    width: 320px;
+    height: 200px;
+    pointer-events: none;
+    cursor: pointer;
+}
+
+.vyasa-scroll-proxy-flag canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .vyasa-scroll-proxy-effects { display: none; }
+}
