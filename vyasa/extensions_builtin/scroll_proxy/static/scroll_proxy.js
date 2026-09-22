@@ -51,6 +51,14 @@ function randomEnabled() {
     return new URL(import.meta.url).searchParams.get('random') === '1';
 }
 
+let stillOverride = null;
+
+function stillEnabled() {
+    if (stillOverride !== null) return stillOverride;
+    return new URL(import.meta.url).searchParams.get('still') === '1'
+        || (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
+
 function emitParticle(particle, bar, theme, stagger = 0) {
     if (!particle.isConnected) return;
     const physics = theme.physics;
@@ -172,7 +180,6 @@ function mountFlag(bar, theme) {
         holder.style.pointerEvents = pointOnFlag(outline, event.clientX - rect.left, event.clientY - rect.top) ? 'auto' : 'none';
     };
     if (theme.link) document.addEventListener('pointermove', hover, { passive: true });
-    const reduced = matchMedia('(prefers-reduced-motion: reduce)');
     const position = () => (parseFloat(bar.style.getPropertyValue('--vyasa-scroll-position')) || 0) * bar.clientWidth / 100;
     const windRecovery = Math.max(0.05, flag.physics?.windRecovery ?? 0.8);
     let frame = 0, previous = 0, pole = position(), remainder = 0, still = 0, cloth, flagHeight = 0;
@@ -180,9 +187,10 @@ function mountFlag(bar, theme) {
         if (!canvas.isConnected) return;
         remainder += Math.min((now - (previous || now)) / 1000, 0.05);
         const steps = Math.floor(remainder * 120), nextPole = position();
+        const animate = !stillEnabled();
         if (nextPole !== pole) still = windRecovery;
         still = Math.max(0, still - steps / 120);
-        for (let step = 0; step < steps && !reduced.matches; step++) cloth.step((nextPole - pole) / steps, 1 - still / windRecovery);
+        for (let step = 0; step < steps && animate; step++) cloth.step((nextPole - pole) / steps, 1 - still / windRecovery);
         remainder -= steps / 120; previous = now;
         if (steps) pole = nextPole;
         context.clearRect(0, 0, 320, 200);
@@ -235,7 +243,7 @@ function applyTheme(bar, theme) {
     } else ['colors', 'end'].forEach((name) => bar.style.removeProperty(`--vyasa-scroll-proxy-${name}`));
     const effects = bar.querySelector('.vyasa-scroll-proxy-effects');
     effects.getAnimations({ subtree: true }).forEach((animation) => animation.cancel());
-    effects.replaceChildren(...Array.from({ length: theme.particleCount || 0 }, (_, index) => {
+    effects.replaceChildren(...Array.from({ length: stillEnabled() ? 0 : theme.particleCount || 0 }, (_, index) => {
         const particle = document.createElement('span');
         particle.textContent = theme.particles[index % theme.particles.length] || '';
         return particle;
@@ -275,7 +283,11 @@ function installScrollProxy() {
     return bar;
 }
 
-globalThis.VyasaScrollProxy = { registerTheme: registerScrollProxyTheme, resolveTheme: resolveScrollProxyTheme, list: () => themes.map((theme) => theme.id), refresh: (id) => installedBar && applyTheme(installedBar, themes.find((theme) => theme.id === id) || resolveScrollProxyTheme(new Date(), randomEnabled())) };
+globalThis.VyasaScrollProxy = { setStill: (on) => {
+    stillOverride = on === null ? null : Boolean(on);
+    if (installedBar) applyTheme(installedBar, resolveScrollProxyTheme(new Date(), randomEnabled()));
+    return stillEnabled();
+}, registerTheme: registerScrollProxyTheme, resolveTheme: resolveScrollProxyTheme, list: () => themes.map((theme) => theme.id), refresh: (id) => installedBar && applyTheme(installedBar, themes.find((theme) => theme.id === id) || resolveScrollProxyTheme(new Date(), randomEnabled())) };
 
 if (typeof document !== 'undefined') {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', installScrollProxy, { once: true });
