@@ -27,6 +27,7 @@ def load_builtin_extensions():
     from . import mdx
     from . import rbac_admin
     from . import scoped_custom_css
+    from . import scroll_proxy
     from . import slides
     from . import sidebar_routes
     from . import table_of_contents
@@ -63,6 +64,7 @@ def load_builtin_extensions():
         document_edit.EXTENSION,
         table_of_contents.EXTENSION,
         scoped_custom_css.EXTENSION,
+        scroll_proxy.EXTENSION,
         code_tools.EXTENSION,
         link_preview.EXTENSION,
         default_favicon.EXTENSION,

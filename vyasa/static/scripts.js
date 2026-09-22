@@ -1302,36 +1302,6 @@ function initSidebarResizers(root = document) {
     bind('#toc-sidebar', 'toc', -1);
 }
 
-function initScrollProgress(root = document) {
-    const page = root.getElementById?.('page-container') || document.getElementById('page-container');
-    if (!page) return;
-    let bar = document.getElementById('vyasa-scroll-progress');
-    if (!bar) {
-        bar = document.createElement('div');
-        bar.id = 'vyasa-scroll-progress';
-        bar.className = 'vyasa-scroll-progress';
-        bar.setAttribute('aria-hidden', 'true');
-        page.appendChild(bar);
-    }
-    let frame = null;
-    const sync = () => {
-        if (frame !== null) return;
-        frame = window.requestAnimationFrame(() => {
-            frame = null;
-            const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-            const progress = Math.min(1, Math.max(0, window.scrollY / max));
-            bar.style.setProperty('--vyasa-scroll-progress', String(progress));
-        });
-    };
-    window.__vyasaSyncMobileScrollProgress = sync;
-    if (!window.__vyasaMobileScrollProgressBound) {
-        window.addEventListener('scroll', () => window.__vyasaSyncMobileScrollProgress?.(), { passive: true });
-        window.addEventListener('resize', () => window.__vyasaSyncMobileScrollProgress?.(), { passive: true });
-        window.__vyasaMobileScrollProgressBound = true;
-    }
-    sync();
-}
-
 function normalizeCriticalTextColors(root = document) {
     const ink = getComputedStyle(document.documentElement).getPropertyValue('--vyasa-ink').trim() || '#2d3434';
     root.querySelectorAll('#main-content h1, #main-content h2, #main-content h3, #main-content h4, #main-content h5, #main-content h6').forEach((el) => {
@@ -2406,7 +2376,6 @@ document.addEventListener('DOMContentLoaded', () => {
     syncHeadingActionStates(document);
     initScrollTopButton(document);
     initSidebarResizers(document);
-    initScrollProgress(document);
     syncThemePresetDebug(document);
     initFloatingUiDismiss();
     replaceEscapedDollarPlaceholders(document.body);
@@ -2454,7 +2423,6 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
     syncHeadingActionStates(document);
     initScrollTopButton(document);
     initSidebarResizers(event.target || document);
-    initScrollProgress(document);
     syncThemePresetDebug(document);
     replaceEscapedDollarPlaceholders(event.target);
     renderMathSafely(event.target);
