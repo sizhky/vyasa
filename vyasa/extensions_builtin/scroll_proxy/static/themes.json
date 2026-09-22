@@ -717,10 +717,11 @@
         }
       ],
       "particles": [
-        "◆",
-        "●",
-        "☠",
-        "✦"
+        "🎃",
+        "👻",
+        "🦇",
+        "🕷",
+        "🕸"
       ],
       "particleCount": 12,
       "colors": [
@@ -813,10 +814,10 @@
         }
       ],
       "particles": [
-        "✦",
-        "✹",
-        "❉",
-        "•"
+        "🪔",
+        "✨",
+        "🪷",
+        "🔥"
       ],
       "colors": [
         "#fde68a",
@@ -824,10 +825,23 @@
         "#dc2626"
       ],
       "physics": {
-        "size": 6,
-        "glow": 7
+        "size": 26,
+        "glow": 7,
+        "stretch": 0,
+        "vx": 30,
+        "vy": [
+          -45,
+          -12
+        ],
+        "gravity": 60,
+        "lifetime": [
+          1.4,
+          2.6
+        ],
+        "originSpreadX": 60,
+        "originSpreadY": 12
       },
-      "particleMode": "always"
+      "particleCount": 16
     },
     {
       "id": "winter-solstice",
@@ -872,11 +886,13 @@
         }
       ],
       "particles": [
-        "❄",
-        "❅",
-        "❆",
-        "★",
-        "●"
+        "🎄",
+        "❄️",
+        "🎁",
+        "⭐",
+        "🔔",
+        "🎅",
+        "🦌"
       ],
       "particleCount": 16,
       "colors": [

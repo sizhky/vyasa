@@ -40,6 +40,13 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
     border-radius: 50%;
 }
 
+.vyasa-scroll-proxy-effects > span[data-image] {
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    border-radius: 0;
+}
+
 .vyasa-scroll-proxy-flag {
     position: absolute;
     top: 0;

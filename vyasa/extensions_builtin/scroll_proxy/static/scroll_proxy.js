@@ -55,14 +55,22 @@ export function registerScrollProxyTheme(theme, defer = false) {
     return true;
 }
 
+function resolveThemeAssets(theme, base) {
+    const patch = {};
+    if (theme.flag?.src) patch.flag = { src: new URL(theme.flag.src, base).href };
+    if (theme.particles?.some((entry) => entry?.src)) patch.particles = theme.particles
+        .map((entry) => entry?.src ? { ...entry, src: new URL(entry.src, base).href } : entry);
+    return Object.keys(patch).length ? merge(theme, patch) : theme;
+}
+
 async function loadScrollProxyThemes() {
     const extra = new URL(import.meta.url).searchParams.get('themes') || '';
     const sources = ['./themes.json', ...extra.split(',')].map((source) => source.trim()).filter(Boolean);
     for (const source of sources) {
         const base = new URL(source, import.meta.url).href;
         const payload = await fetch(base).then((response) => response.ok ? response.json() : null).catch(() => null);
-        (Array.isArray(payload) ? payload : payload?.themes || []).forEach((theme) => registerScrollProxyTheme(
-            theme.flag?.src ? merge(theme, { flag: { src: new URL(theme.flag.src, base).href } }) : theme, true));
+        (Array.isArray(payload) ? payload : payload?.themes || [])
+            .forEach((theme) => registerScrollProxyTheme(resolveThemeAssets(theme, base), true));
     }
     (globalThis.VyasaScrollProxyThemes || []).forEach((theme) => registerScrollProxyTheme(theme, true));
     const theme = currentTheme();
@@ -137,6 +145,7 @@ function emitParticle(particle, bar, theme, stagger = null) {
     const resistance = Math.max(0, physics.drag);
     particle.style.fontSize = `${physics.size}px`;
     particle.style.width = particle.style.height = `${physics.size}px`;
+    const painted = Boolean(particle.textContent) || 'image' in particle.dataset;
     const swatch = physics.colors[Math.floor(Math.random() * physics.colors.length)];
     const origin = parseFloat(bar.style.getPropertyValue('--vyasa-scroll-position')) / 100 * bar.clientWidth || 0;
     const originX = origin + (Math.random() * 2 - 1) * physics.originSpreadX;
@@ -155,7 +164,7 @@ function emitParticle(particle, bar, theme, stagger = null) {
             transform: `translate(${originX + vx * travel}px, ${originY + vy * travel + physics.gravity * fall}px) rotate(${Math.atan2(dy, dx) * physics.stretch + spin * time}rad) scale(${1 + physics.stretch * (Math.max(0.4, Math.hypot(dx, dy) / 35) - 1)}, ${1 - age * 0.7 * physics.stretch})`,
             opacity: Math.min(1, age * 16) * (1 - age) ** 1.5,
             color,
-            backgroundColor: particle.textContent ? 'transparent' : color,
+            backgroundColor: painted ? 'transparent' : color,
             filter: `drop-shadow(0 0 ${physics.glow}px ${color})`,
         };
     });
@@ -311,8 +320,12 @@ function applyTheme(bar, theme) {
     const effects = bar.querySelector('.vyasa-scroll-proxy-effects');
     effects.getAnimations({ subtree: true }).forEach((animation) => animation.cancel());
     effects.replaceChildren(...Array.from({ length: stillEnabled() ? 0 : theme.particleCount || 0 }, (_, index) => {
+        const entry = theme.particles[index % theme.particles.length];
         const particle = document.createElement('span');
-        particle.textContent = theme.particles[index % theme.particles.length] || '';
+        if (entry?.src) {
+            particle.dataset.image = '';
+            particle.style.backgroundImage = `url("${encodeURI(entry.src)}")`;
+        } else particle.textContent = entry || '';
         return particle;
     }));
     activeTheme = theme;
