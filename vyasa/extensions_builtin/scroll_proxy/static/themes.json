@@ -5,7 +5,7 @@
       "dates": [
         {
           "month": 1,
-          "endDay": 2
+          "endDay": 3
         }
       ],
       "particles": [
@@ -22,7 +22,8 @@
       "physics": {
         "size": 5,
         "glow": 5
-      }
+      },
+      "particleMode": "always"
     },
     {
       "id": "india-republic-day",
@@ -30,8 +31,8 @@
       "dates": [
         {
           "month": 1,
-          "startDay": 26,
-          "endDay": 26
+          "startDay": 25,
+          "endDay": 27
         }
       ],
       "particleCount": 0,
@@ -74,7 +75,8 @@
       "physics": {
         "size": 5,
         "glow": 6
-      }
+      },
+      "particleMode": "always"
     },
     {
       "id": "valentines-day",
@@ -176,10 +178,7 @@
         }
       ],
       "particles": [
-        "π",
-        "∑",
-        "∞",
-        "●"
+        "π"
       ],
       "colors": [
         "#0ea5e9",
@@ -555,7 +554,8 @@
       "physics": {
         "size": 5,
         "glow": 5
-      }
+      },
+      "particleMode": "always"
     },
     {
       "id": "independence-day",
@@ -581,7 +581,8 @@
       ],
       "physics": {
         "size": 3
-      }
+      },
+      "particleMode": "always"
     },
     {
       "id": "bastille-day",
@@ -606,7 +607,8 @@
       "physics": {
         "size": 5,
         "glow": 5
-      }
+      },
+      "particleMode": "always"
     },
     {
       "id": "perseids",
@@ -637,7 +639,8 @@
         ],
         "gravity": 110,
         "glow": 6
-      }
+      },
+      "particleMode": "always"
     },
     {
       "id": "india-independence-day",
@@ -645,8 +648,8 @@
       "dates": [
         {
           "month": 8,
-          "startDay": 15,
-          "endDay": 15
+          "startDay": 14,
+          "endDay": 16
         }
       ],
       "particleCount": 0,
@@ -757,8 +760,8 @@
       "dates": [
         {
           "month": 10,
-          "startDay": 2,
-          "endDay": 2
+          "startDay": 1,
+          "endDay": 3
         }
       ],
       "particleCount": 0,
@@ -796,7 +799,8 @@
       "physics": {
         "size": 5,
         "glow": 7
-      }
+      },
+      "particleMode": "always"
     },
     {
       "id": "diwali",
@@ -822,7 +826,8 @@
       "physics": {
         "size": 6,
         "glow": 7
-      }
+      },
+      "particleMode": "always"
     },
     {
       "id": "winter-solstice",
@@ -853,7 +858,8 @@
         ],
         "gravity": 25,
         "glow": 4
-      }
+      },
+      "particleMode": "always"
     },
     {
       "id": "christmas",
@@ -927,7 +933,8 @@
       "physics": {
         "size": 5,
         "glow": 5
-      }
+      },
+      "particleMode": "always"
     },
     {
       "id": "default",
