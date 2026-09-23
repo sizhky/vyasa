@@ -243,10 +243,11 @@ export function createFlagCloth(width, height, { foldStiffness = 0.15, gravity =
         if (burstLeft > 0) burstLeft -= 1 / 120;
         else if (calmLeft > 0) calmLeft -= 1 / 120;
         else if (strength) {
-            burstSpan = Math.max(0.05, windBurstLength) * (0.5 + Math.random());
+            const strongGust = Math.random() < 0.5;
+            burstSpan = Math.max(0.05, windBurstLength) * (0.5 + Math.random()) * (strongGust ? 1.75 : 1);
             burstLeft = burstSpan;
             calmLeft = Math.max(0, windCalm) * (0.3 + 1.4 * Math.random());
-            const power = Math.random() < 0.18 ? 1.2 + Math.random() * 0.8 : 0.4 + Math.random() * 0.6;
+            const power = strongGust ? 5 + Math.random() * 5 : 0.4 + Math.random() * 0.6;
             burstPower = power * (Math.random() < Math.max(0, Math.min(1, windReversal)) ? -1 : 1);
             burstSide = Math.random() * 2 - 1;
         }
@@ -284,13 +285,23 @@ export function pointOnFlag(outline, x, y) {
     });
 }
 
+function expandedTriangle([a, b, c], padding) {
+    const center = { x: (a.x + b.x + c.x) / 3, y: (a.y + b.y + c.y) / 3 };
+    return [a, b, c].map((point) => {
+        const dx = point.x - center.x, dy = point.y - center.y;
+        const distance = Math.hypot(dx, dy) || 1;
+        return { x: point.x + dx / distance * padding, y: point.y + dy / distance * padding };
+    });
+}
+
 function mountFlag(bar, theme) {
     const flag = theme.flag;
     const canvas = document.createElement('canvas'), image = new Image();
-    canvas.width = 640; canvas.height = 400;
+    const pixelRatio = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    canvas.width = 320 * pixelRatio; canvas.height = 200 * pixelRatio;
     const context = canvas.getContext('2d');
     if (!context) return () => {};
-    context.scale(2, 2);
+    context.scale(pixelRatio, pixelRatio);
     const holder = document.createElement(theme.link ? 'a' : 'span');
     holder.className = 'vyasa-scroll-proxy-flag';
     holder.title = themeHoverTitle(flag.label, theme);
@@ -349,12 +360,13 @@ function mountFlag(bar, theme) {
         const depth = (triangle) => triangle.reduce((sum, i) => sum + cloth.points[i].p[2], 0);
         [...cloth.triangles].sort((a, b) => depth(a) - depth(b)).forEach((triangle) => {
             const [a, b, c] = triangle.map((i) => vertices[i]);
+            const [clipA, clipB, clipC] = expandedTriangle([a, b, c], 0.5);
             const det = (b.u - a.u) * (c.v - a.v) - (c.u - a.u) * (b.v - a.v);
             const xx = ((b.x - a.x) * (c.v - a.v) - (c.x - a.x) * (b.v - a.v)) / det;
             const xy = ((b.y - a.y) * (c.v - a.v) - (c.y - a.y) * (b.v - a.v)) / det;
             const yx = ((c.x - a.x) * (b.u - a.u) - (b.x - a.x) * (c.u - a.u)) / det;
             const yy = ((c.y - a.y) * (b.u - a.u) - (b.y - a.y) * (c.u - a.u)) / det;
-            context.save(); context.beginPath(); context.moveTo(a.x, a.y); context.lineTo(b.x, b.y); context.lineTo(c.x, c.y); context.closePath(); context.clip();
+            context.save(); context.beginPath(); context.moveTo(clipA.x, clipA.y); context.lineTo(clipB.x, clipB.y); context.lineTo(clipC.x, clipC.y); context.closePath(); context.clip();
             context.transform(xx, xy, yx, yy, a.x - xx * a.u - yx * a.v, a.y - xy * a.u - yy * a.v);
             context.drawImage(image, 0, 0); context.restore();
         });
