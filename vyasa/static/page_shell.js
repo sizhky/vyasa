@@ -96,31 +96,25 @@ function findTextFragmentRange(root, target) {
     return null;
 }
 
-function removeTextFragmentRange(range) {
-    textFragmentRanges.delete(range);
-    if (globalThis.CSS?.highlights) {
-        if (textFragmentRanges.size && typeof Highlight !== 'undefined') globalThis.CSS.highlights.set('vyasa-text-fragment', new Highlight(...textFragmentRanges));
-        else globalThis.CSS.highlights.delete('vyasa-text-fragment');
-    }
-}
-
 export function jumpToTextFragment(root, href) {
     const target = textFragmentTarget(href);
     if (!root || !target?.start) return false;
     const previous = recentTextFragments.get(root);
-    if (previous?.href === href && previous.expiresAt > Date.now()) return true;
+    if (previous?.href === href) return true;
     const range = findTextFragmentRange(root, target);
     if (!range) return false;
     if (globalThis.CSS?.highlights && typeof Highlight !== 'undefined') {
+        for (const activeRange of textFragmentRanges) {
+            if (!activeRange.startContainer.isConnected) textFragmentRanges.delete(activeRange);
+        }
         textFragmentRanges.add(range);
         globalThis.CSS.highlights.set('vyasa-text-fragment', new Highlight(...textFragmentRanges));
-        window.setTimeout(() => removeTextFragmentRange(range), 15000);
     }
     for (let element = range.startContainer.parentElement; element && element !== root; element = element.parentElement) {
         if (element.matches('.vyasa-heading-fold')) element.open = true;
     }
     range.startContainer.parentElement?.scrollIntoView({ block: 'center' });
-    recentTextFragments.set(root, { href, expiresAt: Date.now() + 15000 });
+    recentTextFragments.set(root, { href });
     return true;
 }
 

@@ -29,8 +29,9 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
     position: absolute; z-index: 1; top: 50%; left: var(--vyasa-scroll-position, 0%);
     display: grid; place-items: center; width: 12px; height: 12px; overflow: hidden;
     transform: translate(-50%, -50%); border: 1px solid white; border-radius: 999px;
-    background: var(--vyasa-scroll-proxy-end); box-shadow: 0 0 8px var(--vyasa-scroll-proxy-end);
-    color: white; text-decoration: none; pointer-events: auto;
+    background: var(--vyasa-scroll-proxy-tip-background, var(--vyasa-scroll-proxy-end));
+    box-shadow: 0 0 8px var(--vyasa-scroll-proxy-end);
+    color: var(--vyasa-scroll-proxy-tip-color, white); text-decoration: none; pointer-events: auto;
     transition: width 150ms ease, height 150ms ease, border-radius 150ms ease;
 }
 .vyasa-scroll-proxy-tip:hover, .vyasa-scroll-proxy-tip:focus-visible {

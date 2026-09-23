@@ -69,6 +69,17 @@ function themeTip(theme) {
     return theme.tip?.link && (theme.tip.src || theme.tip.emoji) ? theme.tip : null;
 }
 
+function themeHoverTitle(label, theme) {
+    const title = label || theme.id;
+    if (!randomEnabled() || dateOverride || requestedThemeId() || !theme.flag?.src) return title;
+    const dates = (theme.dates || []).map(({ month, startDay = 1, endDay = 31 }) => {
+        const start = `${String(month).padStart(2, '0')}-${String(startDay).padStart(2, '0')}`;
+        const end = `${String(month).padStart(2, '0')}-${String(endDay).padStart(2, '0')}`;
+        return startDay === endDay ? start : `${start} to ${end}`;
+    });
+    return dates.length ? `${title}\nDev mode: this flag would be shown on ${dates.join(', ')} every year` : title;
+}
+
 function mountTip(bar, theme) {
     const tip = themeTip(theme);
     if (!tip) return () => {};
@@ -79,7 +90,9 @@ function mountTip(bar, theme) {
     link.className = 'vyasa-scroll-proxy-tip';
     link.href = destination.href;
     link.setAttribute('aria-label', tip.label || theme.id);
-    link.title = tip.label || theme.id;
+    link.title = themeHoverTitle(tip.label, theme);
+    if (tip.color) link.style.setProperty('--vyasa-scroll-proxy-tip-color', tip.color);
+    if (tip.background) link.style.setProperty('--vyasa-scroll-proxy-tip-background', tip.background);
     if (destination.origin !== location.origin) { link.target = '_blank'; link.rel = 'noopener noreferrer'; }
     if (tip.src) {
         const image = document.createElement('img');
@@ -106,6 +119,7 @@ async function loadScrollProxyThemes() {
 
 function themeReason() {
     if (dateOverride) return previewDate().toDateString();
+    if (requestedThemeId()) return `theme query: ${requestedThemeId()}`;
     return randomEnabled() ? 'random mode' : previewDate().toDateString();
 }
 
@@ -133,6 +147,10 @@ function randomEnabled() {
     return new URL(import.meta.url).searchParams.get('random') === '1';
 }
 
+function requestedThemeId() {
+    return typeof location === 'undefined' ? '' : new URLSearchParams(location.search).get('scroll_proxy_theme')?.trim() || '';
+}
+
 let stillOverride = null;
 
 export function parseScrollProxyDate(stamp, today = new Date()) {
@@ -151,6 +169,10 @@ function previewDate() {
 
 // an explicitly requested date is a question about the calendar, so random mode must not answer it
 function currentTheme() {
+    if (!dateOverride) {
+        const id = requestedThemeId();
+        if (id) return themes.find((theme) => theme.id === id) || themes.find((theme) => theme.id === 'default');
+    }
     return resolveScrollProxyTheme(previewDate(), dateOverride ? false : randomEnabled());
 }
 
@@ -215,19 +237,21 @@ export function createFlagCloth(width, height, { foldStiffness = 0.15, gravity =
         if (a.u < 1 && a.v < 1) triangles.push([i, i + 1, i + 10], [i, i + 10, i + 9]);
     });
     let quiet = 0, wavePhase = 0, burstLeft = 0, burstSpan = 1, burstPower = 0, burstSide = 0, calmLeft = 0;
-    return { points, triangles, step(movement = 0, windScale = 1) {
+    return { points, triangles, step(movement = 0, windScale = 1, dampingScale = 1, scrollWind = 0) {
         const strength = Math.max(0, windStrength) * windScale;
+        const inertia = damping * Math.max(0, Math.min(1, dampingScale));
         if (burstLeft > 0) burstLeft -= 1 / 120;
         else if (calmLeft > 0) calmLeft -= 1 / 120;
         else if (strength) {
             burstSpan = Math.max(0.05, windBurstLength) * (0.5 + Math.random());
             burstLeft = burstSpan;
             calmLeft = Math.max(0, windCalm) * (0.3 + 1.4 * Math.random());
-            burstPower = (0.4 + Math.random() * 0.6) * (Math.random() < Math.max(0, Math.min(1, windReversal)) ? -1 : 1);
+            const power = Math.random() < 0.18 ? 1.2 + Math.random() * 0.8 : 0.4 + Math.random() * 0.6;
+            burstPower = power * (Math.random() < Math.max(0, Math.min(1, windReversal)) ? -1 : 1);
             burstSide = Math.random() * 2 - 1;
         }
         const envelope = burstLeft > 0 ? burstPower * Math.sin(Math.PI * (1 - burstLeft / burstSpan)) : 0;
-        const wind = [strength * envelope, strength * Math.abs(envelope) * burstSide * 0.6];
+        const wind = [strength * envelope + scrollWind, strength * Math.abs(envelope) * burstSide * 0.6];
         wavePhase += Math.max(0, Math.min(20, flutterSpeed)) * Math.PI / 60;
         const ripple = (point, offset) => Math.abs(wind[0]) * flutter * point.u * Math.sin(wavePhase - point.u * flutterWaves * Math.PI * 2 + offset);
         const force = (point, axis) => axis === 1 ? gravity + ripple(point, 0) * 0.5
@@ -239,7 +263,7 @@ export function createFlagCloth(width, height, { foldStiffness = 0.15, gravity =
         points.forEach((point, i) => {
             if (!point.weight) return;
             point.p[0] -= movement; point.previous[0] -= movement;
-            point.p = point.p.map((value, axis) => value + (value - point.previous[axis]) * damping + force(point, axis) / 14400);
+            point.p = point.p.map((value, axis) => value + (value - point.previous[axis]) * inertia + force(point, axis) / 14400);
             point.previous = before[i].map((value, axis) => value - (axis === 0 ? movement : 0));
         });
         for (let iteration = 0; iteration < 8; iteration++) links.forEach(({ a, b, length, stiffness }) => {
@@ -269,11 +293,12 @@ function mountFlag(bar, theme) {
     context.scale(2, 2);
     const holder = document.createElement(theme.link ? 'a' : 'span');
     holder.className = 'vyasa-scroll-proxy-flag';
+    holder.title = themeHoverTitle(flag.label, theme);
+    holder.setAttribute('aria-label', flag.label || theme.id);
     if (theme.link) {
         holder.href = theme.link;
         holder.target = '_blank';
         holder.rel = 'noopener noreferrer';
-        holder.setAttribute('aria-label', flag.label || theme.id);
     }
     holder.appendChild(canvas);
     bar.appendChild(holder);
@@ -285,15 +310,36 @@ function mountFlag(bar, theme) {
     if (theme.link) document.addEventListener('pointermove', hover, { passive: true });
     const position = () => (parseFloat(bar.style.getPropertyValue('--vyasa-scroll-position')) || 0) * bar.clientWidth / 100;
     const windRecovery = Math.max(0.05, flag.physics?.windRecovery ?? 0.8);
-    let frame = 0, previous = 0, pole = position(), remainder = 0, still = 0, cloth, flagHeight = 0;
+    let frame = 0, previous = 0, pole = position(), remainder = 0, still = 0, settle = 0, poleVelocity = 0, scrollLag = 0, cloth, flagHeight = 0;
     const draw = (now) => {
         if (!canvas.isConnected) return;
         remainder += Math.min((now - (previous || now)) / 1000, 0.05);
         const steps = Math.floor(remainder * 120), nextPole = position();
         const animate = !stillEnabled();
+        const elapsed = steps / 120;
         if (nextPole !== pole) still = windRecovery;
-        still = Math.max(0, still - steps / 120);
-        for (let step = 0; step < steps && animate; step++) cloth.step((nextPole - pole) / steps, 1 - still / windRecovery);
+        still = Math.max(0, still - elapsed);
+        if (steps && animate) {
+            const lagScale = flagHeight * image.naturalWidth / image.naturalHeight * 0.55;
+            const previousLag = scrollLag;
+            const velocity = (nextPole - pole) / elapsed;
+            const speedChange = Math.abs(velocity) - Math.abs(poleVelocity);
+            const threshold = Math.max(12, Math.abs(poleVelocity) * 0.08);
+            const accelerating = poleVelocity * velocity >= 0 && speedChange > threshold;
+            const decelerating = speedChange < -threshold;
+            if (accelerating) settle = 0;
+            else if (decelerating) settle = 0.28;
+            else settle = Math.max(0, settle - elapsed);
+            const scrollDrive = (nextPole - pole) * (accelerating ? 0.34 : settle ? 0.04 : 0.16)
+                / (1 + Math.abs(scrollLag) / lagScale);
+            scrollLag = (scrollLag + scrollDrive) * Math.exp(-elapsed / (settle ? 0.14 : accelerating ? 0.5 : 0.3));
+            const movement = (scrollLag - previousLag) / steps;
+            const wind = (1 - still / windRecovery) * (settle ? 0.35 : 1);
+            const dampingScale = settle ? 0.96 : 1;
+            const scrollWind = Math.max(-1400, Math.min(1400, -velocity * 2.5)) * (settle ? 0.45 : 1);
+            for (let step = 0; step < steps; step++) cloth.step(movement, wind, dampingScale, scrollWind);
+            poleVelocity = velocity;
+        }
         remainder -= steps / 120; previous = now;
         if (steps) pole = nextPole;
         context.clearRect(0, 0, 320, 200);

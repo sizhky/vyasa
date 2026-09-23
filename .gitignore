@@ -6,7 +6,6 @@ demo/sf-trip-palettes.json
 .gemini/
 agents/
 .github/
-!vyasa/extensions_builtin/scroll_proxy/static/*.svg
 tasks-ui/node_modules/
 docs/*
 !docs/readme-overhaul-20260920.md
