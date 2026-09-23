@@ -71,7 +71,7 @@ function themeTip(theme) {
 
 function themeHoverTitle(label, theme) {
     const title = label || theme.id;
-    if (!randomEnabled() || dateOverride || !theme.flag?.src) return title;
+    if (!randomEnabled() || dateOverride || requestedThemeId() || !theme.flag?.src) return title;
     const dates = (theme.dates || []).map(({ month, startDay = 1, endDay = 31 }) => {
         const start = `${String(month).padStart(2, '0')}-${String(startDay).padStart(2, '0')}`;
         const end = `${String(month).padStart(2, '0')}-${String(endDay).padStart(2, '0')}`;
@@ -119,6 +119,7 @@ async function loadScrollProxyThemes() {
 
 function themeReason() {
     if (dateOverride) return previewDate().toDateString();
+    if (requestedThemeId()) return `theme query: ${requestedThemeId()}`;
     return randomEnabled() ? 'random mode' : previewDate().toDateString();
 }
 
@@ -146,6 +147,10 @@ function randomEnabled() {
     return new URL(import.meta.url).searchParams.get('random') === '1';
 }
 
+function requestedThemeId() {
+    return typeof location === 'undefined' ? '' : new URLSearchParams(location.search).get('scroll_proxy_theme')?.trim() || '';
+}
+
 let stillOverride = null;
 
 export function parseScrollProxyDate(stamp, today = new Date()) {
@@ -164,6 +169,10 @@ function previewDate() {
 
 // an explicitly requested date is a question about the calendar, so random mode must not answer it
 function currentTheme() {
+    if (!dateOverride) {
+        const id = requestedThemeId();
+        if (id) return themes.find((theme) => theme.id === id) || themes.find((theme) => theme.id === 'default');
+    }
     return resolveScrollProxyTheme(previewDate(), dateOverride ? false : randomEnabled());
 }
 
