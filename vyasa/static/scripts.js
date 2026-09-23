@@ -215,6 +215,23 @@ function initHeadingLevelCopy(root = document) {
     });
 }
 
+function initUnknownTagMarkers(root = document) {
+    const elements = root instanceof Element && root.matches('*') ? [root, ...root.querySelectorAll('*')] : root.querySelectorAll('*');
+    elements.forEach((element) => {
+        if (!(element instanceof HTMLUnknownElement) || element.hasAttribute('data-vyasa-tag-markers')) return;
+        if (!element.closest('#main-content, [data-vyasa-editor-preview]')) return;
+        if (element.closest('a, code, pre, script, style, textarea, title')) return;
+        const parent = element.parentElement;
+        if (parent instanceof HTMLUnknownElement && parent.tagName === element.tagName
+            && !element.textContent.trim() && !element.children.length) return;
+        const tag = element.tagName.toLowerCase();
+        element.classList.add('vyasa-unknown-tag-markers');
+        element.dataset.vyasaTagMarkers = 'true';
+        element.dataset.vyasaTagOpen = `<${tag}>`;
+        element.dataset.vyasaTagClose = `</${tag}>`;
+    });
+}
+
 function assetAlreadyInstalled(tagName, url) {
     if (!url) return true;
     if (tagName === 'LINK') {
@@ -2397,6 +2414,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.__vyasaInitPostsSearchPersistence?.(document);
     initHeadingPermalinkCopy(document);
     initHeadingLevelCopy(document);
+    initUnknownTagMarkers(document);
     window.__vyasaInitCodeTools?.(document);
     window.__vyasaInitSearchClearButtons?.(document);
     ensurePdfFocusState();
@@ -2433,6 +2451,7 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
     syncPostsHoverToggleButtons(event.target || document);
     initHeadingPermalinkCopy(event.target);
     initHeadingLevelCopy(event.target);
+    initUnknownTagMarkers(event.target);
     window.__vyasaInitCodeTools?.(event.target);
     window.__vyasaInitSearchClearButtons?.(event.target);
     ensurePdfFocusState();
