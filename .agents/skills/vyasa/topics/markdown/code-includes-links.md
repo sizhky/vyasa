@@ -82,7 +82,8 @@ Use a text fragment to jump to a word or phrase in the rendered document:
 - `#:~:text=...` finds the first case-insensitive match, with repeated whitespace treated as one space.
 - Use `prefix-,target,-suffix` to select a later match by its surrounding text; only `target` is highlighted.
 - Encode spaces and URL-reserved characters in the phrase, such as `%20` for spaces.
-- The page scrolls to the match and highlights it for 15 seconds. Cmd/Ctrl-hover previews load the full Markdown document, then use the same first-match jump and highlight.
+- Clicking an internal text-fragment link loads the destination document so the browser can apply the fragment. The match stays highlighted until navigation.
+- Cmd/Ctrl-hover previews load the full Markdown document, then use the same match and persistent highlight.
 - Without prefix or suffix context, the first occurrence wins. Include enough surrounding text to identify another occurrence.
 
 ## Code File Links
