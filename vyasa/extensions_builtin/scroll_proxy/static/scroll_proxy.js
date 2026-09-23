@@ -1,6 +1,7 @@
 const themes = [];
 let installedBar = null;
 let stopFlag = () => {};
+let stopTip = () => {};
 const scrollMotion = { y: 0, velocity: 0, time: 0, movedAt: -Infinity };
 const SCROLL_EMIT_WINDOW = 400;
 let activeTheme = null;
@@ -58,9 +59,34 @@ export function registerScrollProxyTheme(theme, defer = false) {
 function resolveThemeAssets(theme, base) {
     const patch = {};
     if (theme.flag?.src) patch.flag = { src: new URL(theme.flag.src, base).href };
+    if (theme.tip?.src) patch.tip = { src: new URL(theme.tip.src, base).href };
     if (theme.particles?.some((entry) => entry?.src)) patch.particles = theme.particles
         .map((entry) => entry?.src ? { ...entry, src: new URL(entry.src, base).href } : entry);
     return Object.keys(patch).length ? merge(theme, patch) : theme;
+}
+
+function themeTip(theme) {
+    return theme.tip?.link && (theme.tip.src || theme.tip.emoji) ? theme.tip : null;
+}
+
+function mountTip(bar, theme) {
+    const tip = themeTip(theme);
+    if (!tip) return () => {};
+    let destination;
+    try { destination = new URL(tip.link, location.href); } catch { return () => {}; }
+    if (!['http:', 'https:'].includes(destination.protocol)) return () => {};
+    const link = document.createElement('a');
+    link.className = 'vyasa-scroll-proxy-tip';
+    link.href = destination.href;
+    link.setAttribute('aria-label', tip.label || theme.id);
+    link.title = tip.label || theme.id;
+    if (destination.origin !== location.origin) { link.target = '_blank'; link.rel = 'noopener noreferrer'; }
+    if (tip.src) {
+        const image = document.createElement('img');
+        image.src = tip.src; image.alt = ''; link.appendChild(image);
+    } else link.textContent = tip.emoji;
+    bar.appendChild(link);
+    return () => link.remove();
 }
 
 async function loadScrollProxyThemes() {
@@ -87,6 +113,7 @@ export function describeScrollProxyTheme(theme, reason) {
     if (!theme) return `no theme matched ${reason}`;
     const notes = [`${theme.particleCount || 0} particles (${theme.particleMode})`];
     if (theme.flag?.src) notes.push('flag');
+    if (themeTip(theme)) notes.push('tip');
     if (stillEnabled()) notes.push('still');
     return `${theme.id} — ${reason} — ${notes.join(', ')}`;
 }
@@ -309,6 +336,8 @@ export function scrollProxyStops(colors) {
 function applyTheme(bar, theme) {
     if (!theme) return;
     stopFlag();
+    stopTip();
+    stopTip = mountTip(bar, theme);
     stopFlag = theme.flag?.src ? mountFlag(bar, theme) : () => {};
     bar.dataset.vyasaScrollTheme = theme.id;
     bar.dataset.vyasaScrollEffect = theme.effect || 'none';
