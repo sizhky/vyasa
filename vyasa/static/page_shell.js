@@ -5,6 +5,118 @@ let markdownHydrator = () => {};
 const loadedScripts = new Map();
 const SCRIPT_PROBE_MS = 50;
 const SCRIPT_PROBE_LIMIT_MS = 10000;
+const recentTextFragments = new WeakMap();
+const textFragmentRanges = new Set();
+
+function textFragmentTarget(href) {
+    try {
+        const fragment = new URL(href || window.location.href, window.location.href).hash.slice(1);
+        const directive = fragment.indexOf(':~:');
+        if (directive < 0) return null;
+        const rawText = fragment.slice(directive + 3).split('&').find((part) => part.startsWith('text='))?.slice(5);
+        if (!rawText) return null;
+        const parts = rawText.split(',');
+        const decode = (value) => decodeURIComponent(value).trim();
+        let prefix = '';
+        let suffix = '';
+        if (parts.length > 1 && parts[0].endsWith('-')) prefix = decode(parts.shift().slice(0, -1));
+        if (parts.length > 1 && parts.at(-1).startsWith('-')) suffix = decode(parts.pop().slice(1));
+        if (!parts.length || parts.length > 2) return null;
+        return { prefix, start: decode(parts[0]), end: parts[1] ? decode(parts[1]) : '', suffix };
+    } catch (_) {
+        return null;
+    }
+}
+
+function normalizedText(value) {
+    return String(value || '').toLocaleLowerCase().replace(/\s+/gu, ' ').trim();
+}
+
+function findTextFragmentRange(root, target) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+            return node.parentElement?.closest('script,style,noscript,template,[hidden],[aria-hidden="true"]')
+                ? NodeFilter.FILTER_REJECT
+                : NodeFilter.FILTER_ACCEPT;
+        },
+    });
+    const map = [];
+    let text = '';
+    let previousBlock = null;
+    while (walker.nextNode()) {
+        const node = walker.currentNode;
+        const block = node.parentElement?.closest('p,li,td,th,blockquote,pre,h1,h2,h3,h4,h5,h6,div,section,article') || root;
+        if (previousBlock && block !== previousBlock && text && !text.endsWith(' ')) {
+            text += ' ';
+            map.push(null);
+        }
+        previousBlock = block;
+        const value = node.textContent || '';
+        for (let offset = 0; offset < value.length;) {
+            const char = String.fromCodePoint(value.codePointAt(offset));
+            const end = offset + char.length;
+            const lowered = char.toLocaleLowerCase();
+            if (/\s/u.test(char)) {
+                if (!text.endsWith(' ')) {
+                    text += ' ';
+                    map.push({ node, start: offset, end });
+                } else if (map.at(-1)?.node === node) {
+                    map.at(-1).end = end;
+                }
+            } else {
+                for (let index = 0; index < lowered.length; index += 1) {
+                    text += lowered[index];
+                    map.push({ node, start: offset, end });
+                }
+            }
+            offset = end;
+        }
+    }
+    const needle = normalizedText(target.start);
+    const endNeedle = normalizedText(target.end);
+    const prefix = normalizedText(target.prefix);
+    const suffix = normalizedText(target.suffix);
+    if (!needle) return null;
+    let start = text.indexOf(needle);
+    while (start >= 0) {
+        const endStart = endNeedle ? text.indexOf(endNeedle, start + needle.length) : start;
+        const end = endStart < 0 ? -1 : endStart + (endNeedle ? endNeedle.length : needle.length);
+        if (end >= 0 && (!prefix || text.slice(0, start).trimEnd().endsWith(prefix)) && (!suffix || text.slice(end).trimStart().startsWith(suffix))) {
+            const first = map[start];
+            const last = map[end - 1];
+            if (first && last) {
+                const range = document.createRange();
+                range.setStart(first.node, first.start);
+                range.setEnd(last.node, last.end);
+                return range;
+            }
+        }
+        start = text.indexOf(needle, start + 1);
+    }
+    return null;
+}
+
+export function jumpToTextFragment(root, href) {
+    const target = textFragmentTarget(href);
+    if (!root || !target?.start) return false;
+    const previous = recentTextFragments.get(root);
+    if (previous?.href === href) return true;
+    const range = findTextFragmentRange(root, target);
+    if (!range) return false;
+    if (globalThis.CSS?.highlights && typeof Highlight !== 'undefined') {
+        for (const activeRange of textFragmentRanges) {
+            if (!activeRange.startContainer.isConnected) textFragmentRanges.delete(activeRange);
+        }
+        textFragmentRanges.add(range);
+        globalThis.CSS.highlights.set('vyasa-text-fragment', new Highlight(...textFragmentRanges));
+    }
+    for (let element = range.startContainer.parentElement; element && element !== root; element = element.parentElement) {
+        if (element.matches('.vyasa-heading-fold')) element.open = true;
+    }
+    range.startContainer.parentElement?.scrollIntoView({ block: 'center' });
+    recentTextFragments.set(root, { href });
+    return true;
+}
 
 // One promise per URL keeps independent widgets on the same pending load.
 export function loadScript(src, isReady) {

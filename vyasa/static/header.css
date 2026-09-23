@@ -8,6 +8,13 @@ body {
     color: inherit !important;
     line-height: 1.6;
 }
+::highlight(vyasa-text-fragment),
+::target-text {
+    color: var(--vyasa-ink);
+    background: color-mix(in srgb, var(--vyasa-primary) 30%, transparent);
+    text-decoration: underline;
+    text-decoration-color: var(--vyasa-primary);
+}
 html,
 body {
     min-height: 100%;

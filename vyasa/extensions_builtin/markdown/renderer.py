@@ -921,10 +921,11 @@ class ContentRenderer(FrankenRenderer):
         href_suffix = Path(urlsplit(href).path).suffix.lower()
         is_plain_text = is_absolute_internal and bool(href_suffix) and href_suffix not in enabled_document_suffixes()
         doc_escape = self.slide_mode and is_absolute_internal and not href.startswith("/slides/")
-        hx = f' hx-get="{href}" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML show:window:top"' if (is_internal and not doc_escape) else ""
+        has_text_fragment = ":~:text=" in href
+        hx = f' hx-get="{href}" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML show:window:top"' if (is_internal and not doc_escape and not has_text_fragment) else ""
         ext = "" if (is_internal or is_absolute_internal or is_hash) else ' target="_blank" rel="noopener noreferrer"'
         download_attr = ""
-        boost_attr = ' hx-boost="false"' if (doc_escape or (is_absolute_internal and not is_internal)) else ""
+        boost_attr = ' hx-boost="false"' if (has_text_fragment or doc_escape or (is_absolute_internal and not is_internal)) else ""
         if download_flag:
             download_attr = " download"
             boost_attr = ' hx-boost="false"'

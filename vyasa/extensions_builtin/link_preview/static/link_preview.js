@@ -15,6 +15,7 @@ import {
 } from './link_preview_geometry.js';
 import { linkPreviewCodeLineHref, linkPreviewHashMatch, linkPreviewLineMatch, linkPreviewLineNumber, linkPreviewSymbolMatch } from './link_preview_target.js';
 import { installCodeReferences, scrollToFirstCodeReferenceFocus } from './code_reference.js';
+import { jumpToTextFragment } from '/static/page_shell.js';
 
 const LINK_SELECTOR = 'a[data-vyasa-link-preview="true"]';
 const WORD_WRAP_KEY = 'vyasa:link_preview:word_wrap';
@@ -605,6 +606,7 @@ function scrollLinkPreviewToTarget(content, href) {
     // A code reference already carries server-resolved focus ranges, so the
     // legacy symbol and line heuristics must not run for it.
     if (scrollToFirstCodeReferenceFocus(body)) return;
+    if (jumpToTextFragment(body, href)) return;
     const elementsWithIds = [...body.querySelectorAll('[id]')];
     const matchedId = linkPreviewHashMatch(href, elementsWithIds.map((element) => element.id));
     if (matchedId) {

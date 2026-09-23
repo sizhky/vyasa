@@ -1,4 +1,4 @@
-import { showVyasaToast, createMomentumRunner, documentAbsolutePath, ensureFloatingActions, ensureShortcutHelp, headingMarkdownCopyValue, isEditableShortcutEvent, registerFloatingActionSync, registerMarkdownHydrator, shortcutsSuspended, syncFloatingActions } from '/static/page_shell.js';
+import { showVyasaToast, createMomentumRunner, documentAbsolutePath, ensureFloatingActions, ensureShortcutHelp, headingMarkdownCopyValue, isEditableShortcutEvent, jumpToTextFragment, registerFloatingActionSync, registerMarkdownHydrator, shortcutsSuspended, syncFloatingActions } from '/static/page_shell.js';
 
 function switchTab(tabsId, index) {
     const container = document.querySelector(`.tabs-container[data-tabs-id="${tabsId}"]`);
@@ -1178,6 +1178,7 @@ function alignToCurrentHash() {
     if (!hash || hash === '#') {
         return;
     }
+    if (jumpToTextFragment(document.getElementById('main-content'), window.location.href)) return;
     const id = decodeURIComponent(hash.slice(1));
     const target = document.getElementById(id);
     if (!target) {

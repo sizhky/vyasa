@@ -29,12 +29,13 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
     position: absolute; z-index: 1; top: 50%; left: var(--vyasa-scroll-position, 0%);
     display: grid; place-items: center; width: 12px; height: 12px; overflow: hidden;
     transform: translate(-50%, -50%); border: 1px solid white; border-radius: 999px;
-    background: var(--vyasa-scroll-proxy-end); box-shadow: 0 0 8px var(--vyasa-scroll-proxy-end);
-    color: white; text-decoration: none; pointer-events: auto;
+    background: var(--vyasa-scroll-proxy-tip-background, var(--vyasa-scroll-proxy-end));
+    box-shadow: 0 0 8px var(--vyasa-scroll-proxy-end);
+    color: var(--vyasa-scroll-proxy-tip-color, white); text-decoration: none; pointer-events: auto;
     transition: width 150ms ease, height 150ms ease, border-radius 150ms ease;
 }
 .vyasa-scroll-proxy-tip:hover, .vyasa-scroll-proxy-tip:focus-visible {
-    width: 2.35rem; height: 2.35rem; border-radius: 1rem;
+    width: 3rem; height: 2.35rem; border-radius: 1rem;
 }
 .vyasa-scroll-proxy-tip img { width: 1.4rem; height: 1.4rem; object-fit: contain; opacity: 0; transform: scale(.6); transition: opacity 120ms ease, transform 120ms ease; }
 .vyasa-scroll-proxy-tip:hover img, .vyasa-scroll-proxy-tip:focus-visible img { opacity: 1; transform: scale(1); }
