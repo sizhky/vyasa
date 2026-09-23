@@ -5,6 +5,102 @@ let markdownHydrator = () => {};
 const loadedScripts = new Map();
 const SCRIPT_PROBE_MS = 50;
 const SCRIPT_PROBE_LIMIT_MS = 10000;
+const recentTextFragments = new WeakMap();
+const textFragmentRanges = new Set();
+
+function textFragmentPhrase(href) {
+    try {
+        const fragment = new URL(href || window.location.href, window.location.href).hash.slice(1);
+        const directive = fragment.indexOf(':~:');
+        if (directive < 0) return '';
+        return new URLSearchParams(fragment.slice(directive + 3)).get('text')?.trim() || '';
+    } catch (_) {
+        return '';
+    }
+}
+
+function normalizedText(value) {
+    return String(value || '').toLocaleLowerCase().replace(/\s+/gu, ' ').trim();
+}
+
+function findTextFragmentRange(root, phrase) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+            return node.parentElement?.closest('script,style,noscript,template,[hidden],[aria-hidden="true"]')
+                ? NodeFilter.FILTER_REJECT
+                : NodeFilter.FILTER_ACCEPT;
+        },
+    });
+    const map = [];
+    let text = '';
+    let previousBlock = null;
+    while (walker.nextNode()) {
+        const node = walker.currentNode;
+        const block = node.parentElement?.closest('p,li,td,th,blockquote,pre,h1,h2,h3,h4,h5,h6,div,section,article') || root;
+        if (previousBlock && block !== previousBlock && text && !text.endsWith(' ')) {
+            text += ' ';
+            map.push(null);
+        }
+        previousBlock = block;
+        const value = node.textContent || '';
+        for (let offset = 0; offset < value.length;) {
+            const char = String.fromCodePoint(value.codePointAt(offset));
+            const end = offset + char.length;
+            const lowered = char.toLocaleLowerCase();
+            if (/\s/u.test(char)) {
+                if (!text.endsWith(' ')) {
+                    text += ' ';
+                    map.push({ node, start: offset, end });
+                } else if (map.at(-1)?.node === node) {
+                    map.at(-1).end = end;
+                }
+            } else {
+                for (let index = 0; index < lowered.length; index += 1) {
+                    text += lowered[index];
+                    map.push({ node, start: offset, end });
+                }
+            }
+            offset = end;
+        }
+    }
+    const needle = normalizedText(phrase);
+    const start = text.indexOf(needle);
+    if (!needle || start < 0 || !map[start] || !map[start + needle.length - 1]) return null;
+    const first = map[start];
+    const last = map[start + needle.length - 1];
+    const range = document.createRange();
+    range.setStart(first.node, first.start);
+    range.setEnd(last.node, last.end);
+    return range;
+}
+
+function removeTextFragmentRange(range) {
+    textFragmentRanges.delete(range);
+    if (globalThis.CSS?.highlights) {
+        if (textFragmentRanges.size && typeof Highlight !== 'undefined') globalThis.CSS.highlights.set('vyasa-text-fragment', new Highlight(...textFragmentRanges));
+        else globalThis.CSS.highlights.delete('vyasa-text-fragment');
+    }
+}
+
+export function jumpToTextFragment(root, href) {
+    const phrase = textFragmentPhrase(href);
+    if (!root || !phrase) return false;
+    const previous = recentTextFragments.get(root);
+    if (previous?.href === href && previous.expiresAt > Date.now()) return true;
+    const range = findTextFragmentRange(root, phrase);
+    if (!range) return false;
+    if (globalThis.CSS?.highlights && typeof Highlight !== 'undefined') {
+        textFragmentRanges.add(range);
+        globalThis.CSS.highlights.set('vyasa-text-fragment', new Highlight(...textFragmentRanges));
+        window.setTimeout(() => removeTextFragmentRange(range), 15000);
+    }
+    for (let element = range.startContainer.parentElement; element && element !== root; element = element.parentElement) {
+        if (element.matches('.vyasa-heading-fold')) element.open = true;
+    }
+    range.startContainer.parentElement?.scrollIntoView({ block: 'center' });
+    recentTextFragments.set(root, { href, expiresAt: Date.now() + 15000 });
+    return true;
+}
 
 // One promise per URL keeps independent widgets on the same pending load.
 export function loadScript(src, isReady) {

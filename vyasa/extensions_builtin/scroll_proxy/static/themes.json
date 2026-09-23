@@ -540,7 +540,7 @@
       },
       "particleCount": 16,
       "tip": {
-        "emoji": "🏳️‍🌈",
+        "emoji": "🌈",
         "label": "Pride",
         "link": "https://en.wikipedia.org/w/index.php?search=LGBT+pride"
       }
@@ -621,6 +621,11 @@
         "glow": 5
       },
       "particleMode": "always",
+      "flag": {
+        "src": "./canada.svg",
+        "label": "Canada Day"
+      },
+      "link": "https://en.wikipedia.org/wiki/Canada_Day",
       "tip": {
         "emoji": "🍁",
         "label": "Canada Day",
@@ -653,8 +658,13 @@
         "size": 3
       },
       "particleMode": "always",
+      "flag": {
+        "src": "./united-states.svg",
+        "label": "United States Independence Day"
+      },
+      "link": "https://en.wikipedia.org/wiki/Independence_Day_(United_States)",
       "tip": {
-        "emoji": "🇺🇸",
+        "emoji": "🎆",
         "label": "United States Independence Day",
         "link": "https://en.wikipedia.org/w/index.php?search=Independence+Day+%28United+States%29"
       }
@@ -684,6 +694,11 @@
         "glow": 5
       },
       "particleMode": "always",
+      "flag": {
+        "src": "./france.svg",
+        "label": "Bastille Day"
+      },
+      "link": "https://en.wikipedia.org/wiki/Bastille_Day",
       "tip": {
         "emoji": "🗼",
         "label": "Bastille Day",
@@ -749,7 +764,7 @@
       },
       "link": "https://en.wikipedia.org/wiki/Independence_Day_(India)",
       "tip": {
-        "emoji": "🇮🇳",
+        "emoji": "🪷",
         "label": "Indian Independence Day",
         "link": "https://en.wikipedia.org/w/index.php?search=Independence+Day+%28India%29"
       }
@@ -1088,8 +1103,8 @@
       "particleCount": 0,
       "tip": {
         "emoji": "🌀",
-        "label": "Vyasa",
-        "link": "https://github.com/sizhky/vyasa"
+        "label": "Vyasa Muni",
+        "link": "https://en.wikipedia.org/wiki/Vyasa"
       }
     }
   ]

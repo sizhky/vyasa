@@ -92,6 +92,10 @@ def _default_section_markdown(text: str) -> str:
     return "\n\n".join(paragraphs[:2]).strip()
 
 
+def _is_text_fragment(fragment: str) -> bool:
+    return str(fragment or "").startswith(":~:text=")
+
+
 def _resolve_preview_file(slug: str):
     file_path = content_path_for_slug(slug, ".md")
     if file_path and file_path.exists():
@@ -181,6 +185,8 @@ def render_link_preview_html(
         page_slug = content_slug_for_path(file_path) or slug
         if target_line:
             section = None
+        elif _is_text_fragment(fragment):
+            section = _strip_leading_frontmatter_block(source).strip()
         else:
             section = (
                 _extract_markdown_section_text(source, fragment)
