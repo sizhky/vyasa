@@ -1,9 +1,42 @@
 const themes = [];
 let installedBar = null;
 let stopFlag = () => {};
-const scrollMotion = { y: 0, velocity: 0, time: 0 };
+let stopTip = () => {};
+const scrollMotion = { y: 0, velocity: 0, time: 0, movedAt: -Infinity };
+const SCROLL_EMIT_WINDOW = 400;
+let activeTheme = null;
+let lastEmit = 0;
 
-const THEME_DEFAULTS = { priority: 0, dates: [], particles: [], particleCount: 32, physics: { lifetime: [0.45, 1.1], vx: 90, vy: [-135, -35], gravity: 200, drag: 2, spin: 0, stretch: 1, size: 2, glow: 7, originSpreadX: 12, originSpreadY: 4, colorByAge: true, colors: ['#fffbea', '#ffd16a', '#d95b16'] } };
+// sparks read as a continuous fountain; shapes only earn their keep while the reader is moving
+function emitsAlways(theme) {
+    return theme?.particleMode === 'always';
+}
+
+function scrolling() {
+    return performance.now() - scrollMotion.movedAt < SCROLL_EMIT_WINDOW;
+}
+
+function idleParticles(bar) {
+    return Array.from(bar.querySelectorAll('.vyasa-scroll-proxy-effects > span'))
+        .filter((particle) => !particle.getAnimations().length);
+}
+
+// always-on themes may spread their first cycle: nothing has scrolled yet, so no origin goes stale
+function wakeParticles(bar, theme) {
+    idleParticles(bar).forEach((particle) => emitParticle(particle, bar, theme, Math.random() * theme.physics.lifetime[1] * 1000));
+}
+
+// one particle per interval, launched now from the live scroll position
+function sprinkle(bar, theme, now) {
+    const perSecond = Math.max(1, theme.particleCount) / Math.max(0.1, theme.physics.lifetime[1] * 0.75);
+    if (now - lastEmit < 1000 / perSecond) return;
+    const [particle] = idleParticles(bar);
+    if (!particle) return;
+    emitParticle(particle, bar, theme, 0);
+    lastEmit = now;
+}
+
+const THEME_DEFAULTS = { priority: 0, dates: [], particles: [], particleCount: 32, particleMode: 'scroll', physics: { lifetime: [0.45, 1.1], vx: 90, vy: [-135, -35], gravity: 200, drag: 2, spin: 0, stretch: 1, size: 2, glow: 7, originSpreadX: 12, originSpreadY: 4, colorByAge: true, colors: ['#fffbea', '#ffd16a', '#d95b16'] } };
 
 function merge(base, patch) {
     if (patch === undefined) return base;
@@ -19,8 +52,41 @@ export function registerScrollProxyTheme(theme, defer = false) {
     const merged = merge(merge(THEME_DEFAULTS, index < 0 ? {} : themes[index]), theme);
     if (index < 0) themes.push(merged); else themes[index] = merged;
     themes.sort((left, right) => right.priority - left.priority);
-    if (installedBar && !defer) applyTheme(installedBar, resolveScrollProxyTheme(new Date(), randomEnabled()));
+    if (installedBar && !defer) applyTheme(installedBar, currentTheme());
     return true;
+}
+
+function resolveThemeAssets(theme, base) {
+    const patch = {};
+    if (theme.flag?.src) patch.flag = { src: new URL(theme.flag.src, base).href };
+    if (theme.tip?.src) patch.tip = { src: new URL(theme.tip.src, base).href };
+    if (theme.particles?.some((entry) => entry?.src)) patch.particles = theme.particles
+        .map((entry) => entry?.src ? { ...entry, src: new URL(entry.src, base).href } : entry);
+    return Object.keys(patch).length ? merge(theme, patch) : theme;
+}
+
+function themeTip(theme) {
+    return theme.tip?.link && (theme.tip.src || theme.tip.emoji) ? theme.tip : null;
+}
+
+function mountTip(bar, theme) {
+    const tip = themeTip(theme);
+    if (!tip) return () => {};
+    let destination;
+    try { destination = new URL(tip.link, location.href); } catch { return () => {}; }
+    if (!['http:', 'https:'].includes(destination.protocol)) return () => {};
+    const link = document.createElement('a');
+    link.className = 'vyasa-scroll-proxy-tip';
+    link.href = destination.href;
+    link.setAttribute('aria-label', tip.label || theme.id);
+    link.title = tip.label || theme.id;
+    if (destination.origin !== location.origin) { link.target = '_blank'; link.rel = 'noopener noreferrer'; }
+    if (tip.src) {
+        const image = document.createElement('img');
+        image.src = tip.src; image.alt = ''; link.appendChild(image);
+    } else link.textContent = tip.emoji;
+    bar.appendChild(link);
+    return () => link.remove();
 }
 
 async function loadScrollProxyThemes() {
@@ -29,11 +95,27 @@ async function loadScrollProxyThemes() {
     for (const source of sources) {
         const base = new URL(source, import.meta.url).href;
         const payload = await fetch(base).then((response) => response.ok ? response.json() : null).catch(() => null);
-        (Array.isArray(payload) ? payload : payload?.themes || []).forEach((theme) => registerScrollProxyTheme(
-            theme.flag?.src ? merge(theme, { flag: { src: new URL(theme.flag.src, base).href } }) : theme, true));
+        (Array.isArray(payload) ? payload : payload?.themes || [])
+            .forEach((theme) => registerScrollProxyTheme(resolveThemeAssets(theme, base), true));
     }
     (globalThis.VyasaScrollProxyThemes || []).forEach((theme) => registerScrollProxyTheme(theme, true));
-    if (installedBar) applyTheme(installedBar, resolveScrollProxyTheme(new Date(), randomEnabled()));
+    const theme = currentTheme();
+    if (installedBar) applyTheme(installedBar, theme);
+    console.info(`[vyasa scroll proxy] ${describeScrollProxyTheme(theme, themeReason())}`);
+}
+
+function themeReason() {
+    if (dateOverride) return previewDate().toDateString();
+    return randomEnabled() ? 'random mode' : previewDate().toDateString();
+}
+
+export function describeScrollProxyTheme(theme, reason) {
+    if (!theme) return `no theme matched ${reason}`;
+    const notes = [`${theme.particleCount || 0} particles (${theme.particleMode})`];
+    if (theme.flag?.src) notes.push('flag');
+    if (themeTip(theme)) notes.push('tip');
+    if (stillEnabled()) notes.push('still');
+    return `${theme.id} — ${reason} — ${notes.join(', ')}`;
 }
 
 export function matchesScrollProxyDate(theme, date) {
@@ -53,13 +135,33 @@ function randomEnabled() {
 
 let stillOverride = null;
 
+export function parseScrollProxyDate(stamp, today = new Date()) {
+    const parts = /^(?:(\d{4})-)?(\d{1,2})-(\d{1,2})$/.exec((stamp || '').trim());
+    if (!parts) return today;
+    // built from local parts on purpose: new Date('2026-01-26') is UTC midnight and slips a day west of Greenwich
+    const date = new Date(parts[1] ? Number(parts[1]) : today.getFullYear(), Number(parts[2]) - 1, Number(parts[3]));
+    return Number.isNaN(date.getTime()) ? today : date;
+}
+
+let dateOverride = null;
+
+function previewDate() {
+    return dateOverride || new Date();
+}
+
+// an explicitly requested date is a question about the calendar, so random mode must not answer it
+function currentTheme() {
+    return resolveScrollProxyTheme(previewDate(), dateOverride ? false : randomEnabled());
+}
+
+
 function stillEnabled() {
     if (stillOverride !== null) return stillOverride;
     return new URL(import.meta.url).searchParams.get('still') === '1'
         || (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
 }
 
-function emitParticle(particle, bar, theme, stagger = 0) {
+function emitParticle(particle, bar, theme, stagger = null) {
     if (!particle.isConnected) return;
     const physics = theme.physics;
     const lifetime = physics.lifetime[0] + Math.random() * (physics.lifetime[1] - physics.lifetime[0]);
@@ -70,6 +172,7 @@ function emitParticle(particle, bar, theme, stagger = 0) {
     const resistance = Math.max(0, physics.drag);
     particle.style.fontSize = `${physics.size}px`;
     particle.style.width = particle.style.height = `${physics.size}px`;
+    const painted = Boolean(particle.textContent) || 'image' in particle.dataset;
     const swatch = physics.colors[Math.floor(Math.random() * physics.colors.length)];
     const origin = parseFloat(bar.style.getPropertyValue('--vyasa-scroll-position')) / 100 * bar.clientWidth || 0;
     const originX = origin + (Math.random() * 2 - 1) * physics.originSpreadX;
@@ -88,12 +191,12 @@ function emitParticle(particle, bar, theme, stagger = 0) {
             transform: `translate(${originX + vx * travel}px, ${originY + vy * travel + physics.gravity * fall}px) rotate(${Math.atan2(dy, dx) * physics.stretch + spin * time}rad) scale(${1 + physics.stretch * (Math.max(0.4, Math.hypot(dx, dy) / 35) - 1)}, ${1 - age * 0.7 * physics.stretch})`,
             opacity: Math.min(1, age * 16) * (1 - age) ** 1.5,
             color,
-            backgroundColor: particle.textContent ? 'transparent' : color,
+            backgroundColor: painted ? 'transparent' : color,
             filter: `drop-shadow(0 0 ${physics.glow}px ${color})`,
         };
     });
-    particle.animate(frames, { duration: lifetime * 1000, delay: stagger || Math.random() * 120, easing: 'linear' })
-        .onfinish = () => emitParticle(particle, bar, theme);
+    particle.animate(frames, { duration: lifetime * 1000, delay: stagger ?? Math.random() * 120, easing: 'linear' })
+        .onfinish = () => { if (emitsAlways(theme) || scrolling()) emitParticle(particle, bar, theme); };
 }
 
 export function createFlagCloth(width, height, { foldStiffness = 0.15, gravity = 500, windStrength = 350, windCalm = 2.5, windBurstLength = 1.4, windReversal = 0.5, flutter = 0.9, flutterWaves = 1.6, flutterSpeed = 2.5, damping = 0.99 } = {}) {
@@ -233,6 +336,8 @@ export function scrollProxyStops(colors) {
 function applyTheme(bar, theme) {
     if (!theme) return;
     stopFlag();
+    stopTip();
+    stopTip = mountTip(bar, theme);
     stopFlag = theme.flag?.src ? mountFlag(bar, theme) : () => {};
     bar.dataset.vyasaScrollTheme = theme.id;
     bar.dataset.vyasaScrollEffect = theme.effect || 'none';
@@ -244,11 +349,16 @@ function applyTheme(bar, theme) {
     const effects = bar.querySelector('.vyasa-scroll-proxy-effects');
     effects.getAnimations({ subtree: true }).forEach((animation) => animation.cancel());
     effects.replaceChildren(...Array.from({ length: stillEnabled() ? 0 : theme.particleCount || 0 }, (_, index) => {
+        const entry = theme.particles[index % theme.particles.length];
         const particle = document.createElement('span');
-        particle.textContent = theme.particles[index % theme.particles.length] || '';
+        if (entry?.src) {
+            particle.dataset.image = '';
+            particle.style.backgroundImage = `url("${encodeURI(entry.src)}")`;
+        } else particle.textContent = entry || '';
         return particle;
     }));
-    Array.from(effects.children).forEach((particle) => emitParticle(particle, bar, theme, Math.random() * theme.physics.lifetime[1] * 1000));
+    activeTheme = theme;
+    if (emitsAlways(theme)) wakeParticles(bar, theme);
 }
 
 function installScrollProxy() {
@@ -265,7 +375,9 @@ function installScrollProxy() {
         const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
         const now = performance.now();
         scrollMotion.velocity = Math.max(-400, Math.min(400, (window.scrollY - scrollMotion.y) / max * bar.clientWidth * 1000 / Math.max(16, now - scrollMotion.time)));
+        if (window.scrollY !== scrollMotion.y) scrollMotion.movedAt = now;
         Object.assign(scrollMotion, { y: window.scrollY, time: now });
+        if (activeTheme && !emitsAlways(activeTheme) && scrolling()) sprinkle(bar, activeTheme, now);
         const progress = Math.min(1, Math.max(0, window.scrollY / max));
         bar.style.setProperty('--vyasa-scroll-progress', String(progress));
         bar.style.setProperty('--vyasa-scroll-position', `${progress * 100}%`);
@@ -279,15 +391,27 @@ function installScrollProxy() {
     window.addEventListener('resize', schedule, { passive: true });
     document.addEventListener('htmx:afterSwap', schedule);
     sync();
-    applyTheme(bar, resolveScrollProxyTheme(new Date(), randomEnabled()));
+    applyTheme(bar, currentTheme());
     return bar;
 }
 
-globalThis.VyasaScrollProxy = { setStill: (on) => {
+globalThis.VyasaScrollProxy = { setDate: (stamp) => {
+    dateOverride = stamp === null ? null : parseScrollProxyDate(stamp);
+    const theme = currentTheme();
+    if (installedBar) applyTheme(installedBar, theme);
+    return `${previewDate().toDateString()} -> ${theme?.id}${dateOverride && randomEnabled() ? ' (random mode bypassed)' : ''}`;
+}, setStill: (on) => {
     stillOverride = on === null ? null : Boolean(on);
-    if (installedBar) applyTheme(installedBar, resolveScrollProxyTheme(new Date(), randomEnabled()));
+    if (installedBar) applyTheme(installedBar, currentTheme());
     return stillEnabled();
-}, registerTheme: registerScrollProxyTheme, resolveTheme: resolveScrollProxyTheme, list: () => themes.map((theme) => theme.id), refresh: (id) => installedBar && applyTheme(installedBar, themes.find((theme) => theme.id === id) || resolveScrollProxyTheme(new Date(), randomEnabled())) };
+}, registerTheme: registerScrollProxyTheme, resolveTheme: resolveScrollProxyTheme, list: () => themes.map(({ id, dates, colors, particleCount, flag }) => ({
+    id,
+    when: (dates || []).map(({ month, startDay = 1, endDay = 31 }) =>
+        `${month}/${startDay}${endDay === startDay ? '' : `-${endDay}`}`).join(' ') || 'fallback',
+    stops: (colors || []).length,
+    particles: particleCount,
+    flag: Boolean(flag?.src),
+})), refresh: (id) => installedBar && applyTheme(installedBar, themes.find((theme) => theme.id === id) || currentTheme()) };
 
 if (typeof document !== 'undefined') {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', installScrollProxy, { once: true });

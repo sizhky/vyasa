@@ -5,7 +5,7 @@
       "dates": [
         {
           "month": 1,
-          "endDay": 2
+          "endDay": 3
         }
       ],
       "particles": [
@@ -22,6 +22,12 @@
       "physics": {
         "size": 5,
         "glow": 5
+      },
+      "particleMode": "always",
+      "tip": {
+        "emoji": "🎉",
+        "label": "New Year",
+        "link": "https://en.wikipedia.org/w/index.php?search=New+Year"
       }
     },
     {
@@ -30,8 +36,8 @@
       "dates": [
         {
           "month": 1,
-          "startDay": 26,
-          "endDay": 26
+          "startDay": 25,
+          "endDay": 27
         }
       ],
       "particleCount": 0,
@@ -44,7 +50,12 @@
         "src": "./india.svg",
         "label": "Republic Day"
       },
-      "link": "https://en.wikipedia.org/wiki/Republic_Day_(India)"
+      "link": "https://en.wikipedia.org/wiki/Republic_Day_(India)",
+      "tip": {
+        "emoji": "🪖",
+        "label": "Republic Day of India",
+        "link": "https://en.wikipedia.org/w/index.php?search=Republic+Day+%28India%29"
+      }
     },
     {
       "id": "lunar-new-year",
@@ -74,6 +85,12 @@
       "physics": {
         "size": 5,
         "glow": 6
+      },
+      "particleMode": "always",
+      "tip": {
+        "emoji": "🧧",
+        "label": "Lunar New Year",
+        "link": "https://en.wikipedia.org/w/index.php?search=Lunar+New+Year"
       }
     },
     {
@@ -119,7 +136,12 @@
           "#be185d"
         ]
       },
-      "particleCount": 16
+      "particleCount": 16,
+      "tip": {
+        "emoji": "💝",
+        "label": "Valentine's Day",
+        "link": "https://en.wikipedia.org/w/index.php?search=Valentine%27s+Day"
+      }
     },
     {
       "id": "international-womens-day",
@@ -164,7 +186,12 @@
           "#ec4899"
         ]
       },
-      "particleCount": 16
+      "particleCount": 16,
+      "tip": {
+        "emoji": "♀️",
+        "label": "International Women's Day",
+        "link": "https://en.wikipedia.org/w/index.php?search=International+Women%27s+Day"
+      }
     },
     {
       "id": "pi-day",
@@ -176,10 +203,7 @@
         }
       ],
       "particles": [
-        "π",
-        "∑",
-        "∞",
-        "●"
+        "π"
       ],
       "colors": [
         "#0ea5e9",
@@ -209,7 +233,12 @@
           "#8b5cf6"
         ]
       },
-      "particleCount": 16
+      "particleCount": 16,
+      "tip": {
+        "emoji": "🥧",
+        "label": "Pi Day",
+        "link": "https://en.wikipedia.org/w/index.php?search=Pi+Day"
+      }
     },
     {
       "id": "st-patricks-day",
@@ -254,7 +283,12 @@
           "#ff883e"
         ]
       },
-      "particleCount": 16
+      "particleCount": 16,
+      "tip": {
+        "emoji": "🍀",
+        "label": "Saint Patrick's Day",
+        "link": "https://en.wikipedia.org/w/index.php?search=Saint+Patrick%27s+Day"
+      }
     },
     {
       "id": "spring-equinox",
@@ -299,7 +333,12 @@
           "#65a30d"
         ]
       },
-      "particleCount": 16
+      "particleCount": 16,
+      "tip": {
+        "emoji": "🌱",
+        "label": "Spring Equinox",
+        "link": "https://en.wikipedia.org/w/index.php?search=March+equinox"
+      }
     },
     {
       "id": "april-fools-day",
@@ -344,7 +383,12 @@
           "#db2777"
         ]
       },
-      "particleCount": 16
+      "particleCount": 16,
+      "tip": {
+        "emoji": "🤡",
+        "label": "April Fools' Day",
+        "link": "https://en.wikipedia.org/w/index.php?search=April+Fools%27+Day"
+      }
     },
     {
       "id": "earth-day",
@@ -389,7 +433,12 @@
           "#16a34a"
         ]
       },
-      "particleCount": 16
+      "particleCount": 16,
+      "tip": {
+        "emoji": "🌍",
+        "label": "Earth Day",
+        "link": "https://en.wikipedia.org/w/index.php?search=Earth+Day"
+      }
     },
     {
       "id": "may-day",
@@ -433,7 +482,12 @@
           "#facc15"
         ]
       },
-      "particleCount": 16
+      "particleCount": 16,
+      "tip": {
+        "emoji": "🌼",
+        "label": "May Day",
+        "link": "https://en.wikipedia.org/w/index.php?search=May+Day"
+      }
     },
     {
       "id": "pride",
@@ -484,7 +538,12 @@
           "#750787"
         ]
       },
-      "particleCount": 16
+      "particleCount": 16,
+      "tip": {
+        "emoji": "🏳️‍🌈",
+        "label": "Pride",
+        "link": "https://en.wikipedia.org/w/index.php?search=LGBT+pride"
+      }
     },
     {
       "id": "summer-solstice",
@@ -530,7 +589,12 @@
         ]
       },
       "priority": 10,
-      "particleCount": 16
+      "particleCount": 16,
+      "tip": {
+        "emoji": "☀️",
+        "label": "Summer Solstice",
+        "link": "https://en.wikipedia.org/w/index.php?search=June+solstice"
+      }
     },
     {
       "id": "canada-day",
@@ -555,6 +619,12 @@
       "physics": {
         "size": 5,
         "glow": 5
+      },
+      "particleMode": "always",
+      "tip": {
+        "emoji": "🍁",
+        "label": "Canada Day",
+        "link": "https://en.wikipedia.org/w/index.php?search=Canada+Day"
       }
     },
     {
@@ -581,6 +651,12 @@
       ],
       "physics": {
         "size": 3
+      },
+      "particleMode": "always",
+      "tip": {
+        "emoji": "🇺🇸",
+        "label": "United States Independence Day",
+        "link": "https://en.wikipedia.org/w/index.php?search=Independence+Day+%28United+States%29"
       }
     },
     {
@@ -606,6 +682,12 @@
       "physics": {
         "size": 5,
         "glow": 5
+      },
+      "particleMode": "always",
+      "tip": {
+        "emoji": "🗼",
+        "label": "Bastille Day",
+        "link": "https://en.wikipedia.org/w/index.php?search=Bastille+Day"
       }
     },
     {
@@ -637,6 +719,12 @@
         ],
         "gravity": 110,
         "glow": 6
+      },
+      "particleMode": "always",
+      "tip": {
+        "emoji": "☄️",
+        "label": "Perseids",
+        "link": "https://en.wikipedia.org/w/index.php?search=Perseids"
       }
     },
     {
@@ -645,8 +733,8 @@
       "dates": [
         {
           "month": 8,
-          "startDay": 15,
-          "endDay": 15
+          "startDay": 14,
+          "endDay": 16
         }
       ],
       "particleCount": 0,
@@ -659,7 +747,12 @@
         "src": "./india.svg",
         "label": "Independence Day"
       },
-      "link": "https://en.wikipedia.org/wiki/Independence_Day_(India)"
+      "link": "https://en.wikipedia.org/wiki/Independence_Day_(India)",
+      "tip": {
+        "emoji": "🇮🇳",
+        "label": "Indian Independence Day",
+        "link": "https://en.wikipedia.org/w/index.php?search=Independence+Day+%28India%29"
+      }
     },
     {
       "id": "autumn-equinox",
@@ -704,7 +797,12 @@
           "#b45309"
         ]
       },
-      "particleCount": 16
+      "particleCount": 16,
+      "tip": {
+        "emoji": "🍂",
+        "label": "Autumn Equinox",
+        "link": "https://en.wikipedia.org/w/index.php?search=September+equinox"
+      }
     },
     {
       "id": "halloween",
@@ -714,10 +812,11 @@
         }
       ],
       "particles": [
-        "◆",
-        "●",
-        "☠",
-        "✦"
+        "🎃",
+        "👻",
+        "🦇",
+        "🕷",
+        "🕸"
       ],
       "particleCount": 12,
       "colors": [
@@ -749,6 +848,11 @@
         "originSpreadX": 60,
         "originSpreadY": 12,
         "colorByAge": false
+      },
+      "tip": {
+        "emoji": "🎃",
+        "label": "Halloween",
+        "link": "https://en.wikipedia.org/w/index.php?search=Halloween"
       }
     },
     {
@@ -757,8 +861,8 @@
       "dates": [
         {
           "month": 10,
-          "startDay": 2,
-          "endDay": 2
+          "startDay": 1,
+          "endDay": 3
         }
       ],
       "particleCount": 0,
@@ -771,7 +875,12 @@
         "src": "./india.svg",
         "label": "Gandhi Jayanti"
       },
-      "link": "https://en.wikipedia.org/wiki/Gandhi_Jayanti"
+      "link": "https://en.wikipedia.org/wiki/Gandhi_Jayanti",
+      "tip": {
+        "emoji": "🕊️",
+        "label": "Gandhi Jayanti",
+        "link": "https://en.wikipedia.org/w/index.php?search=Gandhi+Jayanti"
+      }
     },
     {
       "id": "bonfire-night",
@@ -796,6 +905,12 @@
       "physics": {
         "size": 5,
         "glow": 7
+      },
+      "particleMode": "always",
+      "tip": {
+        "emoji": "🔥",
+        "label": "Bonfire Night",
+        "link": "https://en.wikipedia.org/w/index.php?search=Guy+Fawkes+Night"
       }
     },
     {
@@ -809,10 +924,10 @@
         }
       ],
       "particles": [
-        "✦",
-        "✹",
-        "❉",
-        "•"
+        "🪔",
+        "✨",
+        "🪷",
+        "🔥"
       ],
       "colors": [
         "#fde68a",
@@ -820,8 +935,27 @@
         "#dc2626"
       ],
       "physics": {
-        "size": 6,
-        "glow": 7
+        "size": 26,
+        "glow": 7,
+        "stretch": 0,
+        "vx": 30,
+        "vy": [
+          -45,
+          -12
+        ],
+        "gravity": 60,
+        "lifetime": [
+          1.4,
+          2.6
+        ],
+        "originSpreadX": 60,
+        "originSpreadY": 12
+      },
+      "particleCount": 16,
+      "tip": {
+        "emoji": "🪔",
+        "label": "Diwali",
+        "link": "https://en.wikipedia.org/w/index.php?search=Diwali"
       }
     },
     {
@@ -853,6 +987,12 @@
         ],
         "gravity": 25,
         "glow": 4
+      },
+      "particleMode": "always",
+      "tip": {
+        "emoji": "❄️",
+        "label": "Winter Solstice",
+        "link": "https://en.wikipedia.org/w/index.php?search=December+solstice"
       }
     },
     {
@@ -866,11 +1006,13 @@
         }
       ],
       "particles": [
-        "❄",
-        "❅",
-        "❆",
-        "★",
-        "●"
+        "🎄",
+        "❄️",
+        "🎁",
+        "⭐",
+        "🔔",
+        "🎅",
+        "🦌"
       ],
       "particleCount": 16,
       "colors": [
@@ -902,6 +1044,11 @@
         "originSpreadX": 60,
         "originSpreadY": 12,
         "colorByAge": false
+      },
+      "tip": {
+        "emoji": "🎄",
+        "label": "Christmas",
+        "link": "https://en.wikipedia.org/w/index.php?search=Christmas"
       }
     },
     {
@@ -927,12 +1074,23 @@
       "physics": {
         "size": 5,
         "glow": 5
+      },
+      "particleMode": "always",
+      "tip": {
+        "emoji": "🥂",
+        "label": "New Year's Eve",
+        "link": "https://en.wikipedia.org/w/index.php?search=New+Year%27s+Eve"
       }
     },
     {
       "id": "default",
       "priority": -1,
-      "particleCount": 0
+      "particleCount": 0,
+      "tip": {
+        "emoji": "🌀",
+        "label": "Vyasa",
+        "link": "https://github.com/sizhky/vyasa"
+      }
     }
   ]
 }

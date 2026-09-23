@@ -92,7 +92,7 @@
    box of its own -- only a rule to divide it from the editor beside it. */
 .vyasa-document-editor-preview {
     box-sizing: border-box;
-    padding: 0 1.35rem 0 0.25rem;
+    padding: 0 1.35rem 0 3rem;
     border-right: 1px solid color-mix(in srgb, var(--vyasa-ink) 12%, transparent);
 }
 
@@ -103,7 +103,7 @@
     }
 
     .vyasa-document-editor-preview {
-        padding: 1.25rem 0 0;
+        padding: 1.25rem 0 0 3rem;
         border-right: 0;
         border-top: 1px solid color-mix(in srgb, var(--vyasa-ink) 12%, transparent);
     }
