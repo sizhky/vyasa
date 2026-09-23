@@ -71,6 +71,20 @@ highlight one place in the source file:
 - Use `<...>` around a destination that contains spaces, or URL-encode the spaces as `%20`.
 - When several lines start with the same `$` text, the first line wins; the author must add more characters when another line is intended.
 
+Use a text fragment to jump to a word or phrase in the rendered document:
+
+```md
+[Disposition](../docs/domain/adjudication#:~:text=Disposition)
+[Triage precedent](../docs/domain/learning#:~:text=triage%20precedent)
+[Application](../docs/domain/platform#:~:text=unique%20prefix-,Application,-unique%20suffix)
+```
+
+- `#:~:text=...` finds the first case-insensitive match, with repeated whitespace treated as one space.
+- Use `prefix-,target,-suffix` to select a later match by its surrounding text; only `target` is highlighted.
+- Encode spaces and URL-reserved characters in the phrase, such as `%20` for spaces.
+- The page scrolls to the match and highlights it for 15 seconds. Cmd/Ctrl-hover previews load the full Markdown document, then use the same first-match jump and highlight.
+- Without prefix or suffix context, the first occurrence wins. Include enough surrounding text to identify another occurrence.
+
 ## Code File Links
 
 When a document refers to a code file, link the symbol and not the bare file:
