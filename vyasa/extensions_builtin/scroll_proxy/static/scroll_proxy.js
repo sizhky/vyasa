@@ -313,8 +313,29 @@ function mountFlag(bar, theme) {
     }
     holder.appendChild(canvas);
     bar.appendChild(holder);
+    const tip = bar.querySelector('.vyasa-scroll-proxy-tip');
+    let fadeTimer;
+    const fade = () => {
+        holder.classList.add('is-faded');
+        holder.inert = true;
+        holder.style.pointerEvents = 'none';
+    };
+    const reveal = () => {
+        clearTimeout(fadeTimer);
+        holder.classList.remove('is-faded');
+        holder.inert = false;
+    };
+    const idle = () => {
+        clearTimeout(fadeTimer);
+        if (!tip?.matches(':hover, :focus')) fadeTimer = setTimeout(fade, 15000);
+    };
+    tip?.addEventListener('pointerenter', reveal);
+    tip?.addEventListener('pointerleave', idle);
+    tip?.addEventListener('focus', reveal);
+    tip?.addEventListener('blur', idle);
     let outline = [];
     const hover = (event) => {
+        if (holder.inert) return;
         const rect = canvas.getBoundingClientRect();
         holder.style.pointerEvents = pointOnFlag(outline, event.clientX - rect.left, event.clientY - rect.top) ? 'auto' : 'none';
     };
@@ -377,10 +398,17 @@ function mountFlag(bar, theme) {
         cloth = createFlagCloth(flagHeight * image.naturalWidth / image.naturalHeight, flagHeight, flag.physics);
         for (let step = 0; step < 1200; step++) cloth.step();
         frame = requestAnimationFrame(draw);
+        clearTimeout(fadeTimer);
+        if (!tip?.matches(':hover, :focus')) fadeTimer = setTimeout(fade, 5000);
     };
     image.onerror = () => holder.remove();
     image.src = flag.src;
     return () => {
+        clearTimeout(fadeTimer);
+        tip?.removeEventListener('pointerenter', reveal);
+        tip?.removeEventListener('pointerleave', idle);
+        tip?.removeEventListener('focus', reveal);
+        tip?.removeEventListener('blur', idle);
         document.removeEventListener('pointermove', hover);
         image.onload = image.onerror = null; cancelAnimationFrame(frame); holder.remove();
     };

@@ -72,7 +72,11 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
     height: 200px;
     pointer-events: none;
     cursor: pointer;
+    opacity: 1;
+    transition: opacity 2s ease;
 }
+
+.vyasa-scroll-proxy-flag.is-faded { opacity: 0; }
 
 .vyasa-scroll-proxy-flag canvas {
     width: 100%;
@@ -83,5 +87,5 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
     .vyasa-scroll-proxy-effects { display: none; }
-    .vyasa-scroll-proxy-tip, .vyasa-scroll-proxy-tip img { transition: none; }
+    .vyasa-scroll-proxy-tip, .vyasa-scroll-proxy-tip img, .vyasa-scroll-proxy-flag { transition: none; }
 }
