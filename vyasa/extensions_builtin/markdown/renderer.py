@@ -7,7 +7,7 @@ from functools import partial
 from itertools import count
 from pathlib import Path
 from typing import Any, Protocol
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 import mistletoe as mst
 from fasthtml.common import Div, Link, NotStr, Script, Span, to_xml
@@ -860,7 +860,7 @@ class ContentRenderer(FrankenRenderer):
             wrap=bool(attrs.get("wrap")),
         )
 
-    def render_link(self, token):
+    def render_link(self, token: Any) -> str:
         href, inner, title = token.target, self.render_inner(token), f' title="{token.title}"' if token.title else ""
         href, code_reference = extract_code_reference(href)
         code_reference_attr = (
@@ -936,6 +936,9 @@ class ContentRenderer(FrankenRenderer):
             request_asset_bundle("link_preview.runtime")
             preview_attrs = f' data-vyasa-link-preview="true"{current_path_attr}{code_reference_attr}'
         link_class = "underline underline-offset-2 font-medium transition-colors"
+        code_path = re.sub(r":\d+(?::\d+)?$", "", unquote(urlsplit(href).path).partition("$")[0])
+        if infer_code_language(code_path) and Path(code_path).suffix.lower() not in enabled_document_suffixes() and "<img" not in inner:
+            link_class += " vyasa-code-link"
         return f'<a href="{href}"{hx}{ext}{download_attr}{boost_attr}{preview_attrs} class="{link_class}"{title}>{inner}</a>'
 
 

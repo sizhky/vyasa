@@ -1297,7 +1297,10 @@ details[open] > .vyasa-callout-summary .vyasa-callout-chevron { transform: rotat
 .vyasa-heading-fold-body li > ol { margin-top: 0.3rem; }
 .code-block pre, .code-block pre *, .code-block pre code, .code-block pre code *, pre code.hljs, pre code.hljs * { font-family: var(--vyasa-font-mono) !important; }
 .code-block pre, .code-block pre code, pre code.hljs { background: var(--vyasa-code-bg); color: var(--vyasa-code-fg); }
-:not(pre) > code { background: var(--vyasa-inline-code-bg); color: var(--vyasa-inline-code-fg); border: 1px solid var(--vyasa-inline-code-border); padding: 0.1em 0.35em; border-radius: 0.25rem; }
+:not(pre) > code, a.vyasa-code-link:not(:has(code)) { background: var(--vyasa-inline-code-bg); border: 1px solid var(--vyasa-inline-code-border); padding: 0.1em 0.35em; border-radius: 0.25rem; }
+:not(pre) > code { color: var(--vyasa-inline-code-fg); }
+a.vyasa-code-link, a.vyasa-code-link code { font-family: var(--vyasa-font-mono); }
+a.vyasa-code-link code { color: inherit; }
 .code-block { margin: 1.4rem 0 1.8rem; }
 .code-block pre { border: 1px solid var(--vyasa-code-border); border-radius: var(--vyasa-rect-radius) !important; padding: 1.15rem 1.3rem !important; box-shadow: 0 16px 24px -22px rgba(45, 52, 52, 0.18); }
 .code-block pre code, pre code.hljs { display: block; width: 100%; box-sizing: border-box; font-size: 0.95rem; line-height: 1.2; }
