@@ -14,5 +14,6 @@ Links inside a webpage's own nested iframes are not supported by this initial ve
 
 After changing the extension, select **Reload** on its Chrome extension card and reload Vyasa.
 Both gesture orders work: hold Cmd/Ctrl before hovering, or hover first and then press Cmd/Ctrl.
+Nested previews retain their source link rectangle for the origin warp, updating it during iframe scrolling and resizing.
 Run the event regression check from the repository root with `node browser-extension/test.mjs`.
 Reference: [Chrome's unpacked extension installation](https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world#load-unpacked).

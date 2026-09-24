@@ -1,13 +1,18 @@
 (() => {
     if (window === window.top) return;
     let hovered = null, sent = null;
+    const origins = new Map();
+    const sendOrigin = (link, type) => {
+        const rect = link.getBoundingClientRect();
+        window.parent.postMessage({ type, href: link.href, label: link.textContent.trim(),
+            x: rect.left, y: rect.top, width: rect.width, height: rect.height }, '*');
+    };
     const preview = (event, modifiers = event) => {
         if (!event.isTrusted || !(modifiers.metaKey || modifiers.ctrlKey) || !hovered || hovered === sent) return;
         const url = new URL(hovered.href, location.href);
         if (!['http:', 'https:'].includes(url.protocol)) return;
-        const rect = hovered.getBoundingClientRect();
-        window.parent.postMessage({ type: 'vyasa:external-preview', href: url.href,
-            label: hovered.textContent.trim(), x: rect.left, y: rect.bottom }, '*');
+        origins.set(url.href, hovered);
+        sendOrigin(hovered, 'vyasa:external-preview');
         sent = hovered;
     };
     document.addEventListener('pointerover', (event) => {
@@ -35,4 +40,14 @@
         if (hovered && !hovered.contains(event.relatedTarget)) hovered = sent = null;
     }, true);
     window.addEventListener('blur', () => { hovered = sent = null; });
+    let originFrame = 0;
+    const refreshOrigins = () => {
+        if (originFrame) return;
+        originFrame = requestAnimationFrame(() => {
+            originFrame = 0;
+            origins.forEach((link) => sendOrigin(link, 'vyasa:external-preview-origin'));
+        });
+    };
+    document.addEventListener('scroll', refreshOrigins, true);
+    window.addEventListener('resize', refreshOrigins);
 })();

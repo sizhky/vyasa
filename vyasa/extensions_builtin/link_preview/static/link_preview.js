@@ -27,6 +27,7 @@ let previewZ = 10500;
 let pointerFrame = null;
 let previewPage = `${window.location.pathname}${window.location.search}`;
 const previewViews = new Set();
+const externalPreviewOrigins = new WeakMap();
 let dimpleFilterSequence = 0;
 let dimpleMapUrl = '';
 
@@ -372,17 +373,24 @@ function createPreviewView({ point, link, onClose }) {
         popover.style.zIndex = String(z);
     };
     const updatePointer = () => {
-        if (!activeLink.isConnected) {
+        const origin = externalPreviewOrigins.get(activeLink);
+        const source = origin?.frame || activeLink;
+        const bounds = source.getBoundingClientRect();
+        const sourceRect = origin ? { left: bounds.left + origin.x, top: bounds.top + origin.y,
+            width: origin.width, height: origin.height } : bounds;
+        if (!source.isConnected || (origin && (origin.width <= 0 || origin.height <= 0
+            || origin.x + origin.width < 0 || origin.y + origin.height < 0 || origin.x > bounds.width || origin.y > bounds.height))) {
             pointer.hidden = true;
+            card.style.removeProperty('filter');
+            dimpleCanvas.hidden = pinchCanvas.hidden = true;
             return;
         }
-        const sourceRect = activeLink.getBoundingClientRect();
         const popupRect = popover.getBoundingClientRect();
         const sourceHit = document.elementFromPoint?.(
             sourceRect.left + sourceRect.width / 2,
             sourceRect.top + sourceRect.height / 2,
         );
-        const sourceParent = activeLink.closest?.('.vyasa-link-preview-popover');
+        const sourceParent = source.closest?.('.vyasa-link-preview-popover');
         const sourceCovered = sourceHit?.closest?.('.vyasa-link-preview-popover') === popover;
         const geometry = linkPreviewPointerGeometry(sourceRect, popupRect, 28, 2, {
             preferDimple: sourceCovered && sourceParent !== popover,
@@ -693,7 +701,7 @@ const previews = new LinkPreviewStack({
 const externalPreviewLinks = new WeakMap();
 window.addEventListener('message', (event) => {
     const data = event.data;
-    if (!['vyasa:external-preview', 'vyasa:external-preview-close'].includes(data?.type)) return;
+    if (!['vyasa:external-preview', 'vyasa:external-preview-close', 'vyasa:external-preview-origin'].includes(data?.type)) return;
     const frame = Array.from(document.querySelectorAll('.vyasa-link-preview-external iframe'))
         .find((candidate) => candidate.contentWindow === event.source);
     if (!frame) return;
@@ -701,21 +709,25 @@ window.addEventListener('message', (event) => {
         frame.closest('.vyasa-link-preview-popover')?.querySelector('.vyasa-link-preview-close')?.click();
         return;
     }
-    if (typeof data.href !== 'string' || !Number.isFinite(data.x) || !Number.isFinite(data.y)) return;
+    if (typeof data.href !== 'string' || ![data.x, data.y, data.width, data.height].every(Number.isFinite)) return;
     let url;
     try { url = new URL(data.href); } catch { return; }
     if (!['http:', 'https:'].includes(url.protocol)) return;
     if (!externalPreviewLinks.has(frame)) externalPreviewLinks.set(frame, new Map());
     const links = externalPreviewLinks.get(frame);
+    if (data.type === 'vyasa:external-preview-origin' && !links.has(url.href)) return;
     if (!links.has(url.href)) {
         const link = document.createElement('a');
         link.href = url.href;
         link.textContent = typeof data.label === 'string' ? data.label : url.href;
         links.set(url.href, link);
     }
+    externalPreviewOrigins.set(links.get(url.href), { frame, x: data.x, y: data.y, width: data.width, height: data.height });
+    schedulePointerRefresh();
+    if (data.type === 'vyasa:external-preview-origin') return;
     const rect = frame.getBoundingClientRect();
     previews.open(links.get(url.href), { clientX: rect.left + Math.max(0, Math.min(rect.width, data.x)),
-        clientY: rect.top + Math.max(0, Math.min(rect.height, data.y)) });
+        clientY: rect.top + Math.max(0, Math.min(rect.height, data.y + data.height)) });
 });
 
 // A preview normally follows a link the reader can point at. The tasks graph
