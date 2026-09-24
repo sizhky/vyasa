@@ -932,7 +932,7 @@ class ContentRenderer(FrankenRenderer):
             download_target = href[len("/posts/"):] if href.startswith("/posts/") else href.lstrip("/") if href.startswith("/") else href
             href = content_url_for_slug(download_target, prefix="/download")
             hx = ""
-        if (is_internal or is_plain_text) and not download_flag:
+        if (is_internal or is_plain_text or href.startswith(("https://", "http://", "//"))) and not download_flag:
             request_asset_bundle("link_preview.runtime")
             preview_attrs = f' data-vyasa-link-preview="true"{current_path_attr}{code_reference_attr}'
         link_class = "underline underline-offset-2 font-medium transition-colors"

@@ -826,6 +826,20 @@ def test_link_preview_fragment_match_ignores_heading_case(tmp_path, monkeypatch)
     assert "Later" not in result
 
 
+def test_external_web_links_enable_previews_without_including_other_schemes() -> None:
+    from vyasa.extensions_builtin.markdown.renderer import _render_markdown_fragment
+
+    for target in ("https://example.org/page", "http://example.org", "//example.org"):
+        rendered = _render_markdown_fragment(f"[Webpage]({target})")
+        assert 'data-vyasa-link-preview="true"' in rendered
+        assert 'target="_blank"' in rendered
+    for target in ("mailto:reader@example.org", "tel:123", "vscode://open"):
+        rendered = _render_markdown_fragment(f"[Open]({target})")
+        assert 'data-vyasa-link-preview="true"' not in rendered
+    rendered = _render_markdown_fragment('[Download](https://example.org/file "download=true")')
+    assert 'data-vyasa-link-preview="true"' not in rendered
+
+
 def test_link_preview_stack_keeps_nested_previews_until_each_is_closed():
     script = """
         import { LinkPreviewStack } from './vyasa/extensions_builtin/link_preview/static/link_preview_stack.js';

@@ -652,6 +652,29 @@ function scrollLinkPreviewToTarget(content, href) {
 }
 
 async function fetchPreview({ href, currentPath, codeReference, full, signal }) {
+    const destination = new URL(href, window.location.href);
+    if (!['http:', 'https:'].includes(destination.protocol)) return null;
+    if (destination.origin !== window.location.origin) {
+        const shell = document.createElement('div');
+        shell.className = 'vyasa-link-preview-shell vyasa-link-preview-external';
+        const notice = document.createElement('div');
+        notice.className = 'vyasa-link-preview-external-notice';
+        notice.textContent = 'If this page cannot load here, open it in a new tab. ';
+        const open = document.createElement('a');
+        open.href = destination.href;
+        open.target = '_blank';
+        open.rel = 'noopener noreferrer';
+        open.textContent = 'Open in new tab';
+        notice.appendChild(open);
+        const frame = document.createElement('iframe');
+        frame.title = `Webpage preview: ${destination.hostname}`;
+        frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox');
+        frame.referrerPolicy = 'no-referrer';
+        frame.src = destination.href;
+        shell.append(notice, frame);
+        return shell.outerHTML;
+    }
+    if (/^(https?:)?\/\//i.test(href)) href = destination.pathname + destination.search + destination.hash;
     const url = new URL('/preview/link', window.location.origin);
     url.searchParams.set('href', href);
     const resolvedPath = currentPath || inferCurrentPath();
