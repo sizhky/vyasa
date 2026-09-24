@@ -690,6 +690,34 @@ const previews = new LinkPreviewStack({
     fetchPreview,
 });
 
+const externalPreviewLinks = new WeakMap();
+window.addEventListener('message', (event) => {
+    const data = event.data;
+    if (!['vyasa:external-preview', 'vyasa:external-preview-close'].includes(data?.type)) return;
+    const frame = Array.from(document.querySelectorAll('.vyasa-link-preview-external iframe'))
+        .find((candidate) => candidate.contentWindow === event.source);
+    if (!frame) return;
+    if (data.type === 'vyasa:external-preview-close') {
+        frame.closest('.vyasa-link-preview-popover')?.querySelector('.vyasa-link-preview-close')?.click();
+        return;
+    }
+    if (typeof data.href !== 'string' || !Number.isFinite(data.x) || !Number.isFinite(data.y)) return;
+    let url;
+    try { url = new URL(data.href); } catch { return; }
+    if (!['http:', 'https:'].includes(url.protocol)) return;
+    if (!externalPreviewLinks.has(frame)) externalPreviewLinks.set(frame, new Map());
+    const links = externalPreviewLinks.get(frame);
+    if (!links.has(url.href)) {
+        const link = document.createElement('a');
+        link.href = url.href;
+        link.textContent = typeof data.label === 'string' ? data.label : url.href;
+        links.set(url.href, link);
+    }
+    const rect = frame.getBoundingClientRect();
+    previews.open(links.get(url.href), { clientX: rect.left + Math.max(0, Math.min(rect.width, data.x)),
+        clientY: rect.top + Math.max(0, Math.min(rect.height, data.y)) });
+});
+
 // A preview normally follows a link the reader can point at. The tasks graph
 // has no such link: its node attributes live in a model, not in the page. This
 // door lets it open a preview from a detached anchor it builds itself, and
@@ -731,6 +759,12 @@ function openFromEvent(event) {
 function trackModifier(event) {
     const wasDown = modifierDown;
     modifierDown = event.metaKey || event.ctrlKey;
+    const frame = document.querySelector('.vyasa-link-preview-external iframe:hover');
+    if (frame && event.isTrusted) {
+        frame.contentWindow?.postMessage({ type: 'vyasa:preview-modifier',
+            metaKey: event.metaKey, ctrlKey: event.ctrlKey }, '*');
+        return;
+    }
     if (!modifierDown || wasDown || !hoveredLink) return;
     const rect = hoveredLink.getBoundingClientRect();
     previews.open(hoveredLink, { clientX: rect.left, clientY: rect.bottom });
