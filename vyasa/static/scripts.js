@@ -2263,7 +2263,7 @@ window.vyasaToggleThemePresetMenu = function vyasaToggleThemePresetMenu(source) 
 window.vyasaApplyThemePreset = function vyasaApplyThemePreset(next, source) {
     const presets = window.__VYASA_THEME_PRESETS__ || {};
     const meta = window.__VYASA_THEME_EXTENSION_META__ || {};
-    const franken = JSON.parse(localStorage.getItem('__FRANKEN__') || '{"mode":"light"}');
+    const franken = JSON.parse(localStorage.getItem('__FRANKEN__') || '{}');
     let resolved = next;
     if (next && meta[next] && meta[next].randomizable) {
         const choices = Array.isArray(meta[next].choices) ? meta[next].choices.filter((name) => presets[name]) : [];
@@ -2302,7 +2302,7 @@ window.vyasaApplyRandomThemePreset = function vyasaApplyRandomThemePreset(source
 function syncThemePresetDebug(root = document) {
     const presets = window.__VYASA_THEME_PRESETS__ || {};
     const meta = window.__VYASA_THEME_EXTENSION_META__ || {};
-    const stored = JSON.parse(localStorage.getItem('__FRANKEN__') || '{"mode":"light"}');
+    const stored = JSON.parse(localStorage.getItem('__FRANKEN__') || '{}');
     const label = root.querySelector ? root.querySelector('#theme-preset-active-label') : document.querySelector('#theme-preset-active-label');
     const active = stored.preset || (label ? label.textContent.trim() : '') || '';
     const resolved = stored.resolvedPreset || active;

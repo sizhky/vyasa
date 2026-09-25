@@ -96,18 +96,20 @@
         });
     } catch (_) {}
 
+    // Stored mode follows MonsterUI's Theme.headers() contract, whose script runs
+    // after this one: 'light', 'dark', or no mode for the OS preference.
     const THEME_MODES = ['light', 'dark', 'system'];
     const systemDark = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
-    let franken = { mode: 'system' };
-    try {
-        const stored = localStorage.getItem('__FRANKEN__');
-        if (stored) {
-            const parsed = JSON.parse(stored);
-            if (parsed && THEME_MODES.includes(parsed.mode)) {
-                franken = parsed;
-            }
-        }
-    } catch (_) {}
+    function readFranken() {
+        try {
+            const parsed = JSON.parse(localStorage.getItem('__FRANKEN__') || '{}');
+            if (parsed && typeof parsed === 'object') return parsed;
+        } catch (_) {}
+        return {};
+    }
+    const storedThemeMode = (stored) => (stored.mode === 'light' || stored.mode === 'dark' ? stored.mode : 'system');
+    let franken = readFranken();
+    if (storedThemeMode(franken) === 'system') delete franken.mode;
 
     function applyThemeMode(mode) {
         const root = document.documentElement;
@@ -117,19 +119,18 @@
     }
 
     window.vyasaCycleThemeMode = function vyasaCycleThemeMode() {
-        let stored = {};
-        try { stored = JSON.parse(localStorage.getItem('__FRANKEN__') || '{}') || {}; } catch (_) {}
-        const current = THEME_MODES.includes(stored.mode) ? stored.mode : 'system';
-        stored.mode = THEME_MODES[(THEME_MODES.indexOf(current) + 1) % THEME_MODES.length];
+        const stored = readFranken();
+        const next = THEME_MODES[(THEME_MODES.indexOf(storedThemeMode(stored)) + 1) % THEME_MODES.length];
+        if (next === 'system') delete stored.mode; else stored.mode = next;
         localStorage.setItem('__FRANKEN__', JSON.stringify(stored));
-        applyThemeMode(stored.mode);
+        applyThemeMode(next);
     };
 
     systemDark?.addEventListener?.('change', () => {
         if (document.documentElement.dataset.themeMode === 'system') applyThemeMode('system');
     });
 
-    applyThemeMode(franken.mode);
+    applyThemeMode(storedThemeMode(franken));
 
     franken = applyStoredThemePreset(franken);
 
