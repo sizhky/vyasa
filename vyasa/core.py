@@ -776,17 +776,14 @@ ensure_app_initialized()
 
 
 def theme_toggle():
-    theme_script = """on load set franken to (localStorage's __FRANKEN__ or '{}') as Object
-                if franken's mode is 'dark' then add .dark to <html/> end
-                on click toggle .dark on <html/>
-                set franken to (localStorage's __FRANKEN__ or '{}') as Object
-                if the first <html/> matches .dark set franken's mode to 'dark' else set franken's mode to 'light' end
-                set localStorage's __FRANKEN__ to franken as JSON"""
     button = Button(
-        UkIcon("moon", cls="dark:hidden"),
-        UkIcon("sun", cls="hidden dark:block"),
-        _=theme_script,
+        UkIcon("sun", data_theme_mode_icon="light"),
+        UkIcon("moon", data_theme_mode_icon="dark"),
+        UkIcon("monitor", data_theme_mode_icon="system"),
+        onclick="window.vyasaCycleThemeMode && window.vyasaCycleThemeMode()",
         id="theme-mode-toggle",
+        title="Theme: light, dark, or system",
+        aria_label="Cycle theme mode: light, dark, system",
         cls="vyasa-emphasis-control vyasa-emphasis-control-icon p-1 hover:scale-110 shadow-none",
         type="button",
     )

@@ -96,23 +96,40 @@
         });
     } catch (_) {}
 
-    const prefersDark = !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    let franken = { mode: prefersDark ? 'dark' : 'light' };
+    const THEME_MODES = ['light', 'dark', 'system'];
+    const systemDark = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+    let franken = { mode: 'system' };
     try {
         const stored = localStorage.getItem('__FRANKEN__');
         if (stored) {
             const parsed = JSON.parse(stored);
-            if (parsed && (parsed.mode === 'light' || parsed.mode === 'dark')) {
+            if (parsed && THEME_MODES.includes(parsed.mode)) {
                 franken = parsed;
             }
         }
     } catch (_) {}
 
-    if (franken.mode === 'dark') {
-        document.documentElement.classList.add('dark');
-    } else {
-        document.documentElement.classList.remove('dark');
+    function applyThemeMode(mode) {
+        const root = document.documentElement;
+        const dark = mode === 'dark' || (mode === 'system' && !!systemDark?.matches);
+        root.dataset.themeMode = mode;
+        root.classList.toggle('dark', dark);
     }
+
+    window.vyasaCycleThemeMode = function vyasaCycleThemeMode() {
+        let stored = {};
+        try { stored = JSON.parse(localStorage.getItem('__FRANKEN__') || '{}') || {}; } catch (_) {}
+        const current = THEME_MODES.includes(stored.mode) ? stored.mode : 'system';
+        stored.mode = THEME_MODES[(THEME_MODES.indexOf(current) + 1) % THEME_MODES.length];
+        localStorage.setItem('__FRANKEN__', JSON.stringify(stored));
+        applyThemeMode(stored.mode);
+    };
+
+    systemDark?.addEventListener?.('change', () => {
+        if (document.documentElement.dataset.themeMode === 'system') applyThemeMode('system');
+    });
+
+    applyThemeMode(franken.mode);
 
     franken = applyStoredThemePreset(franken);
 

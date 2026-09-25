@@ -690,6 +690,17 @@ html[data-vyasa-hide-toc-sidebar] #toc-sidebar {
     stroke: currentColor !important;
 }
 
+#theme-mode-toggle [data-theme-mode-icon] {
+    display: none;
+}
+
+html:not([data-theme-mode]) #theme-mode-toggle [data-theme-mode-icon="system"],
+html[data-theme-mode="light"] #theme-mode-toggle [data-theme-mode-icon="light"],
+html[data-theme-mode="dark"] #theme-mode-toggle [data-theme-mode-icon="dark"],
+html[data-theme-mode="system"] #theme-mode-toggle [data-theme-mode-icon="system"] {
+    display: inline-block;
+}
+
 .vyasa-emphasis-control-menu {
     --vyasa-emphasis-control-text: var(--vyasa-emphasis-control-menu-text);
     --vyasa-emphasis-control-bg-hover: var(--vyasa-emphasis-control-menu-option-hover);
