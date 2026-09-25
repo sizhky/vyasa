@@ -1028,6 +1028,17 @@ document.addEventListener('toggle', (event) => {
     details.classList.toggle('is-open', details.open);
 }, true);
 
+// Esc toggles the innermost hovered <details>; bubbling on window lets overlay Esc handlers claim the key first
+window.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || event.defaultPrevented || event.repeat) return;
+    if (shortcutsSuspended() || isEditableShortcutEvent(event)) return;
+    const details = [...document.querySelectorAll('details:hover')].pop();
+    const summary = details?.querySelector(':scope > summary');
+    if (!summary) return;
+    event.preventDefault();
+    summary.click();
+});
+
 function syncFoldAllButton(button, allOpen) {
     const label = allOpen ? 'Fold all' : 'Unfold all';
     button.classList.add('vyasa-page-action-tooltip');
