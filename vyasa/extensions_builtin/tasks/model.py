@@ -398,6 +398,9 @@ def _clean_gradient_palette(value) -> dict:
             gradient["domain"] = [start, end]
     if "wrap" in value:
         gradient["wrap"] = bool(value.get("wrap"))
+    positions = [stop["at"] for stop in cleaned_stops] + list(gradient.get("domain", []))
+    if value.get("scale") == "log" and all(position > 0 for position in positions):
+        gradient["scale"] = "log"
     label = str(value.get("label") or "").strip()
     if label:
         gradient["label"] = label

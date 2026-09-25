@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from vyasa.extensions import AssetBundle, ExtensionRuntime, request_asset_bundle
 from vyasa.extensions_builtin.link_preview import code_reference_render, routes
 from vyasa.extensions_builtin.link_preview.code_reference import (
     CodeReference,
@@ -826,6 +827,20 @@ def test_link_preview_fragment_match_ignores_heading_case(tmp_path, monkeypatch)
     assert "Later" not in result
 
 
+def test_external_web_links_enable_previews_without_including_other_schemes() -> None:
+    from vyasa.extensions_builtin.markdown.renderer import _render_markdown_fragment
+
+    for target in ("https://example.org/page", "http://example.org", "//example.org"):
+        rendered = _render_markdown_fragment(f"[Webpage]({target})")
+        assert 'data-vyasa-link-preview="true"' in rendered
+        assert 'target="_blank"' in rendered
+    for target in ("mailto:reader@example.org", "tel:123", "vscode://open"):
+        rendered = _render_markdown_fragment(f"[Open]({target})")
+        assert 'data-vyasa-link-preview="true"' not in rendered
+    rendered = _render_markdown_fragment('[Download](https://example.org/file "download=true")')
+    assert 'data-vyasa-link-preview="true"' not in rendered
+
+
 def test_link_preview_stack_keeps_nested_previews_until_each_is_closed():
     script = """
         import { LinkPreviewStack } from './vyasa/extensions_builtin/link_preview/static/link_preview_stack.js';
@@ -1640,3 +1655,36 @@ def test_single_block_navigation_cycles_onto_itself():
         }
     """
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
+def test_link_preview_renders_kg_directory_with_static_renderer(tmp_path, monkeypatch):
+    graph = tmp_path / "tasks.kg"
+    graph.mkdir()
+    (graph / "kg.schema").write_text("{}", encoding="utf-8")
+    calls = []
+
+    def render(context):
+        calls.append(context.doc_file)
+        request_asset_bundle("tasks.runtime")
+        return type("Rendered", (), {"content_html": '<div class="tasks-container"></div>'})()
+
+    runtime = ExtensionRuntime(
+        plan=None,
+        catalog={},
+        bundles={"tasks.runtime": AssetBundle("tasks.runtime", js=("/static/extensions/tasks/tasks.js",))},
+        static_document_renderers={"kg": render},
+    )
+    monkeypatch.setattr(routes, "content_path_for_slug", lambda slug, suffix="": graph if not suffix else None)
+    monkeypatch.setattr(routes, "content_slug_for_path", lambda _path, strip_suffix=True: "tasks.kg")
+    monkeypatch.setattr(routes, "get_extension_runtime", lambda: runtime)
+    monkeypatch.setattr(routes, "document_kind_for_path", lambda _path: "kg")
+    monkeypatch.setattr(routes, "is_document_path", lambda path: path == graph)
+
+    result = routes.render_link_preview_html(href="/posts/tasks.kg")
+
+    assert calls == [graph]
+    assert result is not None
+    assert '<div class="tasks-container"></div>' in result
+    assert 'data-relative-path="tasks.kg"' in result
+    assert 'data-vyasa-bundle-asset="true"' in result
+    assert "tasks.js" in result

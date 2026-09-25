@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Vyasa Link Previews",
+  "version": "0.1.0",
+  "description": "Open nested Vyasa previews with Cmd/Ctrl-hover inside external webpages.",
+  "content_scripts": [{
+    "matches": ["http://*/*", "https://*/*"],
+    "js": ["content.js"],
+    "all_frames": true
+  }]
+}

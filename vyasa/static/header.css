@@ -690,6 +690,17 @@ html[data-vyasa-hide-toc-sidebar] #toc-sidebar {
     stroke: currentColor !important;
 }
 
+#theme-mode-toggle [data-theme-mode-icon] {
+    display: none;
+}
+
+html:not([data-theme-mode]) #theme-mode-toggle [data-theme-mode-icon="system"],
+html[data-theme-mode="light"] #theme-mode-toggle [data-theme-mode-icon="light"],
+html[data-theme-mode="dark"] #theme-mode-toggle [data-theme-mode-icon="dark"],
+html[data-theme-mode="system"] #theme-mode-toggle [data-theme-mode-icon="system"] {
+    display: inline-block;
+}
+
 .vyasa-emphasis-control-menu {
     --vyasa-emphasis-control-text: var(--vyasa-emphasis-control-menu-text);
     --vyasa-emphasis-control-bg-hover: var(--vyasa-emphasis-control-menu-option-hover);
@@ -1007,11 +1018,47 @@ html:has(.image-focus-dialog[open]), body.image-focus-open { overflow: hidden; }
    step at each nesting level. Vyasa-owned details (callouts, heading folds,
    frontmatter, sidebar, tree) keep their own spacing. */
 #main-content details:not([class*="vyasa-"]) {
-    --vyasa-details-indent: 1.1rem;
+    --vyasa-details-indent: 1.35rem;
     padding-left: var(--vyasa-details-indent);
+    margin-block: 0.4rem;
 }
 #main-content details:not([class*="vyasa-"]) > summary {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
     margin-left: calc(-1 * var(--vyasa-details-indent));
+    padding: 0.4rem 0.6rem 0.4rem 0.35rem;
+    border-radius: 0.5rem;
+    line-height: 1.5;
+    list-style: none;
+    cursor: pointer;
+    transition: background-color 140ms ease;
+}
+#main-content details:not([class*="vyasa-"]) > summary::-webkit-details-marker { display: none; }
+#main-content details:not([class*="vyasa-"]) > summary::before {
+    content: "";
+    flex: 0 0 auto;
+    width: 0.42rem;
+    height: 0.42rem;
+    margin: 0 0.2rem 0 0.25rem;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(-45deg);
+    opacity: 0.55;
+    transition: transform 160ms ease, opacity 160ms ease;
+}
+#main-content details:not([class*="vyasa-"])[open] > summary::before { transform: rotate(45deg); opacity: 0.85; }
+#main-content details:not([class*="vyasa-"]) > summary:hover { background: color-mix(in srgb, var(--vyasa-ink) 5%, transparent); }
+#main-content details:not([class*="vyasa-"]) > summary:hover::before { opacity: 0.9; }
+#main-content details:not([class*="vyasa-"]) > summary:focus-visible { outline: 2px solid color-mix(in srgb, var(--vyasa-primary) 55%, transparent); outline-offset: 1px; }
+#main-content details:not([class*="vyasa-"]) > summary > code { padding: 0.12em 0.45em; }
+#main-content details:not([class*="vyasa-"])[open] { margin-block: 0.4rem 1rem; }
+#main-content details:not([class*="vyasa-"])[open] > summary { margin-bottom: 0.35rem; }
+/* Guide line under the chevron, beside the body only; browsers without ::details-content skip it */
+#main-content details:not([class*="vyasa-"])::details-content {
+    margin-left: calc(0.85rem - var(--vyasa-details-indent));
+    padding-left: calc(var(--vyasa-details-indent) - 0.85rem - 1px);
+    border-left: 1px solid color-mix(in srgb, var(--vyasa-ink) 12%, transparent);
 }
 
 .vyasa-callout { --vyasa-callout-accent: var(--vyasa-primary); background: var(--vyasa-paper-low); border: 1px solid color-mix(in srgb, var(--vyasa-callout-accent) 16%, transparent); box-shadow: 0 22px 34px -30px rgba(45, 52, 52, 0.24); }
@@ -1297,7 +1344,10 @@ details[open] > .vyasa-callout-summary .vyasa-callout-chevron { transform: rotat
 .vyasa-heading-fold-body li > ol { margin-top: 0.3rem; }
 .code-block pre, .code-block pre *, .code-block pre code, .code-block pre code *, pre code.hljs, pre code.hljs * { font-family: var(--vyasa-font-mono) !important; }
 .code-block pre, .code-block pre code, pre code.hljs { background: var(--vyasa-code-bg); color: var(--vyasa-code-fg); }
-:not(pre) > code { background: var(--vyasa-inline-code-bg); color: var(--vyasa-inline-code-fg); border: 1px solid var(--vyasa-inline-code-border); padding: 0.1em 0.35em; border-radius: 0.25rem; }
+:not(pre) > code, a.vyasa-code-link:not(:has(code)) { background: var(--vyasa-inline-code-bg); border: 1px solid var(--vyasa-inline-code-border); padding: 0.1em 0.35em; border-radius: 0.25rem; }
+:not(pre) > code { color: var(--vyasa-inline-code-fg); }
+a.vyasa-code-link, a.vyasa-code-link code { font-family: var(--vyasa-font-mono); }
+a.vyasa-code-link code { color: inherit; }
 .code-block { margin: 1.4rem 0 1.8rem; }
 .code-block pre { border: 1px solid var(--vyasa-code-border); border-radius: var(--vyasa-rect-radius) !important; padding: 1.15rem 1.3rem !important; box-shadow: 0 16px 24px -22px rgba(45, 52, 52, 0.18); }
 .code-block pre code, pre code.hljs { display: block; width: 100%; box-sizing: border-box; font-size: 0.95rem; line-height: 1.2; }

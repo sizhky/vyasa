@@ -7,7 +7,7 @@ from functools import partial
 from itertools import count
 from pathlib import Path
 from typing import Any, Protocol
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 import mistletoe as mst
 from fasthtml.common import Div, Link, NotStr, Script, Span, to_xml
@@ -22,6 +22,7 @@ from ...helpers import (
     _plain_text_from_html,
     content_path_for_slug,
     content_url_for_slug,
+    document_kind_for_suffix,
     enabled_document_suffixes,
     get_content_mounts,
     content_root_and_relative,
@@ -860,7 +861,7 @@ class ContentRenderer(FrankenRenderer):
             wrap=bool(attrs.get("wrap")),
         )
 
-    def render_link(self, token):
+    def render_link(self, token: Any) -> str:
         href, inner, title = token.target, self.render_inner(token), f' title="{token.title}"' if token.title else ""
         href, code_reference = extract_code_reference(href)
         code_reference_attr = (
@@ -920,6 +921,7 @@ class ContentRenderer(FrankenRenderer):
         is_internal = is_absolute_internal and "." not in href.split("/")[-1]
         href_suffix = Path(urlsplit(href).path).suffix.lower()
         is_plain_text = is_absolute_internal and bool(href_suffix) and href_suffix not in enabled_document_suffixes()
+        is_graph_document = is_absolute_internal and document_kind_for_suffix(href_suffix) == "kg"
         doc_escape = self.slide_mode and is_absolute_internal and not href.startswith("/slides/")
         has_text_fragment = ":~:text=" in href
         hx = f' hx-get="{href}" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML show:window:top"' if (is_internal and not doc_escape and not has_text_fragment) else ""
@@ -932,10 +934,13 @@ class ContentRenderer(FrankenRenderer):
             download_target = href[len("/posts/"):] if href.startswith("/posts/") else href.lstrip("/") if href.startswith("/") else href
             href = content_url_for_slug(download_target, prefix="/download")
             hx = ""
-        if (is_internal or is_plain_text) and not download_flag:
+        if (is_internal or is_plain_text or is_graph_document or href.startswith(("https://", "http://", "//"))) and not download_flag:
             request_asset_bundle("link_preview.runtime")
             preview_attrs = f' data-vyasa-link-preview="true"{current_path_attr}{code_reference_attr}'
         link_class = "underline underline-offset-2 font-medium transition-colors"
+        code_path = re.sub(r":\d+(?::\d+)?$", "", unquote(urlsplit(href).path).partition("$")[0])
+        if infer_code_language(code_path) and Path(code_path).suffix.lower() not in enabled_document_suffixes() and "<img" not in inner:
+            link_class += " vyasa-code-link"
         return f'<a href="{href}"{hx}{ext}{download_attr}{boost_attr}{preview_attrs} class="{link_class}"{title}>{inner}</a>'
 
 

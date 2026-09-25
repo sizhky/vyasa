@@ -408,3 +408,20 @@ def test_copy_relative_path_button_carries_shift_copy_absolute_payload():
     assert "vyasa-page-action-tooltip" in button_html
     assert 'class="sr-only"' in button_html
     assert "/tmp/notes/x.md" not in target_html
+
+
+def test_theme_mode_cycles_light_dark_system_and_follows_os_in_system():
+    """Default is system; clicks cycle light -> dark -> system; system resolves .dark from prefers-color-scheme."""
+    script = """
+        const cls = new Set(); const store = {};
+        global.window = { matchMedia: () => ({ matches: true, addEventListener() {} }), location: { search: '' }, addEventListener() {} };
+        global.document = { documentElement: { dataset: {}, classList: { toggle: (c, v) => v ? cls.add(c) : cls.delete(c), contains: (c) => cls.has(c) } },
+            readyState: 'complete', body: null, addEventListener() {}, getElementById: () => null };
+        global.MutationObserver = class { observe() {} }; global.performance = { now: () => 0 };
+        global.localStorage = { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = v; } };
+        require('./vyasa/static/head-init.js');
+        const seen = [];
+        for (let i = 0; i < 4; i++) { seen.push(`${document.documentElement.dataset.themeMode}:${cls.has('dark')}`); window.vyasaCycleThemeMode(); }
+        if (seen.join(' ') !== 'system:true light:false dark:true system:true') throw new Error(seen.join(' '));
+    """
+    subprocess.run(["node", "-e", script], check=True)

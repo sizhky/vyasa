@@ -341,6 +341,13 @@ def test_internal_file_link_escapes_main_content_htmx_boost():
     assert 'hx-boost="false"' in html
 
 
+def test_kg_document_link_requests_link_preview():
+    html = to_xml(from_md("[Graph](/posts/library/tasks.kg)"))
+
+    assert 'data-vyasa-link-preview="true"' in html
+    assert 'data-vyasa-link-preview="true"' not in to_xml(from_md("[PDF](/posts/library/guide.pdf)"))
+
+
 def test_custom_uri_scheme_is_not_rewritten_as_relative_content():
     uri = "vscode://maaashjp.symbol-opener?symbol=DoingView&cwd=%2Ftmp&kind=Class"
 

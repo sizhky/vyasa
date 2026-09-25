@@ -2401,3 +2401,22 @@ def test_kg_pack_links_resolve_from_pack_folder_on_every_referring_page(tmp_path
 
     assert "/posts/src/feed.ts" in html.unescape(from_pack_page)
     assert "/posts/src/feed.ts" in html.unescape(from_document)
+
+
+def test_log_scale_continuous_palette_interpolates_in_log_space():
+    """With scale log, 10 sits halfway between stops at 1 and 100, and the legend places it at 50%."""
+    script = """
+        import { resolveTasksNodeColor, normalizeTasksGradientStops, tasksGradientDomain } from './vyasa/extensions_builtin/tasks/static/tasks_paint.js';
+        const stops = [{ at: 1, color: '#000000' }, { at: 10, color: '#ff0000' }, { at: 100, color: '#ffffff' }];
+        const log = { type: 'continuous', scale: 'log', stops };
+        const color = (palette, n) => resolveTasksNodeColor({ id: 'a', n }, { node_color_palettes: { n: palette } }, 'n', palette);
+        if (color(log, 10) !== '#ff0000') throw new Error(`log midpoint: ${color(log, 10)}`);
+        if (color(log, 0) !== '#000000') throw new Error(`nonpositive clamps to first stop: ${color(log, 0)}`);
+        if (color({ ...log, scale: undefined }, 10) !== '#ff0000') throw new Error('linear stop hit changed');
+        if (color({ ...log, scale: undefined }, 5.5) === color(log, 5.5)) throw new Error('log did not change interpolation');
+        const normalized = normalizeTasksGradientStops(log);
+        const domain = tasksGradientDomain(log, normalized);
+        const middle = (normalized[1].pos - domain.start) / (domain.end - domain.start);
+        if (Math.abs(middle - 0.5) > 1e-9 || normalized[1].at !== 10) throw new Error('legend position or label is wrong');
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
