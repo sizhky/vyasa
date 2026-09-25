@@ -421,7 +421,14 @@ def test_theme_mode_cycles_light_dark_system_and_follows_os_in_system():
         global.localStorage = { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = v; } };
         require('./vyasa/static/head-init.js');
         const seen = [];
-        for (let i = 0; i < 4; i++) { seen.push(`${document.documentElement.dataset.themeMode}:${cls.has('dark')}`); window.vyasaCycleThemeMode(); }
+        let systemStored = '';
+        for (let i = 0; i < 4; i++) {
+            seen.push(`${document.documentElement.dataset.themeMode}:${cls.has('dark')}`);
+            if (i === 3) systemStored = store.__FRANKEN__;
+            window.vyasaCycleThemeMode();
+        }
         if (seen.join(' ') !== 'system:true light:false dark:true system:true') throw new Error(seen.join(' '));
+        // MonsterUI's head script runs later and reads only 'light', 'dark', or no mode as the OS preference.
+        if ('mode' in JSON.parse(systemStored)) throw new Error(`system mode stored as ${systemStored}`);
     """
     subprocess.run(["node", "-e", script], check=True)
