@@ -2420,3 +2420,41 @@ def test_log_scale_continuous_palette_interpolates_in_log_space():
         if (Math.abs(middle - 0.5) > 1e-9 || normalized[1].at !== 10) throw new Error('legend position or label is wrong');
     """
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
+def test_tapered_ribbon_width_follows_the_curve_on_s_bends_and_loops():
+    """The ribbon narrows evenly from source to target width; an S-bend does not pinch and a same-side loop does not twist."""
+    script = """
+        import { tasksTaperedBezierPath } from './vyasa/extensions_builtin/tasks/static/tasks_paint.js';
+        for (const curve of ['M 540 50 C 540 250 20 150 20 360', 'M 0 0 C 0 80 120 80 120 0']) {
+            const pts = tasksTaperedBezierPath(curve, 10, 2).match(/-?\\d*\\.?\\d+(?:e[-+]?\\d+)?/gi).map(Number);
+            const pairs = []; for (let i = 0; i < pts.length; i += 2) pairs.push([pts[i], pts[i + 1]]);
+            const half = pairs.length / 2;
+            const widths = pairs.slice(0, half).map((p, i) => Math.hypot(p[0] - pairs[pairs.length - 1 - i][0], p[1] - pairs[pairs.length - 1 - i][1]));
+            widths.forEach((w, i) => {
+                const want = 10 + (2 - 10) * (i / (half - 1));
+                if (Math.abs(w - want) > 1e-6) throw new Error(`${curve} sample ${i}: ${w} != ${want}`);
+            });
+        }
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
+def test_trimmed_edge_end_stays_on_the_drawn_curve():
+    """The ribbon under an arrowhead is a piece of the edge curve, so it cannot drift off the centreline."""
+    script = """
+        import { tasksTrimBezierEnd } from './vyasa/extensions_builtin/tasks/static/tasks_paint.js';
+        const curve = [540, 50, 540, 250, 20, 150, 20, 360];
+        const at = (k, t) => (1 - t) ** 3 * k[0] + 3 * (1 - t) ** 2 * t * k[1] + 3 * (1 - t) * t * t * k[2] + t ** 3 * k[3];
+        const trim = tasksTrimBezierEnd(`M ${curve.join(' ')}`.replace(/^M (\\S+ \\S+) /, 'M $1 C '), 12).match(/-?\\d*\\.?\\d+(?:e[-+]?\\d+)?/gi).map(Number);
+        const ox = [0, 2, 4, 6].map((i) => curve[i]), oy = [1, 3, 5, 7].map((i) => curve[i]);
+        const tx = [0, 2, 4, 6].map((i) => trim[i]), ty = [1, 3, 5, 7].map((i) => trim[i]);
+        const end = Math.hypot(tx[3] - ox[3], ty[3] - oy[3]);
+        if (end < 11 || end > 13) throw new Error(`trim distance ${end}`);
+        for (let s = 0; s <= 1; s += 0.05) {
+            const px = at(tx, s), py = at(ty, s);
+            let best = Infinity; for (let u = 0; u <= 1; u += 0.0005) best = Math.min(best, Math.hypot(at(ox, u) - px, at(oy, u) - py));
+            if (best > 0.3) throw new Error(`trimmed point ${s} is ${best}px off the curve`);
+        }
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)

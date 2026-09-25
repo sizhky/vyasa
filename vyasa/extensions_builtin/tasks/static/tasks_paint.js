@@ -116,29 +116,55 @@ export function tasksEdgeStrokeWidthForMode(mode) {
     return 1.25;
 }
 
-export function tasksTaperedBezierPath(bezierPath, sourceWidth, targetWidth) {
+// Both ribbon edges are true offsets: each sample moves along the curve's own
+// normal at that point. Shifting whole control points by the end normals only
+// translates the curve, which pinches an S-bend to a hairline and twists a
+// same-side loop inside out.
+function tasksBezierRibbonPath(bezierPath, offsetsAt) {
     const nums = String(bezierPath || '').match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi)?.map(Number) || [];
     if (nums.length < 8) return '';
     const [x0, y0, x1, y1, x2, y2, x3, y3] = nums;
-    const normal = (ax, ay, bx, by) => {
-        const dx = bx - ax;
-        const dy = by - ay;
+    // About one sample per 4px of control polygon, which bounds the curve length.
+    const hull = Math.hypot(x1 - x0, y1 - y0) + Math.hypot(x2 - x1, y2 - y1) + Math.hypot(x3 - x2, y3 - y2);
+    const samples = Math.max(32, Math.min(160, Math.ceil(hull / 4)));
+    const at = (a, b, c, d, t) => (1 - t) ** 3 * a + 3 * (1 - t) ** 2 * t * b + 3 * (1 - t) * t * t * c + t ** 3 * d;
+    const slope = (a, b, c, d, t) => 3 * (1 - t) ** 2 * (b - a) + 6 * (1 - t) * t * (c - b) + 3 * t * t * (d - c);
+    const points = Array.from({ length: samples + 1 }, (_, i) => {
+        const t = i / samples;
+        return { t, x: at(x0, x1, x2, x3, t), y: at(y0, y1, y2, y3, t), dx: slope(x0, x1, x2, x3, t), dy: slope(y0, y1, y2, y3, t) };
+    });
+    const outer = [];
+    const inner = [];
+    points.forEach((point, i) => {
+        // A control point sitting on its endpoint zeroes the tangent there; the
+        // neighbouring sample still gives the direction.
+        const next = points[Math.min(i + 1, samples)];
+        const prev = points[Math.max(i - 1, 0)];
+        let { dx, dy } = point;
+        if (Math.hypot(dx, dy) < 1e-6) { dx = next.x - prev.x; dy = next.y - prev.y; }
         const len = Math.hypot(dx, dy) || 1;
-        return { x: -dy / len, y: dx / len };
-    };
-    const n0 = normal(x0, y0, x1, y1);
-    const n3 = normal(x2, y2, x3, y3);
+        const nx = -dy / len;
+        const ny = dx / len;
+        const [left, right] = offsetsAt(point.t);
+        outer.push(`${point.x + nx * left} ${point.y + ny * left}`);
+        inner.push(`${point.x + nx * right} ${point.y + ny * right}`);
+    });
+    return `M ${outer.join(' L ')} L ${inner.reverse().join(' L ')} Z`;
+}
+
+function tasksRibbonHalfWidth(width) {
     // A width of 0 is a real request: it lets an end taper to a point instead of
     // arriving as a stub. Only a missing width falls back to 1.
-    const w0 = Math.max(0, Number.isFinite(Number(sourceWidth)) ? Number(sourceWidth) : 1) / 2;
-    const w3 = Math.max(0, Number.isFinite(Number(targetWidth)) ? Number(targetWidth) : 1) / 2;
-    return [
-        `M ${x0 + n0.x * w0} ${y0 + n0.y * w0}`,
-        `C ${x1 + n0.x * w0} ${y1 + n0.y * w0} ${x2 + n3.x * w3} ${y2 + n3.y * w3} ${x3 + n3.x * w3} ${y3 + n3.y * w3}`,
-        `L ${x3 - n3.x * w3} ${y3 - n3.y * w3}`,
-        `C ${x2 - n3.x * w3} ${y2 - n3.y * w3} ${x1 - n0.x * w0} ${y1 - n0.y * w0} ${x0 - n0.x * w0} ${y0 - n0.y * w0}`,
-        'Z',
-    ].join(' ');
+    return Math.max(0, Number.isFinite(Number(width)) ? Number(width) : 1) / 2;
+}
+
+export function tasksTaperedBezierPath(bezierPath, sourceWidth, targetWidth) {
+    const w0 = tasksRibbonHalfWidth(sourceWidth);
+    const w3 = tasksRibbonHalfWidth(targetWidth);
+    return tasksBezierRibbonPath(bezierPath, (t) => {
+        const w = w0 + (w3 - w0) * t;
+        return [w, -w];
+    });
 }
 
 // A pair wants its casing on the OUTER side only. A symmetric casing lays paper
@@ -148,32 +174,14 @@ export function tasksTaperedBezierPath(bezierPath, sourceWidth, targetWidth) {
 // inner edge while the outer one is padded, so no paper ever crosses the shared
 // centreline.
 export function tasksSideWeightedRibbonPath(bezierPath, sourceWidth, targetWidth, outerPad, side) {
-    const nums = String(bezierPath || '').match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi)?.map(Number) || [];
-    if (nums.length < 8) return '';
-    const [x0, y0, x1, y1, x2, y2, x3, y3] = nums;
-    const normal = (ax, ay, bx, by) => {
-        const dx = bx - ax;
-        const dy = by - ay;
-        const len = Math.hypot(dx, dy) || 1;
-        return { x: -dy / len, y: dx / len };
-    };
-    const n0 = normal(x0, y0, x1, y1);
-    const n3 = normal(x2, y2, x3, y3);
     const sign = side > 0 ? 1 : -1;
     const w0 = Math.max(0, Number(sourceWidth) || 0) / 2;
     const w3 = Math.max(0, Number(targetWidth) || 0) / 2;
     const pad = Math.max(0, Number(outerPad) || 0);
-    const o0 = sign * (w0 + pad);
-    const o3 = sign * (w3 + pad);
-    const i0 = -sign * w0;
-    const i3 = -sign * w3;
-    return [
-        `M ${x0 + n0.x * o0} ${y0 + n0.y * o0}`,
-        `C ${x1 + n0.x * o0} ${y1 + n0.y * o0} ${x2 + n3.x * o3} ${y2 + n3.y * o3} ${x3 + n3.x * o3} ${y3 + n3.y * o3}`,
-        `L ${x3 + n3.x * i3} ${y3 + n3.y * i3}`,
-        `C ${x2 + n3.x * i3} ${y2 + n3.y * i3} ${x1 + n0.x * i0} ${y1 + n0.y * i0} ${x0 + n0.x * i0} ${y0 + n0.y * i0}`,
-        'Z',
-    ].join(' ');
+    return tasksBezierRibbonPath(bezierPath, (t) => {
+        const w = w0 + (w3 - w0) * t;
+        return [sign * (w + pad), -sign * w];
+    });
 }
 
 // A tapered ribbon used to end in a point at the tip, because the arrowhead is
@@ -186,14 +194,20 @@ export function tasksTrimBezierEnd(bezierPath, backOff) {
     if (nums.length < 8) return String(bezierPath || '');
     const [x0, y0, x1, y1, x2, y2, x3, y3] = nums;
     const plain = `M ${x0} ${y0} C ${x1} ${y1} ${x2} ${y2} ${x3} ${y3}`;
-    const dx = x3 - x2;
-    const dy = y3 - y2;
-    const len = Math.hypot(dx, dy);
-    // Pulling the endpoint past its own control point reverses the end tangent,
-    // which turns the ribbon inside out. Keep the last leg pointing forward.
-    const back = Math.min(Math.max(0, Number(backOff) || 0), len * 0.9);
-    if (!len || !back) return plain;
-    return `M ${x0} ${y0} C ${x1} ${y1} ${x2} ${y2} ${x3 - (dx / len) * back} ${y3 - (dy / len) * back}`;
+    const back = Math.max(0, Number(backOff) || 0);
+    if (!back) return plain;
+    // The trimmed ribbon must be a piece of the drawn curve. Moving only the
+    // endpoint bends the whole curve away from the centreline it rides on.
+    const at = (a, b, c, d, t) => (1 - t) ** 3 * a + 3 * (1 - t) ** 2 * t * b + 3 * (1 - t) * t * t * c + t ** 3 * d;
+    let t = 1;
+    while (t > 0.1 && Math.hypot(at(x0, x1, x2, x3, t) - x3, at(y0, y1, y2, y3, t) - y3) < back) t -= 0.005;
+    const lerp = (p, q) => [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t];
+    const p01 = lerp([x0, y0], [x1, y1]);
+    const p12 = lerp([x1, y1], [x2, y2]);
+    const p23 = lerp([x2, y2], [x3, y3]);
+    const p012 = lerp(p01, p12);
+    const end = lerp(p012, lerp(p12, p23));
+    return `M ${x0} ${y0} C ${p01[0]} ${p01[1]} ${p012[0]} ${p012[1]} ${end[0]} ${end[1]}`;
 }
 
 export function tasksTaperedArrowHeadPath(bezierPath, size, side = 0) {
