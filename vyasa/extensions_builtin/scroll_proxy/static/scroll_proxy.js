@@ -99,7 +99,37 @@ function mountTip(bar, theme) {
         image.src = tip.src; image.alt = ''; link.appendChild(image);
     } else link.textContent = tip.emoji;
     bar.appendChild(link);
+    bindScrub(link, bar);
     return () => link.remove();
+}
+
+// dragging the tip maps pointer x on the bar to page scroll; a press without travel stays a link click
+function bindScrub(handle, bar) {
+    handle.draggable = false;
+    handle.querySelector('img')?.setAttribute('draggable', 'false');
+    let startX = null, scrubbed = false;
+    const seek = (clientX) => {
+        const rect = bar.getBoundingClientRect();
+        const progress = Math.min(1, Math.max(0, (clientX - rect.left) / Math.max(1, rect.width)));
+        const max = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+        window.scrollTo({ top: progress * max, behavior: 'instant' });
+    };
+    handle.addEventListener('pointerdown', (event) => {
+        if (event.button !== 0) return;
+        startX = event.clientX; scrubbed = false;
+        handle.setPointerCapture(event.pointerId);
+    });
+    handle.addEventListener('pointermove', (event) => {
+        if (startX === null) return;
+        if (!scrubbed && Math.abs(event.clientX - startX) < 3) return;
+        scrubbed = true;
+        handle.classList.add('is-scrubbing');
+        seek(event.clientX);
+    });
+    const end = () => { startX = null; handle.classList.remove('is-scrubbing'); };
+    handle.addEventListener('pointerup', end);
+    handle.addEventListener('pointercancel', end);
+    handle.addEventListener('click', (event) => { if (scrubbed) event.preventDefault(); scrubbed = false; });
 }
 
 async function loadScrollProxyThemes() {

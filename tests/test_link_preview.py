@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from vyasa.extensions import AssetBundle, ExtensionRuntime, request_asset_bundle
 from vyasa.extensions_builtin.link_preview import code_reference_render, routes
 from vyasa.extensions_builtin.link_preview.code_reference import (
     CodeReference,
@@ -1654,3 +1655,36 @@ def test_single_block_navigation_cycles_onto_itself():
         }
     """
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
+def test_link_preview_renders_kg_directory_with_static_renderer(tmp_path, monkeypatch):
+    graph = tmp_path / "tasks.kg"
+    graph.mkdir()
+    (graph / "kg.schema").write_text("{}", encoding="utf-8")
+    calls = []
+
+    def render(context):
+        calls.append(context.doc_file)
+        request_asset_bundle("tasks.runtime")
+        return type("Rendered", (), {"content_html": '<div class="tasks-container"></div>'})()
+
+    runtime = ExtensionRuntime(
+        plan=None,
+        catalog={},
+        bundles={"tasks.runtime": AssetBundle("tasks.runtime", js=("/static/extensions/tasks/tasks.js",))},
+        static_document_renderers={"kg": render},
+    )
+    monkeypatch.setattr(routes, "content_path_for_slug", lambda slug, suffix="": graph if not suffix else None)
+    monkeypatch.setattr(routes, "content_slug_for_path", lambda _path, strip_suffix=True: "tasks.kg")
+    monkeypatch.setattr(routes, "get_extension_runtime", lambda: runtime)
+    monkeypatch.setattr(routes, "document_kind_for_path", lambda _path: "kg")
+    monkeypatch.setattr(routes, "is_document_path", lambda path: path == graph)
+
+    result = routes.render_link_preview_html(href="/posts/tasks.kg")
+
+    assert calls == [graph]
+    assert result is not None
+    assert '<div class="tasks-container"></div>' in result
+    assert 'data-relative-path="tasks.kg"' in result
+    assert 'data-vyasa-bundle-asset="true"' in result
+    assert "tasks.js" in result

@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 import re
 from pathlib import Path
+from types import SimpleNamespace
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from starlette.responses import Response
@@ -12,8 +13,12 @@ from ...helpers import (
     _strip_leading_frontmatter_block,
     content_path_for_slug,
     content_slug_for_path,
+    document_kind_for_path,
     find_folder_note_file,
+    is_document_path,
 )
+from ...assets import bundle_asset_html
+from ...extensions import bind_asset_collector, get_extension_runtime
 from ...code_source import split_origin_slug
 from ..markdown.renderer import from_md, infer_code_language, render_code_shell
 from .code_reference import CodeReferenceError, resolve_code_reference
@@ -102,8 +107,24 @@ def _resolve_preview_file(slug: str):
         return file_path
     raw_path = content_path_for_slug(slug)
     if raw_path and raw_path.exists():
-        return find_folder_note_file(raw_path) if raw_path.is_dir() else raw_path
+        if raw_path.is_dir() and not is_document_path(raw_path):
+            return find_folder_note_file(raw_path)
+        return raw_path
     return None
+
+
+def _render_document_preview(file_path: Path) -> str | None:
+    """Render a non-Markdown document, such as a `.kg` directory, with its static renderer."""
+    runtime = get_extension_runtime()
+    kind = document_kind_for_path(file_path)
+    renderer = runtime.static_document_renderers.get(kind) if runtime is not None and kind else None
+    if runtime is None or renderer is None:
+        return None
+    relative_path = content_slug_for_path(file_path, strip_suffix=False) or file_path.name
+    collector = runtime.new_asset_collector()
+    with bind_asset_collector(collector):
+        content_html = str(renderer(SimpleNamespace(doc_file=file_path, relative_path=relative_path)).content_html)
+    return bundle_asset_html(collector.requested, runtime=runtime) + content_html
 
 
 def _render_code_reference_preview(
@@ -151,6 +172,18 @@ def _source_label_attrs(relative_path: str) -> str:
     )
 
 
+def _preview_shell(file_path: Path, preview_html: str, target_line: int | None = None) -> str:
+    relative_path = content_slug_for_path(file_path, strip_suffix=False) or file_path.name
+    return (
+        f'<div class="vyasa-link-preview-shell" data-relative-path="{html.escape(relative_path, quote=True)}" '
+        f'{_source_label_attrs(relative_path)}'
+        f'{f"data-target-line={target_line!r} " if target_line else ""}'
+        f'data-absolute-path="{html.escape(str(file_path.resolve()), quote=True)}">'
+        f'<div class="vyasa-link-preview-body">{preview_html}</div>'
+        '</div>'
+    )
+
+
 def render_link_preview_html(
     *, href: str, current_path: str | None = None, code_ref: str = "", full: bool = False
 ) -> str | None:
@@ -179,6 +212,11 @@ def render_link_preview_html(
             f'<div class="vyasa-link-preview-body">{preview_html}</div>'
             '</div>'
         )
+    if file_path.is_dir():
+        preview_html = _render_document_preview(file_path)
+        if preview_html is None:
+            return None
+        return _preview_shell(file_path, preview_html)
     source = file_path.read_text(encoding="utf-8", errors="replace")
     target_line = _markdown_target_line(source, href) if file_path.suffix.lower() == ".md" else None
     if file_path.suffix.lower() == ".md":
@@ -213,15 +251,7 @@ def render_link_preview_html(
             if language
             else f'<pre class="vyasa-link-preview-plain-text">{html.escape(source)}</pre>'
         )
-    relative_path = content_slug_for_path(file_path, strip_suffix=False) or file_path.name
-    return (
-        f'<div class="vyasa-link-preview-shell" data-relative-path="{html.escape(relative_path, quote=True)}" '
-        f'{_source_label_attrs(relative_path)}'
-        f'{f"data-target-line={target_line!r} " if target_line else ""}'
-        f'data-absolute-path="{html.escape(str(file_path.resolve()), quote=True)}">'
-        f'<div class="vyasa-link-preview-body">{preview_html}</div>'
-        '</div>'
-    )
+    return _preview_shell(file_path, preview_html, target_line)
 
 
 def register_link_preview_routes(rt, runtime) -> None:

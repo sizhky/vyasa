@@ -5326,7 +5326,8 @@ async function renderTasksGraphs(rootElement = document) {
     if (needsRetry) window.requestAnimationFrame(() => { renderTasksGraphs(rootElement); });
 }
 window.__vyasaRenderTasksGraphs = renderTasksGraphs;
-document.addEventListener('DOMContentLoaded', () => { renderTasksGraphs(document); });
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { renderTasksGraphs(document); });
+else renderTasksGraphs(document);
 document.body.addEventListener('htmx:afterSwap', (event) => { renderTasksGraphs(event.target || document); });
 document.body.addEventListener('htmx:beforeRequest', (event) => {
     if (!window.__vyasaTasksDebug.enabled) return;
