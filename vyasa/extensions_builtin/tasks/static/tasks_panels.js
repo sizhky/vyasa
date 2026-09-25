@@ -420,10 +420,10 @@ export function createTasksPanels(getState) {
                             borderRadius: '999px',
                             border: '1px solid color-mix(in srgb, currentColor 12%, transparent)',
                             background: `linear-gradient(90deg, ${gradientStops.map((stop) => {
-                                const start = gradientDomain?.start ?? gradientStops[0]?.at ?? 0;
-                                const end = gradientDomain?.end ?? gradientStops[gradientStops.length - 1]?.at ?? 1;
-                                const span = Math.max(end - start, 1);
-                                return `${tasksDisplayPaletteColor(stop.color)} ${((stop.at - start) / span) * 100}%`;
+                                const start = gradientDomain?.start ?? gradientStops[0]?.pos ?? 0;
+                                const end = gradientDomain?.end ?? gradientStops[gradientStops.length - 1]?.pos ?? 1;
+                                const span = end - start || 1;
+                                return `${tasksDisplayPaletteColor(stop.color)} ${((stop.pos - start) / span) * 100}%`;
                             }).join(', ')})`,
                         } }),
                         React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' } },

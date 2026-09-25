@@ -716,3 +716,12 @@ def test_collapsed_graph_shared_contract() -> None:
             for key, value in model["group_tree"].items()
         }
         assert build_collapsed_graph(model) == fixture["expected"], fixture["name"]
+
+
+def test_gradient_palette_keeps_log_scale_only_for_positive_positions():
+    from vyasa.extensions_builtin.tasks.model import _clean_gradient_palette
+    stops = [{"at": 1, "color": "#000"}, {"at": 100, "color": "#fff"}]
+    assert _clean_gradient_palette({"type": "continuous", "scale": "log", "stops": stops})["scale"] == "log"
+    zero = [{"at": 0, "color": "#000"}, *stops[1:]]
+    assert "scale" not in _clean_gradient_palette({"type": "continuous", "scale": "log", "stops": zero})
+    assert "scale" not in _clean_gradient_palette({"type": "continuous", "scale": "log", "domain": [0, 100], "stops": stops})

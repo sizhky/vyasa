@@ -440,6 +440,12 @@ export function tasksColorOptions(model, nodeNotes = null) {
         });
 }
 
+// `at` stays in data units for labels; `pos` is where the stop sits on the palette's scale
+export function tasksGradientScalePosition(palette, value) {
+    if (palette?.scale !== 'log') return value;
+    return value > 0 ? Math.log10(value) : -Infinity;
+}
+
 export function normalizeTasksGradientStops(palette) {
     if (!isTasksGradientPalette(palette)) return [];
     return palette.stops
@@ -448,22 +454,24 @@ export function normalizeTasksGradientStops(palette) {
             color: typeof stop?.color === 'string' ? stop.color.trim() : '',
             label: typeof stop?.label === 'string' ? stop.label.trim() : '',
         }))
-        .filter((stop) => Number.isFinite(stop.at) && stop.color)
-        .sort((a, b) => a.at - b.at);
+        .map((stop) => ({ ...stop, pos: tasksGradientScalePosition(palette, stop.at) }))
+        .filter((stop) => Number.isFinite(stop.at) && Number.isFinite(stop.pos) && stop.color)
+        .sort((a, b) => a.pos - b.pos);
 }
 
 export function tasksGradientDomain(palette, stops) {
     const rawDomain = Array.isArray(palette?.domain) ? palette.domain : [];
-    const start = Number(rawDomain[0]);
-    const end = Number(rawDomain[1]);
+    const start = tasksGradientScalePosition(palette, Number(rawDomain[0]));
+    const end = tasksGradientScalePosition(palette, Number(rawDomain[1]));
     if (Number.isFinite(start) && Number.isFinite(end) && end !== start) return { start, end };
-    if (stops.length >= 2) return { start: stops[0].at, end: stops[stops.length - 1].at };
+    if (stops.length >= 2) return { start: stops[0].pos, end: stops[stops.length - 1].pos };
     return null;
 }
 
-function normalizeTasksGradientValue(value, domain, wrap) {
-    const numericValue = Number(value);
-    if (!Number.isFinite(numericValue) || !domain) return null;
+function normalizeTasksGradientValue(palette, value, domain, wrap) {
+    if (!Number.isFinite(Number(value))) return null;
+    const numericValue = tasksGradientScalePosition(palette, Number(value));
+    if (Number.isNaN(numericValue) || !domain) return null;
     const span = domain.end - domain.start;
     if (!Number.isFinite(span) || span === 0) return null;
     if (!wrap) return Math.min(domain.end, Math.max(domain.start, numericValue));
@@ -612,16 +620,16 @@ function resolveTasksGradientColor(palette, value) {
     const stops = normalizeTasksGradientStops(palette);
     if (stops.length < 2) return '';
     const domain = tasksGradientDomain(palette, stops);
-    const normalized = normalizeTasksGradientValue(value, domain, Boolean(palette?.wrap));
+    const normalized = normalizeTasksGradientValue(palette, value, domain, Boolean(palette?.wrap));
     if (normalized === null) return '';
-    if (normalized <= stops[0].at) return tasksDisplayPaletteColor(stops[0].color);
+    if (normalized <= stops[0].pos) return tasksDisplayPaletteColor(stops[0].color);
     for (let index = 1; index < stops.length; index += 1) {
         const prev = stops[index - 1];
         const current = stops[index];
-        if (normalized > current.at) continue;
-        const span = current.at - prev.at;
+        if (normalized > current.pos) continue;
+        const span = current.pos - prev.pos;
         if (!Number.isFinite(span) || span <= 0) return tasksDisplayPaletteColor(current.color);
-        return tasksDisplayPaletteColor(interpolateTasksHexColor(prev.color, current.color, (normalized - prev.at) / span) || current.color);
+        return tasksDisplayPaletteColor(interpolateTasksHexColor(prev.color, current.color, (normalized - prev.pos) / span) || current.color);
     }
     return tasksDisplayPaletteColor(stops[stops.length - 1].color);
 }
