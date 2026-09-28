@@ -98,7 +98,33 @@ def build_command():
         traceback.print_exc()
         return 1
 
-def cli():
+def _launchd_socket(name: str) -> int:
+    """Acquire exactly one listening descriptor from launchd."""
+    import ctypes
+
+    if sys.platform != "darwin":
+        raise RuntimeError("--launchd-socket requires macOS")
+    lib = ctypes.CDLL("/usr/lib/libSystem.B.dylib")
+    descriptors = ctypes.POINTER(ctypes.c_int)()
+    count = ctypes.c_size_t()
+    lib.launch_activate_socket.argtypes = [ctypes.c_char_p, ctypes.POINTER(type(descriptors)), ctypes.POINTER(ctypes.c_size_t)]
+    lib.launch_activate_socket.restype = ctypes.c_int
+    lib.free.argtypes = [ctypes.c_void_p]
+    lib.free.restype = None
+    error = lib.launch_activate_socket(name.encode(), ctypes.byref(descriptors), ctypes.byref(count))
+    if error:
+        raise OSError(error, os.strerror(error), name)
+    try:
+        if count.value != 1:
+            for index in range(count.value):
+                os.close(descriptors[index])
+            raise RuntimeError("Configure exactly one IPv4 or IPv6 launchd socket")
+        return descriptors[0]
+    finally:
+        lib.free(descriptors)
+
+
+def cli() -> None:
     """CLI entry point for vyasa command
     
     Usage:
@@ -143,6 +169,7 @@ def cli():
     parser.add_argument('directory', nargs='?', help='Path to markdown files directory')
     parser.add_argument('--host', help='Server host (default: 127.0.0.1, use 0.0.0.0 for all interfaces)')
     parser.add_argument('--port', type=int, help='Server port (default: 5001)')
+    parser.add_argument('--launchd-socket', help='Use a named socket from the LaunchAgent Sockets dictionary')
     parser.add_argument('--no-browser', action='store_true', help='Do not open the site in a browser')
     parser.add_argument('--user', help='Login username (overrides config/env)')
     parser.add_argument('--password', help='Login password (overrides config/env)')
@@ -236,9 +263,11 @@ def cli():
     _ensure_logging_configured()
     # Force-close lingering connections (e.g. the live-reload SSE stream) after
     # a few seconds so shutdown doesn't hang on graceful shutdown.
+    socket_fd = _launchd_socket(args.launchd_socket) if args.launchd_socket else None
     try:
         uvicorn.run(
             "vyasa.main:app",
+            fd=socket_fd,
             host=host,
             port=port,
             log_config=None,
@@ -248,6 +277,8 @@ def cli():
             reload_includes=reload_includes if source_reload_enabled else None,
         )
     finally:
+        if socket_fd is not None:
+            os.close(socket_fd)
         os.environ.pop('VYASA_CLI_ROOT', None)
 
 if __name__ == "__main__":
