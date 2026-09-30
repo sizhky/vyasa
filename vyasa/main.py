@@ -82,12 +82,15 @@ def build_command():
     parser.add_argument('-o', '--output', help='Output directory (default: ./dist)', default='dist')
     parser.add_argument('--show-hidden', action='store_true', help='Include hidden files and folders in listings')
     parser.add_argument('--feedback', action='store_true', help='Enable the feedback extension')
+    parser.add_argument('--kg-defaults', help='Site-wide KG style defaults, e.g. "node_look=outline edge_path=orthogonal" (overrides .vyasa and env)')
     
     args = parser.parse_args(sys.argv[2:])  # Skip 'vyasa' and 'build'
     if args.show_hidden:
         os.environ['VYASA_SHOW_HIDDEN'] = 'true'
     if args.feedback:
         os.environ['VYASA_FEEDBACK_CLI'] = 'true'
+    if args.kg_defaults:
+        os.environ['VYASA_KG_DEFAULTS_CLI'] = args.kg_defaults
     
     try:
         build_static_site(input_dir=args.directory, output_dir=args.output)
@@ -180,10 +183,13 @@ def cli() -> None:
     parser.add_argument('--log-file', action='store_true', help='Write DEBUG logs to vyasa.log')
     parser.add_argument('--feedback', action='store_true', help='Enable the feedback extension')
     parser.add_argument('--edit', action='store_true', help='Let documents be edited from the reading view (off by default)')
+    parser.add_argument('--kg-defaults', help='Site-wide KG style defaults, e.g. "node_look=outline edge_path=orthogonal" (overrides .vyasa and env)')
     
     args = parser.parse_args()
     if args.feedback:
         os.environ['VYASA_FEEDBACK_CLI'] = 'true'
+    if args.kg_defaults:
+        os.environ['VYASA_KG_DEFAULTS_CLI'] = args.kg_defaults
     if args.edit:
         os.environ['VYASA_DOCUMENT_EDIT'] = 'true'
     

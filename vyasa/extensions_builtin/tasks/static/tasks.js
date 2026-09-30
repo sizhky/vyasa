@@ -12,7 +12,7 @@ import { createTasksEdgeRenderer } from './tasks_edges.js';
 import { createTasksFullscreenController } from './tasks_fullscreen.js';
 import { tasksGitHistoryRows } from './tasks_git_review.js';
 import {
-    buildTaskEdgeAnchors, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable,
+    buildTaskEdgeAnchors, tasksEdgePathOf, tasksIsDashed, tasksNodeLook, tasksRouteEdges, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable,
     isTasksUnspecifiedProjectionGroup, nearestTasksIncidentEdge, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon,
     selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksCenteredViewport, tasksEdgeLabelZForMode,
     tasksGraphDynamicMinZoom, tasksGraphNodeAbsoluteRect, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea,
@@ -55,6 +55,7 @@ import {
     tasksDefaultEdgeOpacity, tasksEdgeColorPaletteFor, tasksEdgeRecordId, tasksEdgeStrokeWidthForMode,
     tasksGroupBackground, tasksGroupIdsContainingSelection, tasksHoverFocusEdge, tasksHoverFocusNodeStyle,
     tasksNodeBackground, tasksNodeColorLevels, tasksNodeIsOverlaid, tasksProminentEdgeOpacity,
+    tasksActiveNodeFill, tasksEdgeStrokeStyle, tasksNodeLookStyle,
     tasksReferenceFlowEdge, tasksResolvedThemeColor, tasksUseColorOverlay,
 } from './tasks_paint.js';
 import { createTasksPanels } from './tasks_panels.js';
@@ -78,6 +79,9 @@ function tasksSetEdgeLabelsVisible(visible) {
 window.tasksSetEdgeLabelsVisible = tasksSetEdgeLabelsVisible;
 
 const TASKS_EDGE_LABEL_FOCUS_FONT_SIZE = 16;
+// ELK keeps free nodes at least this far apart, so a routed edge runs its
+// middle leg through the middle of that gap.
+const TASKS_FREE_GUTTER = 44;
 const TASKS_AUTO_FIT_ON_EXPAND_DEFAULT = false;
 const TASKS_AUTO_FIT_ON_FILTER_DEFAULT = true;
 // A share of the widget, not a pixel count, so the panel keeps its
@@ -1512,8 +1516,9 @@ async function renderTasksGraphs(rootElement = document) {
                             },
                         },
                     }));
-                    graphBaseRef.current = { nodes: anchoredNodes, edges: anchored.edges };
-                    setEdges(anchored.edges);
+                    const routed = tasksRouteEdges(anchoredNodes, anchored.edges, TASKS_FREE_GUTTER);
+                    graphBaseRef.current = { nodes: anchoredNodes, edges: routed };
+                    setEdges(routed);
                     return anchoredNodes;
                 });
             }, [nodeConnectionExperiment]);
@@ -2692,19 +2697,22 @@ async function renderTasksGraphs(rootElement = document) {
                                 selectable: true,
                             };
                         }
+                        const nodeLook = tasksNodeLook(node, model, tasksFixedLayout(mode)?.nodeLook);
+                        const lookStyle = tasksNodeLookStyle({
+                            background: useOverlay ? 'transparent' : tasksNodeBackground(nodeColor, '', colorMix, TASKS_NODE_BG, false),
+                            border: nodeColor ? `1px solid color-mix(in srgb, var(--vyasa-paper) 28%, ${nodeColor} 72%)` : TASKS_NODE_BORDER,
+                        }, useOverlay ? 'card' : nodeLook, nodeColor, tasksIsDashed(node));
                         return {
                             id: node.id,
                             type: 'vyasaTask',
                             position: node.position,
-                            data: { ...node, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color, __has_note__: hasNote, __default_color__: ownNodeColor ? '' : defaultNodeColor, __color_levels__: useOverlay ? colorLevels : null },
+                            data: { ...node, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color, __has_note__: hasNote, __default_color__: ownNodeColor ? '' : defaultNodeColor, __color_levels__: useOverlay ? colorLevels : null, __node_look__: nodeLook },
                             style: {
                                 width: node.width,
                                 height: node.height,
                                 zIndex: TASKS_TASK_Z,
-                                background: useOverlay ? 'transparent' : tasksNodeBackground(nodeColor, '', colorMix, TASKS_NODE_BG, false),
-                                border: isChecked
-                                    ? `2px solid color-mix(in srgb, ${stateAccent} 78%, white 22%)`
-                                    : (nodeColor ? `1px solid color-mix(in srgb, var(--vyasa-paper) 28%, ${nodeColor} 72%)` : TASKS_NODE_BORDER),
+                                ...lookStyle,
+                                border: isChecked ? `2px solid color-mix(in srgb, ${stateAccent} 78%, white 22%)` : lookStyle.border,
                                 borderRadius: 6,
                                 boxShadow: isChecked
                                     ? `inset 0 0 0 2px color-mix(in srgb, ${stateAccent} 24%, transparent), 0 0 0 2px color-mix(in srgb, ${stateAccent} 34%, transparent)`
@@ -2740,7 +2748,8 @@ async function renderTasksGraphs(rootElement = document) {
                     // as well as its own. Resolve every colour up front rather than
                     // reaching back into the map from inside it.
                     const pairMateColors = new Map(anchored.edges.map((item) => [item.id, resolveTasksEdgeColor(item, model, model?.edge_color_by, edgeColorPalette)]));
-                    const baseEdges = anchored.edges.map((edge) => {
+                    const fixedLayout = tasksFixedLayout(mode);
+                    const styledEdges = anchored.edges.map((edge) => {
                         const edgeColor = resolveTasksEdgeColor(edge, model, model?.edge_color_by, edgeColorPalette);
                         const resolvedLabel = resolveTasksEdgeLabel(edge, model, activeProjection);
                         const rowLabel = edge.__sequence_step__
@@ -2749,6 +2758,10 @@ async function renderTasksGraphs(rootElement = document) {
                         // A lifeline is a full-height column, so a row that crosses one
                         // must draw over it, not behind it.
                         const rowZ = tasksFixedLayout(mode)?.edgesOverNodes ? TASKS_TASK_Z + 10 : TASKS_EDGE_Z;
+                        // A layout that pins both ends of an edge itself (a sequence row)
+                        // owns that edge's geometry, so the style cascade stops there.
+                        const edgePath = fixedLayout?.authoredHandles ? fixedLayout.edgePath : tasksEdgePathOf(edge, model, fixedLayout?.edgePath);
+                        const stroke = tasksEdgeStrokeStyle(edgePath, edgeColor, tasksIsDashed(edge));
                         return {
                             ...edge,
                             label: rowLabel,
@@ -2771,19 +2784,19 @@ async function renderTasksGraphs(rootElement = document) {
                                 __sequence_label_dy__: Number(edge.__sequence_label_dy__) || 0,
                                 __labels_off__: !edgeLabelsVisible,
                                 __line_off__: Boolean(edge.__sequence_line_off__),
+                                __edge_path__: edgePath,
                                 // The prominent label is an HTML overlay, so it needs a z of
                                 // its own to clear the ribbon this layout draws over the cards.
                                 __label_z__: rowZ + 1,
                                 ...(tasksFixedLayout(mode)?.edgesOverNodes ? { __z__: rowZ } : {}),
                             },
-                            markerEnd: { type: rf.MarkerType.ArrowClosed, width: 8, height: 8, color: edgeColor || 'currentColor' },
+                            markerEnd: { type: rf.MarkerType.ArrowClosed, width: 8, height: 8, color: stroke.stroke },
                             zIndex: rowZ,
                             labelStyle: { fontSize: hoverFontSize, fontWeight: 600, fill: edgeColor || TASKS_EDGE_LABEL_TEXT, opacity: edgeOpacity },
                             labelBgStyle: { fill: TASKS_EDGE_LABEL_BG, fillOpacity: 0.82 },
                             style: {
-                                strokeWidth: 2.5,
+                                ...stroke,
                                 opacity: edgeOpacity,
-                                stroke: edgeColor || 'currentColor',
                                 ...(edge.__sequence_standing__ ? { strokeDasharray: '6 5', strokeWidth: 1.8 } : {}),
                                 ...(edge.__pair_half__ ? { strokeWidth: 1.9 } : {}),
                                 ...(edge.__kg_review_change__ === 'removed' ? { strokeDasharray: '6 5' } : {}),
@@ -2791,6 +2804,9 @@ async function renderTasksGraphs(rootElement = document) {
                             },
                         };
                     });
+                    // A fixed layout never moves its nodes, so routed edges are solved
+                    // against the node rects once, here.
+                    const baseEdges = tasksRouteEdges(nodesWithStyle, styledEdges, fixedLayout?.gutter);
                     referenceEdgesRef.current = referenceAnchored.edges.map((edge) => tasksReferenceFlowEdge(edge, rf.MarkerType.ArrowClosed, hoverFontSize, layoutConfig.edgeLabelWidth));
                     const anchoredNodes = nodesWithStyle.map((node) => ({
                         ...node,
@@ -2901,20 +2917,23 @@ async function renderTasksGraphs(rootElement = document) {
                             ? `1px solid color-mix(in srgb, var(--vyasa-paper) ${100 - groupBorderMix}%, ${groupColor} ${groupBorderMix}%)`
                             : `1px solid color-mix(in srgb, var(--vyasa-paper) 30%, ${nodeColor} 70%)`)
                         : TASKS_NODE_BORDER;
+                    // Only a task node takes a look; a group keeps its container frame.
+                    const nodeLook = n.__kind__ === 'task' && !useOverlay ? tasksNodeLook(n, model) : 'card';
+                    const lookStyle = tasksNodeLookStyle({ background: useOverlay ? 'transparent' : background, border }, nodeLook, nodeColor, tasksIsDashed(n));
                     const branchOpacity = isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1;
                     const rfNode = {
                         id: n.id,
                         type: 'vyasaTask',
                         position: n.position,
-                        data: { ...n, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color, __has_note__: hasNote, __node_image__: nodeImage, __default_color__: ownNodeColor ? '' : defaultNodeColor, __projection_branch_opacity__: branchOpacity, __color_levels__: useOverlay ? colorLevels : null },
+                        data: { ...n, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color, __has_note__: hasNote, __node_image__: nodeImage, __default_color__: ownNodeColor ? '' : defaultNodeColor, __projection_branch_opacity__: branchOpacity, __color_levels__: useOverlay ? colorLevels : null, __node_look__: nodeLook },
                         style: {
                             width: n.width,
                             height: n.height,
                             zIndex: nodeZ,
-                            background: useOverlay ? 'transparent' : background,
+                            ...lookStyle,
                             border: isChecked
                                 ? `2px solid color-mix(in srgb, ${stateAccent} 78%, white 22%)`
-                                : border,
+                                : lookStyle.border,
                             borderRadius: isExpanded ? 12 : 6,
                             boxShadow: isChecked
                                 ? `inset 0 0 0 2px color-mix(in srgb, ${stateAccent} 24%, transparent), 0 0 0 2px color-mix(in srgb, ${stateAccent} 34%, transparent)`
@@ -2977,8 +2996,10 @@ async function renderTasksGraphs(rootElement = document) {
                 // as well as its own. Resolve every colour up front rather than
                 // reaching back into the map from inside it.
                 const pairMateColors = new Map(anchored.edges.map((item) => [item.id, resolveTasksEdgeColor(item, model, model?.edge_color_by, edgeColorPalette)]));
-                const baseEdges = anchored.edges.map((edge) => {
+                const styledEdges = anchored.edges.map((edge) => {
                     const edgeColor = resolveTasksEdgeColor(edge, model, model?.edge_color_by, edgeColorPalette);
+                    const edgePath = tasksEdgePathOf(edge, model);
+                    const stroke = tasksEdgeStrokeStyle(edgePath, edgeColor, tasksIsDashed(edge));
                     const resolvedLabel = resolveTasksEdgeLabel(edge, model, activeProjection);
                     const branchOpacity = (unspecifiedProjectionBranchIds.has(edge.source) || unspecifiedProjectionBranchIds.has(edge.target))
                         ? projectionUnspecifiedContentOpacity
@@ -3001,12 +3022,13 @@ async function renderTasksGraphs(rootElement = document) {
                             __sequence_label_dy__: Number(edge.__sequence_label_dy__) || 0,
                             __labels_off__: !edgeLabelsVisible,
                             __line_off__: Boolean(edge.__sequence_line_off__),
+                            __edge_path__: edgePath,
                         },
                         markerEnd: {
                             type: rf.MarkerType.ArrowClosed,
                             width: 8,
                             height: 8,
-                            color: edgeColor || 'currentColor',
+                            color: stroke.stroke,
                         },
                         zIndex: TASKS_EDGE_Z,
                         labelBgPadding: [6, 3],
@@ -3016,13 +3038,15 @@ async function renderTasksGraphs(rootElement = document) {
                         labelStyle: { fontSize: hoverFontSize, fontWeight: 600, fill: edgeColor || TASKS_EDGE_LABEL_TEXT, opacity: edgeOpacity * branchOpacity },
                         labelBgStyle: { fill: TASKS_EDGE_LABEL_BG, fillOpacity: 0.82 },
                         style: {
-                            strokeWidth: 2.5,
+                            ...stroke,
                             opacity: edgeOpacity * branchOpacity * (edge.__kg_review_change__ === 'unchanged' ? 0.28 : 1),
-                            stroke: edgeColor || 'currentColor',
                             ...(edge.__kg_review_change__ === 'removed' ? { strokeDasharray: '6 5' } : {}),
                         },
                     };
                 });
+                // ELK has placed every node, so routed edges are solved against
+                // those rects; a drag solves them again.
+                const baseEdges = tasksRouteEdges(baseNodes, styledEdges, TASKS_FREE_GUTTER);
                 const anchoredNodes = baseNodes.map((node) => ({
                     ...node,
                     data: {
@@ -3441,7 +3465,7 @@ async function renderTasksGraphs(rootElement = document) {
                                 ? node.style.background
                                 : (node.data?.__kind__ === 'group'
                                     ? (tasksNodeIsOverlaid(node) ? node.style.background : tasksGroupBackground(displayColor, '', TASKS_GROUP_BG_ACTIVE, { mode: 'transparent', intensity: 10 }))
-                                    : (tasksNodeIsOverlaid(node) ? node.style.background : tasksNodeBackground(nodeColor, '', colorMix, TASKS_NODE_BG_ACTIVE, false))),
+                                    : (tasksNodeIsOverlaid(node) ? node.style.background : tasksActiveNodeFill(node, nodeColor, colorMix))),
                             opacity: mode === 'dim' ? branchOpacity * 0.22 : 1,
                             boxShadow: (mode === 'selected' || mode === 'selected-focus')
                                 ? `${checkedShadow !== 'none' ? `${checkedShadow}, ` : ''}0 0 0 2px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 70%, transparent), 0 0 18px 4px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 40%, transparent)`

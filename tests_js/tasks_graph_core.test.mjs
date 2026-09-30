@@ -555,7 +555,7 @@ test('Knowledge Graph hover edges override faint global opacity', () => {
     const source = taskSources;
     assert.ok(source.includes('opacity: tasksProminentEdgeOpacity() * branchOpacity, fontWeight: 800'));
     assert.ok(source.includes('fillOpacity: 0.9'));
-    assert.ok(source.includes('strokeWidth: Math.max(4.75, tasksEdgeStrokeWidthForMode'));
+    assert.ok(source.includes('strokeWidth: tasksEdgeBaseWidth(edge.data?.__edge_path__, true)'));
     assert.ok(source.includes('highlighted ? 0.86 : 0.04'));
 });
 

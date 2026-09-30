@@ -111,6 +111,52 @@ export function tasksEdgeOpacityLabel(opacity) {
     return 'Clear';
 }
 
+// The width an edge is drawn at, by its path. A ribbon swells its width into a
+// taper, so it starts wider; a routed line or orthogonal run draws it as is.
+export function tasksEdgeBaseWidth(edgePath, focused = false) {
+    if (edgePath && edgePath !== 'ribbon') return focused ? 2.5 : 1.5;
+    return focused ? 4.75 : 2.5;
+}
+
+// A routed edge with no colour of its own is muted ink, so colour stays for emphasis.
+export const TASKS_LINE_EDGE_INK = 'color-mix(in srgb, var(--vyasa-ink) 58%, transparent)';
+
+// An outline node carries its role colour in the border and the title, not in
+// the fill, so a figure of many roles stays quiet.
+export function tasksOutlineNodeStyle(color, active = false, dashed = false) {
+    const tint = color || 'var(--vyasa-ink)';
+    return {
+        background: `color-mix(in srgb, ${tint} ${active ? 12 : 6}%, var(--vyasa-paper))`,
+        border: `2px ${dashed ? 'dashed' : 'solid'} color-mix(in srgb, ${tint} 86%, transparent)`,
+        color: `color-mix(in srgb, ${tint} 82%, var(--vyasa-ink))`,
+    };
+}
+
+// The look-owned part of a task node's style. A card keeps the fill and border
+// it was given; an outline replaces them. A dashed node dashes either border.
+export function tasksNodeLookStyle(cardStyle, look, nodeColor, dashed = false) {
+    const style = look === 'outline' ? { ...cardStyle, ...tasksOutlineNodeStyle(nodeColor, false, dashed) } : { ...cardStyle };
+    if (dashed && typeof style.border === 'string') style.border = style.border.replace(' solid ', ' dashed ');
+    return style;
+}
+
+// The stroke of an edge, by its path. A ribbon keeps the node ink and its own
+// width; a routed edge is a thin muted line unless it has a colour of its own.
+export function tasksEdgeStrokeStyle(edgePath, edgeColor, dashed = false) {
+    return {
+        stroke: edgeColor || (edgePath === 'ribbon' ? 'currentColor' : TASKS_LINE_EDGE_INK),
+        strokeWidth: tasksEdgeBaseWidth(edgePath),
+        ...(dashed ? { strokeDasharray: '6 5' } : {}),
+    };
+}
+
+// The fill of a lit task node. Hover and focus both read it, so an outline node
+// keeps its look when it lights up.
+export function tasksActiveNodeFill(node, nodeColor, colorMix) {
+    if (node.data?.__node_look__ === 'outline') return tasksOutlineNodeStyle(nodeColor, true).background;
+    return tasksNodeBackground(nodeColor, '', colorMix, TASKS_NODE_BG_ACTIVE, false);
+}
+
 export function tasksEdgeStrokeWidthForMode(mode) {
     if (mode === 'focused-in' || mode === 'focused-out' || mode === 'selected-in' || mode === 'selected-out' || mode === 'selected') return 3.5;
     return 1.25;
@@ -325,6 +371,25 @@ function tasksPairShiftedProps(props, lift) {
         targetX: props.targetX + target.x,
         targetY: props.targetY + target.y,
     };
+}
+
+/**
+ * SVG path and label point for a routed edge. Every paint helper reads the
+ * last four points of the path as `start c1 c2 end`, so a route is padded to
+ * four points at its start: the arrowhead then follows the final run.
+ *
+ * >>> tasksRoutePath([{ x: 0, y: 0 }, { x: 90, y: 0 }])
+ * ['M 0 0 L 0 0 L 0 0 L 90 0', 45, 0]
+ * >>> tasksRoutePath([{ x: 0, y: 0 }, { x: 0, y: 20 }, { x: 60, y: 20 }, { x: 60, y: 40 }])[0]
+ * 'M 0 0 L 0 20 L 60 20 L 60 40'
+ */
+export function tasksRoutePath(points) {
+    const padded = [...Array(Math.max(0, 4 - points.length)).fill(points[0]), ...points];
+    const [first, ...rest] = padded;
+    // The label sits on the middle of the longest run.
+    const runs = points.slice(1).map((point, index) => [points[index], point]);
+    const [a, b] = runs.reduce((best, run) => (Math.hypot(run[1].x - run[0].x, run[1].y - run[0].y) > Math.hypot(best[1].x - best[0].x, best[1].y - best[0].y) ? run : best), runs[0]);
+    return [`M ${first.x} ${first.y} ${rest.map((point) => `L ${point.x} ${point.y}`).join(' ')}`, (a.x + b.x) / 2, (a.y + b.y) / 2];
 }
 
 function tasksEdgePath(props) {
@@ -1063,7 +1128,7 @@ export function tasksHoverFocusNodeStyle(node, nodeColor, displayColor, activeBo
             ? node.style.background
             : (node.data?.__kind__ === 'group'
                 ? tasksGroupBackground(displayColor, '', TASKS_GROUP_BG_ACTIVE, { mode: 'transparent', intensity: primary ? 12 : 8 })
-                : tasksNodeBackground(nodeColor, '', colorMix, TASKS_NODE_BG_ACTIVE, false)),
+                : tasksActiveNodeFill(node, nodeColor, colorMix)),
         boxShadow: `${checkedShadow !== 'none' ? `${checkedShadow}, ` : ''}0 0 0 ${primary ? 3 : 2}px color-mix(in srgb, ${displayColor} ${primary ? 76 : 68}%, transparent), 0 0 ${primary ? 24 : 32}px ${primary ? 6 : 8}px color-mix(in srgb, ${displayColor} ${primary ? 48 : 46}%, transparent)`,
     };
 }
@@ -1078,7 +1143,7 @@ export function tasksHoverFocusEdge(edge, hoveredNodeId) {
         data: { ...edge.data, highlightMode: 'selected', strokeMode, flareKey: `hover:${hoveredNodeId || ''}` },
         labelStyle: { ...(edge.labelStyle || {}), fill: edgeColor, opacity: tasksProminentEdgeOpacity() * branchOpacity, fontWeight: 800 },
         labelBgStyle: { ...(edge.labelBgStyle || {}), fill: TASKS_EDGE_LABEL_BG, fillOpacity: 0.9 },
-        style: { ...edge.style, stroke: edgeColor, opacity: tasksProminentEdgeOpacity() * branchOpacity, strokeWidth: Math.max(4.75, tasksEdgeStrokeWidthForMode(strokeMode)), strokeLinecap: 'round' },
+        style: { ...edge.style, stroke: edgeColor, opacity: tasksProminentEdgeOpacity() * branchOpacity, strokeWidth: tasksEdgeBaseWidth(edge.data?.__edge_path__, true), strokeLinecap: 'round' },
     };
 }
 

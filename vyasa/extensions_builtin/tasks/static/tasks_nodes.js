@@ -1,6 +1,9 @@
 import { renderTasksInlineLinks, renderTasksNodeLinkBadge, tasksIsIconifyImage, tasksNodeLinkKinds } from './tasks_cards.js';
 import { logTasksDebug } from './tasks_diagnostics.js';
-import { normalizeTasksNodeImageUrl, tasksGraphCornerPath, tasksReviewTarget } from './tasks_graph_core.js';
+import {
+    TASKS_OUTLINE_FONT, TASKS_OUTLINE_SUBTITLE_FONT_SIZE, TASKS_OUTLINE_TITLE_FONT_SIZE,
+    normalizeTasksNodeImageUrl, tasksGraphCornerPath, tasksNodeSubtitle, tasksReviewTarget,
+} from './tasks_graph_core.js';
 import { TASKS_DEFAULT_CARD_STATES, tasksLogicalNodeId, tasksNodeHasChildren } from './tasks_graph_model.js';
 import { TASKS_DONE_ACCENT, TASKS_NODE_LABEL_FONT_SIZE, tasksColorOverlay } from './tasks_paint.js';
 
@@ -529,6 +532,10 @@ export function createTasksNodeRenderer(getState) {
                                 ...renderHandles('source')
                             );
                         }
+                        // An outline node is a figure box: mono title in the role
+                        // colour its wrapper sets, and the description under it.
+                        const outlineLook = data?.__node_look__ === 'outline';
+                        const subtitle = outlineLook ? tasksNodeSubtitle(data, model) : '';
                         return React.createElement('div', {
                             ...reviewAttrs,
                             className: 'vyasa-task-node-body',
@@ -540,9 +547,9 @@ export function createTasksNodeRenderer(getState) {
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 gap: nodeImage ? '10px' : undefined,
-                                fontSize: `${TASKS_NODE_LABEL_FONT_SIZE}px`,
-                                fontWeight: '600',
-                                fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+                                fontSize: outlineLook ? `${TASKS_OUTLINE_TITLE_FONT_SIZE}px` : `${TASKS_NODE_LABEL_FONT_SIZE}px`,
+                                fontWeight: outlineLook ? '500' : '600',
+                                fontFamily: outlineLook ? TASKS_OUTLINE_FONT : 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
                                 textAlign: 'center',
                                 padding: '10px 12px',
                                 overflow: 'hidden',
@@ -576,7 +583,16 @@ export function createTasksNodeRenderer(getState) {
                                     textDecorationColor: isChecked ? taskStateColor : undefined,
                                     textDecorationThickness: isChecked ? '2px' : undefined,
                                 }
-                            }, labelNode),
+                            }, labelNode, subtitle && React.createElement('span', {
+                                style: {
+                                    display: 'block',
+                                    marginTop: '3px',
+                                    fontSize: `${TASKS_OUTLINE_SUBTITLE_FONT_SIZE}px`,
+                                    fontWeight: 400,
+                                    lineHeight: 1.35,
+                                    color: 'color-mix(in srgb, var(--vyasa-ink) 64%, transparent)',
+                                },
+                            }, subtitle)),
                             canExpand && React.createElement('button', {
                                 onClick: handleExpand,
                                 'data-vyasa-task-control': 'true',

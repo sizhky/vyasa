@@ -77,6 +77,9 @@ export function tasksInlineLinkPlainText(value, nodeLabels = {}) {
 export function sizeTaskNode(label, kind = 'task', widthOverride = null, options = {}) {
     const spec = TASK_NODE_SPECS[kind] || TASK_NODE_SPECS.task;
     const width = Math.max(32, Number(widthOverride || spec.width));
+    // An outline task node draws a mono title and its subtitle, so it is sized
+    // with the metrics it is drawn with.
+    if (kind === 'task' && options?.look === 'outline') return tasksOutlineNodeSize(label, options.subtitle, width);
     const imageSpec = options?.hasImage ? (TASK_NODE_IMAGE_SPECS[kind] || TASK_NODE_IMAGE_SPECS.task) : null;
     const imageReserve = imageSpec ? imageSpec.size + imageSpec.gap : 0;
     const maxTextWidth = Math.max(32, width - spec.padX - spec.reserveX - imageReserve - 8);
@@ -90,6 +93,32 @@ export function sizeTaskNode(label, kind = 'task', widthOverride = null, options
         width,
         height: Math.max(spec.minHeight, Math.ceil(contentHeight + spec.padY + 8)),
     };
+}
+
+// Outline node type metrics. The renderer draws with these and the layout sizes
+// with them, so a box always fits its text.
+export const TASKS_OUTLINE_FONT = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+export const TASKS_OUTLINE_TITLE_FONT_SIZE = 14;
+export const TASKS_OUTLINE_SUBTITLE_FONT_SIZE = 11;
+const TASKS_OUTLINE_CHAR_EM = 0.62;
+const TASKS_OUTLINE_PAD = { x: 28, y: 22 };
+
+/**
+ * Height of an outline node: wrapped mono title plus wrapped subtitle.
+ *
+ * >>> tasksOutlineNodeSize('Gate', '', 220)
+ * { width: 220, height: 44 }
+ * >>> tasksOutlineNodeSize('1 · Gate', 'anchored? judged? generic? duplicate?', 220).height
+ * 73
+ */
+export function tasksOutlineNodeSize(title, subtitle, width) {
+    const textWidth = Math.max(40, width - TASKS_OUTLINE_PAD.x);
+    const lines = (text, size) => String(text || '').split(/\r?\n/).filter(Boolean)
+        .reduce((count, part) => count + Math.max(1, Math.ceil((part.length * size * TASKS_OUTLINE_CHAR_EM) / textWidth)), 0);
+    const titleHeight = Math.max(1, lines(title, TASKS_OUTLINE_TITLE_FONT_SIZE)) * TASKS_OUTLINE_TITLE_FONT_SIZE * 1.3;
+    const subtitleLines = lines(subtitle, TASKS_OUTLINE_SUBTITLE_FONT_SIZE);
+    const subtitleHeight = subtitleLines ? 3 + subtitleLines * TASKS_OUTLINE_SUBTITLE_FONT_SIZE * 1.35 : 0;
+    return { width, height: Math.max(44, Math.ceil(titleHeight + subtitleHeight + TASKS_OUTLINE_PAD.y)) };
 }
 
 export function isTasksGraphNodeSelectable(kind, isExpanded = false) {
@@ -784,7 +813,174 @@ function edgeAnchorSides(sourceRect, targetRect, sourceNode = null, targetNode =
         : { sourceSide: verticalSide.sourceSide, targetSide: horizontalSide.targetSide, sortAxis: 'y' };
 }
 
-function absoluteNodeRects(nodes) {
+// Style cascade. A node or edge attr wins, then the view, then the layout's own
+// default. The same key names both levels, so an override reads like the default.
+export const TASKS_NODE_LOOKS = ['card', 'outline'];
+export const TASKS_EDGE_PATHS = ['ribbon', 'line', 'orthogonal'];
+
+const tasksCascade = (allowed, ...values) => values
+    .map((value) => String(value ?? '').trim().toLowerCase())
+    .find((value) => allowed.includes(value));
+
+/**
+ * >>> tasksNodeLook({ node_look: 'card' }, { node_look: 'outline' }, 'outline')
+ * 'card'
+ * >>> tasksNodeLook({}, { node_look: 'outline' })
+ * 'outline'
+ * >>> tasksNodeLook({}, {}, 'outline')
+ * 'outline'
+ */
+export function tasksNodeLook(node, model, layoutDefault = 'card') {
+    return tasksCascade(TASKS_NODE_LOOKS, node?.node_look, model?.node_look, layoutDefault) || 'card';
+}
+
+/**
+ * The second line of an outline node: its own `subtitle`, else the attr the
+ * view names in `subtitle_from`, else nothing.
+ *
+ * >>> tasksNodeSubtitle({ subtitle: 'Own', description: 'Long' }, { subtitle_from: 'description' })
+ * 'Own'
+ * >>> tasksNodeSubtitle({ description: 'Long' }, { subtitle_from: 'description' })
+ * 'Long'
+ * >>> tasksNodeSubtitle({ description: 'Long' }, {})
+ * ''
+ */
+export function tasksNodeSubtitle(node, view) {
+    const from = String(view?.subtitle_from || '').trim();
+    return String(node?.subtitle || (from ? node?.[from] : '') || '').trim();
+}
+
+/**
+ * >>> tasksEdgePathOf({ edge_path: 'line' }, { edge_path: 'orthogonal' })
+ * 'line'
+ * >>> tasksEdgePathOf({}, {}, 'line')
+ * 'line'
+ */
+export function tasksEdgePathOf(edge, model, layoutDefault = 'ribbon') {
+    return tasksCascade(TASKS_EDGE_PATHS, edge?.edge_path, model?.edge_path, layoutDefault) || 'ribbon';
+}
+
+/**
+ * Where the ray from a rect's centre toward a point crosses the rect border,
+ * pushed out by `gap`. A straight edge runs centre to centre and is cut here.
+ *
+ * >>> tasksRectExitPoint({ x: 0, y: 0, width: 100, height: 40 }, { x: 300, y: 20 })
+ * { x: 100, y: 20 }
+ * >>> tasksRectExitPoint({ x: 0, y: 0, width: 100, height: 40 }, { x: 50, y: -200 }, 4)
+ * { x: 50, y: -4 }
+ */
+export function tasksRectExitPoint(rect, toward, gap = 0) {
+    const cx = rect.x + rect.width / 2;
+    const cy = rect.y + rect.height / 2;
+    const dx = toward.x - cx;
+    const dy = toward.y - cy;
+    if (!dx && !dy) return { x: cx, y: cy };
+    const scale = 1 / Math.max(Math.abs(dx) / (rect.width / 2 + gap), Math.abs(dy) / (rect.height / 2 + gap));
+    const px = (value) => Math.round(value * 100) / 100;
+    return { x: px(cx + dx * scale), y: px(cy + dy * scale) };
+}
+
+// A straight route between two node rects: centre to centre, cut at each
+// border. The target end stops short so the arrow tip clears the box.
+export function tasksStraightRoute(sourceRect, targetRect, targetGap = 3) {
+    const centre = (rect) => ({ x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 });
+    return [tasksRectExitPoint(sourceRect, centre(targetRect)), tasksRectExitPoint(targetRect, centre(sourceRect), targetGap)];
+}
+
+// A node or edge the author marked `dashed` is drawn with a dashed stroke.
+export function tasksIsDashed(item) {
+    return ['true', 'yes', '1'].includes(String(item?.dashed ?? '').trim().toLowerCase());
+}
+
+/**
+ * Orthogonal route between two rects, as points. Candidates are the straight
+ * run, both L shapes, and Z or U shapes whose middle run sits in the gutter
+ * beside either end. The route crossing the fewest other rects wins, then the
+ * one with fewest bends, then the shortest.
+ *
+ * >>> tasksOrthogonalRoute({ x: 0, y: 0, width: 100, height: 40 }, { x: 0, y: 100, width: 100, height: 40 }, [], 40)
+ * [{ x: 50, y: 40 }, { x: 50, y: 97 }]
+ */
+export function tasksOrthogonalRoute(source, target, obstacles = [], gap = 40, targetGap = 3) {
+    const gapX = Number(gap?.x ?? gap);
+    const gapY = Number(gap?.y ?? gap);
+    const cx = (r) => r.x + r.width / 2;
+    const cy = (r) => r.y + r.height / 2;
+    const right = (r) => r.x + r.width;
+    const bottom = (r) => r.y + r.height;
+    const candidates = [];
+    const push = (points) => candidates.push(points);
+    // Straight: the rects overlap on one axis, so one run joins facing sides.
+    const overlapX = [Math.max(source.x, target.x), Math.min(right(source), right(target))];
+    const overlapY = [Math.max(source.y, target.y), Math.min(bottom(source), bottom(target))];
+    if (overlapX[1] - overlapX[0] > 8) {
+        const x = (overlapX[0] + overlapX[1]) / 2;
+        const down = cy(target) > cy(source);
+        push([{ x, y: down ? bottom(source) : source.y }, { x, y: down ? target.y - targetGap : bottom(target) + targetGap }]);
+    }
+    if (overlapY[1] - overlapY[0] > 8) {
+        const y = (overlapY[0] + overlapY[1]) / 2;
+        const east = cx(target) > cx(source);
+        push([{ x: east ? right(source) : source.x, y }, { x: east ? target.x - targetGap : right(target) + targetGap, y }]);
+    }
+    // Where a run at `x` leaves or enters a rect horizontally, and at `y` vertically.
+    const sideX = (r, x, gapOut = 0) => (x < cx(r) ? r.x - gapOut : right(r) + gapOut);
+    const sideY = (r, y, gapOut = 0) => (y < cy(r) ? r.y - gapOut : bottom(r) + gapOut);
+    const outsideX = (r, x) => x < r.x || x > right(r);
+    const outsideY = (r, y) => y < r.y || y > bottom(r);
+    // L: leave one axis, enter on the other.
+    if (outsideX(source, cx(target)) && outsideY(target, cy(source))) {
+        push([{ x: sideX(source, cx(target)), y: cy(source) }, { x: cx(target), y: cy(source) }, { x: cx(target), y: sideY(target, cy(source), targetGap) }]);
+    }
+    if (outsideY(source, cy(target)) && outsideX(target, cx(source))) {
+        push([{ x: cx(source), y: sideY(source, cy(target)) }, { x: cx(source), y: cy(target) }, { x: sideX(target, cx(source), targetGap), y: cy(target) }]);
+    }
+    // Z or U: the middle run sits in a gutter beside either end.
+    for (const x of [source.x - gapX / 2, right(source) + gapX / 2, target.x - gapX / 2, right(target) + gapX / 2]) {
+        if (!outsideX(source, x) || !outsideX(target, x)) continue;
+        push([{ x: sideX(source, x), y: cy(source) }, { x, y: cy(source) }, { x, y: cy(target) }, { x: sideX(target, x, targetGap), y: cy(target) }]);
+    }
+    for (const y of [source.y - gapY / 2, bottom(source) + gapY / 2, target.y - gapY / 2, bottom(target) + gapY / 2]) {
+        if (!outsideY(source, y) || !outsideY(target, y)) continue;
+        push([{ x: cx(source), y: sideY(source, y) }, { x: cx(source), y }, { x: cx(target), y }, { x: cx(target), y: sideY(target, y, targetGap) }]);
+    }
+    const others = obstacles.filter((r) => r !== source && r !== target);
+    const hits = (a, b) => others.filter((r) => Math.min(a.x, b.x) < right(r) - 1 && Math.max(a.x, b.x) > r.x + 1
+        && Math.min(a.y, b.y) < bottom(r) - 1 && Math.max(a.y, b.y) > r.y + 1).length;
+    const cost = (points) => points.slice(1).reduce((sum, point, index) => {
+        const prev = points[index];
+        return sum + hits(prev, point) * 1e5 + Math.abs(point.x - prev.x) + Math.abs(point.y - prev.y);
+    }, (points.length - 2) * 60);
+    return candidates.reduce((best, points) => (!best || cost(points) < cost(best) ? points : best), null)
+        || [{ x: cx(source), y: cy(source) }, { x: cx(target), y: cy(target) }];
+}
+
+// The points a routed edge is drawn through, or null for a ribbon, which
+// curves between the handles instead.
+export function tasksEdgeRoute(edgePath, from, to, obstacles = [], gutter = 44) {
+    if (!from || !to || edgePath === 'ribbon') return null;
+    return edgePath === 'orthogonal' ? tasksOrthogonalRoute(from, to, obstacles, gutter) : tasksStraightRoute(from, to);
+}
+
+// Solve every routed edge against the current node rects. A box a route must
+// go around is a task or a collapsed group; an open group contains its routes.
+export function tasksRouteEdges(nodes, edges, gutter = 44) {
+    const rects = absoluteNodeRects(nodes);
+    const obstacles = (nodes || [])
+        .filter((node) => {
+            const kind = node.data?.__kind__ || node.__kind__;
+            return kind === 'task' || (kind === 'group' && !String(node.className || '').includes('expanded-group'));
+        })
+        .map((node) => rects[node.id])
+        .filter(Boolean);
+    return (edges || []).map((edge) => {
+        const edgePath = edge.data?.__edge_path__;
+        if (!edgePath || edgePath === 'ribbon') return edge;
+        return { ...edge, data: { ...edge.data, __route__: tasksEdgeRoute(edgePath, rects[edge.source], rects[edge.target], obstacles, gutter) } };
+    });
+}
+
+export function absoluteNodeRects(nodes) {
     const byId = Object.fromEntries((nodes || []).map((node) => [node.id, node]));
     const cache = {};
     const resolve = (id) => {

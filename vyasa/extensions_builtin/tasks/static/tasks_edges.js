@@ -3,7 +3,7 @@ import { isTasksEdgeLabelVisible, tasksEdgeLabelZForMode } from './tasks_graph_c
 import {
     TASKS_EDGE_LABEL_FOCUS_Z, TASKS_EDGE_LABEL_SELECTED_Z, TASKS_EDGE_LABEL_TEXT, TASKS_EDGE_LABEL_Z,
     TASKS_NODE_LABEL_FONT_SIZE, TASKS_PAIR_LABEL_LIFT, tasksCssFontSize, tasksOpenArrowHeadPath,
-    tasksPairedEdgePath, tasksProminentEdgeLabelScale, tasksReviewBloomColor, tasksSideWeightedRibbonPath,
+    tasksPairedEdgePath, tasksProminentEdgeLabelScale, tasksReviewBloomColor, tasksRoutePath, tasksSideWeightedRibbonPath,
     tasksTaperedArrowHeadPath, tasksTaperedBezierPath, tasksTrimBezierEnd,
 } from './tasks_paint.js';
 
@@ -54,13 +54,20 @@ export function createTasksEdgeRenderer(React, rf) {
                         }, displayLabel)))
                     );
                 };
-    return React.memo((props) => {
+    return React.memo((handleProps) => {
+                // A routed edge carries its own points, solved against the node
+                // rects, so the handle points only matter for curves.
+                const route = handleProps.data?.__route__;
+                const routeEnd = route ? route[route.length - 1] : null;
+                const props = route
+                    ? { ...handleProps, sourceX: route[0].x, sourceY: route[0].y, targetX: routeEnd.x, targetY: routeEnd.y }
+                    : handleProps;
                 // A pair draws two lines a few pixels apart, one either side of the
                 // path they share. Shifting the endpoints, not the finished path,
                 // keeps the arrowhead and the label solver working on the line
                 // that is actually drawn.
                 const pairLift = Number(props.data?.__pair_lift__) || 0;
-                const [path, rawLabelX, rawLabelY] = tasksPairedEdgePath(props, pairLift, props.data?.__pair_half__ || '');
+                const [path, rawLabelX, rawLabelY] = route ? tasksRoutePath(route) : tasksPairedEdgePath(props, pairLift, props.data?.__pair_half__ || '');
                 // A sequence row is a horizontal line, so a centred label sits right on
                 // top of it. Lift it clear of the stroke.
                 // A pair's two halves share one midpoint, so both labels land on the
@@ -129,7 +136,9 @@ export function createTasksEdgeRenderer(React, rf) {
                 // would widen the silhouette where the head should be widest.
                 const taperSourceWidth = (Number(props.style?.strokeWidth) || 4) * 2.65;
                 const taperTargetWidth = Math.min(taperSourceWidth * 0.1, arrowSize * 1.18 * 0.5);
-                const taperPath = props.data?.__pair_half__ ? tasksTaperedBezierPath(
+                // A routed edge is one even stroke: no ribbon, so the plain casing
+                // and BaseEdge below draw it.
+                const taperPath = route ? '' : props.data?.__pair_half__ ? tasksTaperedBezierPath(
                     path,
                     Number(props.style?.strokeWidth) || 1.9,
                     0

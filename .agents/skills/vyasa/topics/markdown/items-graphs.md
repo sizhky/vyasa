@@ -234,7 +234,7 @@ ctx006/release-check:
 
 ## Fixed Layouts
 
-`layout=` replaces the free graph with a layout that places every node itself. Three exist: `sequence`, `layered`, and `matrix`.
+`layout=` replaces the free graph with a layout that places every node itself. Four exist: `sequence`, `layered`, `matrix`, and `grid`.
 
 Each layout owns its own keys and validates them. There is no shared grammar of `row=`/`col=` keys, because the same word would mean different things in different layouts. Write the keys of the layout you chose.
 
@@ -313,7 +313,73 @@ matrix:
 - An empty cell is drawn with a dashed edge. Read the empty cells first, because they say what a row never needs.
 - A cell grows to hold its members, and a row to hold its fullest cell.
 
-See `demo/vyasa-architecture.kg` for all three layouts over one pack, and `demo/browser-page-load.kg` for a sequence-only pack.
+### `layout=grid`
+
+A hand-placed figure. Each node names its column and its row, so position carries meaning. Use it for a small diagram of 3 to 20 nodes that should read like a drawn figure.
+
+```text
+@views
+diagram:
+	source=base
+	layout=grid
+	grid_col=column
+	grid_row=track
+	grid_col_order=input,gate,context,select,merge,outcome
+	grid_row_order=reference,deterministic,judgement,learning
+	edge_path=orthogonal
+	color_by=role
+```
+
+- `grid_col` and `grid_row` name node attrs. `grid_col_order` and `grid_row_order` list the tracks. A node whose value is not in the list is an error.
+- Nodes default to `node_look=outline` and edges to `edge_path=line`. See Styling below.
+- Every column is one node wide. A row is as tall as its tallest cell. Two nodes in one cell stack, and each cell is centred in its row, so one node beside a stack of three lines up with the middle one.
+- A track value in the order list with no nodes is a spacer. Use it to separate panels in one figure, for example `grid_row_order=top,space,bottom`.
+- An edge still crosses a box when no gutter route avoids it. Move a node to another column or row, or drop the edge.
+
+See `demo/vyasa-architecture.kg` for sequence, layered, and matrix over one pack, `demo/browser-page-load.kg` for a sequence-only pack, and `docs/simple-kg/*.kg` for grid figures.
+
+## Styling
+
+Three style keys work in every view, fixed layout or free graph. Each is a default that a node or an edge can override with an attr of the same name.
+
+| Key | Values | Set on | Falls back to |
+| --- | --- | --- | --- |
+| `node_look` | `card`, `outline` | node attr → view → `@graph` → site | the layout default: `outline` in `grid`, `card` elsewhere |
+| `edge_path` | `ribbon`, `line`, `orthogonal` | edge attr → view → `@graph` → site | the layout default: `line` in `grid`, `ribbon` elsewhere |
+| `subtitle_from` | a node attr name | view → `@graph` → site; a node's own `subtitle=` wins | no subtitle |
+
+The site level is the `kg_defaults` setting: `--kg-defaults` beats `.vyasa`, which beats `VYASA_KG_DEFAULTS`. The highest source replaces the whole value, it does not merge key by key. It takes the same `key=value` pairs as an `@graph` line, or a `[kg_defaults]` table in `.vyasa`. A site key or value that is not a style is logged and ignored.
+
+```bash
+vyasa docs --kg-defaults "node_look=outline edge_path=orthogonal"
+```
+
+```text
+@graph id=flow title="Flow" node_look=outline subtitle_from=summary
+
+@views
+pipeline:
+	source=base
+	layout=layered
+	layered_tier=stage
+	edge_path=orthogonal
+```
+
+```text
+e7: merge -> fetch names_evidence edge_path=line
+n4: Remediate
+	node_look=card
+	dashed=true
+```
+
+- `outline` draws a dark box with the role colour in the border and the title, in a mono face. The subtitle shows as a muted second line and the box grows to fit it. `card` is the filled card.
+- A subtitle shows only on an outline node. Name a short attr in `subtitle_from`; a long `description` makes tall boxes.
+- `ribbon` is the tapered curve between handles. `line` runs centre to centre and is cut at each box border; use it for a hub with spokes. `orthogonal` draws L, Z, and U runs through the gaps between boxes and picks the route that crosses the fewest boxes, then the fewest bends, then the shortest; use it for a pipeline.
+- A `line` or `orthogonal` edge with no colour of its own is thin muted ink. Add `edge_color_by` only when colour is the point.
+- `layout=sequence` ignores `edge_path`, because each row's ends are pinned to the lifelines.
+- In a free graph the routes are solved after ELK places the nodes, and again after a drag. An open group does not block a route; a collapsed group does.
+- `dashed=true` on a node or an edge draws it dashed. Use it for what is optional, not captured, or a feedback path. It is per item only.
+- A bad `node_look` or `edge_path` on a view draws the view's error card. A bad value on a node, an edge, or `@graph` is skipped and the next level decides.
 
 ## Slides
 
@@ -377,6 +443,7 @@ n1: Post matching
 - Keep unique/descriptive attrs inline here: `summary`, `description`, `notes`, `rationale`.
 - Attr inheritance is whitelist-only through `inherit=key1,key2`. The named parent attrs copy to descendants only when the child does not already define that key.
 - Put `inherit=` before child nodes. Default is no attr inheritance.
+- `dashed=true` draws the node with a dashed border. Use it for something optional or not captured.
 
 ## Edges
 
@@ -392,6 +459,7 @@ e2: n2 -> n3 creates
 - Relation has no leading `:`; write `unlocks`, not `:unlocks`.
 - Use another edge for another semantic relation between the same nodes.
 - Keep unique edge attrs inline only when UI/CLI can query or display them; otherwise omit dead text attrs.
+- `dashed=true` draws the edge dashed. Use it for a feedback path or an optional step.
 
 ## Attrs
 

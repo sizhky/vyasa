@@ -10,6 +10,8 @@ from ...markdown_fence import current_content_path, get_root_folder
 from .items_pack import PathLike, read_kg_pack
 from .projections import attach_projection_models, normalize_projections
 from .layout import build_collapsed_graph
+from .layouts import KG_STYLE_DEFAULT_KEYS, kg_style_defaults
+from ...config import get_config
 
 
 _STRING_DECODER = json.JSONDecoder()
@@ -1031,7 +1033,7 @@ def _apply_kg_schema(graph: dict, current_path: str | Path | None) -> None:
         return
     schema_path = _resolve_required_source(current_path, schema_source)
     compiled = read_kg_pack(schema_path, str(graph.get("kg_context_id") or ""))
-    for key in ("id", "title", "default_projection", "default_group_by", "default_color_by", "default_secondary_color_by", "default_open_depth", "edge_color_by", "edge_label_from", "pair_by", "view_projections", "slides", "hover_attrs", "node_attr_order", "edge_attr_order", "node_hidden_attrs", "edge_hidden_attrs", "color_palette_source", "kg_schema", "kg_cache", "kg_sources", "kg_context", "kg_contexts", "kg_history", "index_attributes", "edge_index_attributes", "filter_attributes", "card_states", "node_reference_labels", "acl"):
+    for key in ("id", "title", "default_projection", "default_group_by", "default_color_by", "default_secondary_color_by", "default_open_depth", "edge_color_by", "edge_label_from", "pair_by", "view_projections", "slides", "hover_attrs", "node_attr_order", "edge_attr_order", "node_hidden_attrs", "edge_hidden_attrs", "color_palette_source", "kg_schema", "kg_cache", "kg_sources", "kg_context", "kg_contexts", "kg_history", "index_attributes", "edge_index_attributes", "filter_attributes", "card_states", "node_reference_labels", "acl", *KG_STYLE_DEFAULT_KEYS):
         if compiled.get(key) and not graph.get(key):
             graph[key] = compiled[key]
     graph["groups"].extend(compiled.get("groups", []))
@@ -1289,6 +1291,8 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
         "kg_contexts": graph.get("kg_contexts", []),
         "kg_history": graph.get("kg_history", {}),
         "acl": graph.get("acl", {}),
+        # Site defaults, then the @graph line; every view and item overrides them.
+        **kg_style_defaults(get_config().get_kg_defaults(), graph),
     }
     return _attach_acl_viewer_models(attach_projection_models(model))
 

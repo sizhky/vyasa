@@ -35,6 +35,8 @@ notifies color=relation.notifies
 layers:
 	source=base
 	group_by=layer
+	node_look=outline
+	edge_path=line
 	color_by=layer
 	edge_color_by=flow
 	caption="Every layer and every flow at once. Four flows drawn on top of each other, which is why the picture is hard to read. The views below take them apart."
@@ -44,6 +46,8 @@ layered:
 	layered_tier=layer
 	layered_order=surface,core,pipeline,extension,content
 	layered_aside=configuration
+	node_look=outline
+	edge_path=orthogonal
 	color_by=layer
 	edge_color_by=flow
 	caption="Five bands, top to bottom. A node sits in its own band and nowhere else, so direction now means something: down is the request going in, up is the answer coming back. Configuration sits beside the stack because it touches every band."
@@ -63,6 +67,7 @@ grid-prototype:
 	grid_row=grid_track
 	grid_col_order=surface,core,pipeline,extension,content,configuration
 	grid_row_order=entry,control,dispatch,work,result
+	edge_path=orthogonal
 	color_by=layer
 	edge_color_by=flow
 	caption="PROTOTYPE: Columns and tracks control placement without coordinates. Existing nodes and edges remain unchanged."

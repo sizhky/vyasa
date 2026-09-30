@@ -45,6 +45,7 @@ The root `ignore = [...]` list also hides matching files from the homepage card 
 | `table_col_max_width` | Sets the default max width for markdown table cells across the site. |
 | `sidebars_open` | Changes the default information density of the reading surface. |
 | `reload_exclude` | Keeps local dev fast when the repo contains large generated folders. |
+| `kg_defaults` | Sets the KG style every graph starts from, e.g. `kg_defaults = "node_look=outline edge_path=orthogonal"` or a `[kg_defaults]` table. Also `VYASA_KG_DEFAULTS` and `--kg-defaults`; the highest source replaces the whole value. An `@graph` line, a view, or a node or edge attr overrides it. |
 
 ## Serving Content From Git Refs
 

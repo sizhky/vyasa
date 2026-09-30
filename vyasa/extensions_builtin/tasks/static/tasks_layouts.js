@@ -1,7 +1,7 @@
 import { logTasksDebug, logTasksDebugVerbose, rectSummary } from './tasks_diagnostics.js';
 import {
     layoutDisconnectedTaskNodes, packTaskChildRects, resolveTasksNodeImage, sizeTaskNode,
-    tasksExpandedRootRect,
+    tasksExpandedRootRect, tasksNodeLook, tasksNodeSubtitle,
 } from './tasks_graph_core.js';
 import {
     TASKS_LAYOUT_ERROR_MODE, appendProjectedEdge, buildGanttTasksGraph, buildLayoutErrorGraph,
@@ -31,6 +31,13 @@ import {
 // `task` is the full card. `groupTitle` is the compact labelled box, which is
 // what a matrix chip and a lifeline cap both are.
 const labelHeight = (label, width, kind = 'task') => sizeTaskNode(String(label || ''), kind, width).height;
+
+// A task's height under its own look, so an outline node has room for its
+// subtitle. `view` is the view's model, which carries the view and graph defaults.
+const taskHeight = (task, width, view, layoutDefault, kind = 'task') => {
+    const look = tasksNodeLook(task, view, layoutDefault);
+    return sizeTaskNode(String(task.label || task.id), look === 'outline' ? 'task' : kind, width, { look, subtitle: tasksNodeSubtitle(task, view) }).height;
+};
 
 const TASKS_SEQUENCE_LANE_WIDTH = 196;
 const TASKS_SEQUENCE_LANE_GAP = 102;
@@ -736,7 +743,7 @@ export function buildLayeredTasksGraph(model, projection = {}) {
     }
     const heightOf = (task) => Math.max(
         TASKS_LAYERED_NODE_MIN_HEIGHT,
-        labelHeight(task.label || task.id, TASKS_LAYERED_NODE_WIDTH),
+        taskHeight(task, TASKS_LAYERED_NODE_WIDTH, model, TASKS_LAYOUTS.layered.nodeLook),
     );
     // A band is as tall as the longest label on its rung, so nothing clips and
     // the rungs below simply start lower.
@@ -859,7 +866,7 @@ export function buildMatrixTasksGraph(model, projection = {}) {
     const chipWidth = TASKS_MATRIX_COL_WIDTH - 8 - TASKS_MATRIX_CELL_PAD * 2;
     const chipHeight = (task) => Math.max(
         TASKS_MATRIX_CHIP_HEIGHT,
-        labelHeight(task.label || task.id, chipWidth, 'groupTitle'),
+        taskHeight(task, chipWidth, model, TASKS_LAYOUTS.matrix.nodeLook, 'groupTitle'),
     );
     // A cell is as tall as its members stacked, and a row as tall as its fullest
     // cell, so a long label pushes the row down instead of spilling out of it.
@@ -971,21 +978,49 @@ export function buildGridTasksGraph(model, projection = {}) {
     const rows = layoutAttrList(projection.grid_row_order);
     const colValues = cols.length ? cols : values(colAttr);
     const rowValues = rows.length ? rows : values(rowAttr);
-    const occupied = new Map();
-    const nodes = tasks.map((task) => {
+    // Each row is as tall as its tallest cell, and a cell sits centred in its
+    // row, so one node beside a stack of three lines up with the middle one.
+    const placed = tasks.map((task) => {
         const col = colValues.indexOf(layoutAttrOf(task, colAttr));
         const row = rowValues.indexOf(layoutAttrOf(task, rowAttr));
         if (col < 0 || row < 0) throw new Error(`grid cannot place node ${task.id}`);
-        const cell = `${col}:${row}`;
-        const slot = occupied.get(cell) || 0;
-        occupied.set(cell, slot + 1);
+        const height = taskHeight(task, TASKS_GRID.nodeWidth, model, TASKS_LAYOUTS.grid.nodeLook);
+        return { task, col, row, height };
+    });
+    const cells = new Map();
+    for (const item of placed) {
+        const key = `${item.col}:${item.row}`;
+        const stack = cells.get(key) || [];
+        item.offset = stack.reduce((sum, other) => sum + other.height + TASKS_GRID.stackGap, 0);
+        stack.push(item);
+        cells.set(key, stack);
+    }
+    const cellHeight = (stack) => stack.reduce((sum, item) => sum + item.height, 0) + (stack.length - 1) * TASKS_GRID.stackGap;
+    const rowHeights = rowValues.map((_, row) => Math.max(0, ...[...cells.entries()]
+        .filter(([key]) => Number(key.split(':')[1]) === row)
+        .map(([, stack]) => cellHeight(stack))));
+    const colUsed = colValues.map((_, col) => placed.some((item) => item.col === col));
+    // An empty track is a spacer the author asked for, so it keeps a gap's width.
+    const rowY = tracksStart(rowHeights.map((height) => height || TASKS_GRID.emptyTrack), TASKS_GRID.rowGap, TASKS_GRID.top);
+    const colX = tracksStart(colUsed.map((used) => (used ? TASKS_GRID.nodeWidth : TASKS_GRID.emptyTrack)), TASKS_GRID.colGap, TASKS_GRID.left);
+    const nodes = placed.map(({ task, col, row, height, offset }) => {
+        const stackHeight = cellHeight(cells.get(`${col}:${row}`));
         return {
             ...task, __kind__: 'task', __fixed_size__: true,
-            position: { x: 80 + col * 250, y: 60 + row * 190 + slot * 70 },
-            width: 190, height: labelHeight(task.label, 190),
+            position: { x: colX[col], y: rowY[row] + (rowHeights[row] - stackHeight) / 2 + offset },
+            width: TASKS_GRID.nodeWidth, height,
         };
     });
     return { nodes, edges: model.dependency_edges || [] };
+}
+
+const TASKS_GRID = { nodeWidth: 220, colGap: 56, rowGap: 36, stackGap: 12, emptyTrack: 40, left: 80, top: 60 };
+
+// Start offset of each track, given track sizes and the gap between tracks.
+function tracksStart(sizes, gap, origin) {
+    const starts = [];
+    sizes.reduce((at, size) => (starts.push(at), at + size + gap), origin);
+    return starts;
 }
 
 export const TASKS_LAYOUTS = {
@@ -999,6 +1034,8 @@ export const TASKS_LAYOUTS = {
         chromeKinds: ['sequencePhase', 'sequenceActivation', 'sequenceFragment'],
         authoredHandles: true,
         edgesOverNodes: true,
+        edgePath: 'ribbon',
+        nodeLook: 'card',
         build: buildSequenceTasksGraph,
     },
     layered: {
@@ -1009,6 +1046,8 @@ export const TASKS_LAYOUTS = {
         authoredHandles: false,
         // Bands and cards are the picture here, so an arrow stays behind them.
         edgesOverNodes: false,
+        edgePath: 'ribbon',
+        nodeLook: 'card',
         build: buildLayeredTasksGraph,
     },
     matrix: {
@@ -1018,6 +1057,8 @@ export const TASKS_LAYOUTS = {
         chromeKinds: ['matrixHeader', 'matrixCell'],
         authoredHandles: false,
         edgesOverNodes: false,
+        edgePath: 'ribbon',
+        nodeLook: 'card',
         build: buildMatrixTasksGraph,
     },
     grid: {
@@ -1025,6 +1066,10 @@ export const TASKS_LAYOUTS = {
         label: 'Grid',
         keys: ['grid_col', 'grid_row', 'grid_col_order', 'grid_row_order'],
         chromeKinds: [], authoredHandles: false, edgesOverNodes: false,
+        // Hand-placed cells read as a figure, so edges default to straight lines.
+        edgePath: 'line',
+        gutter: { x: TASKS_GRID.colGap, y: TASKS_GRID.rowGap },
+        nodeLook: 'outline',
         build: buildGridTasksGraph,
     },
 };
@@ -1334,7 +1379,7 @@ async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig
         ...(model.task_children?.[groupId] || []).map((id) => {
             const source = tasksById[id] || {};
             const label = source.label || id;
-            return { id, __kind__: 'task', label, ...sizeTaskNode(label, 'task', null, { hasImage: Boolean(resolveTasksNodeImage(source, model)), nodeLabels }) };
+            return { id, __kind__: 'task', label, ...sizeTaskNode(label, 'task', null, { hasImage: Boolean(resolveTasksNodeImage(source, model)), nodeLabels, look: tasksNodeLook(source, model), subtitle: tasksNodeSubtitle(source, model) }) };
         }),
         ...(model.group_tree?.[groupId] || []).map((id) => {
             const source = groupsById[id] || {};

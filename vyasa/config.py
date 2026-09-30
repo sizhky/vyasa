@@ -35,6 +35,22 @@ def load_theme_preset(preset_name: str, base_dir: Optional[Path] = None) -> dict
     return theme
 
 
+def parse_key_value_defaults(raw: Any) -> dict[str, str]:
+    """Read `key=value` pairs from a TOML table or a `key=value key=value` string.
+
+    >>> parse_key_value_defaults("node_look=outline, edge_path=orthogonal")
+    {'node_look': 'outline', 'edge_path': 'orthogonal'}
+    >>> parse_key_value_defaults({"node_look": "outline"})
+    {'node_look': 'outline'}
+    >>> parse_key_value_defaults("")
+    {}
+    """
+    if isinstance(raw, dict):
+        return {str(key).strip(): str(value).strip() for key, value in raw.items() if str(value).strip()}
+    pairs = (part.split("=", 1) for part in str(raw or "").replace(",", " ").split() if "=" in part)
+    return {key.strip(): value.strip() for key, value in pairs if key.strip() and value.strip()}
+
+
 def port_for_working_directory(path: Path) -> int:
     """Map an absolute directory path to a deterministic non-privileged port."""
     normalized = str(path.resolve()).encode("utf-8")
@@ -298,6 +314,15 @@ class VyasaConfig:
     def get_home_sort(self) -> str | None:
         value = self.get('home_sort', 'VYASA_HOME_SORT', None)
         return value if value in ('name_asc', 'name_desc') else None
+
+    def get_kg_defaults(self) -> dict[str, str]:
+        """Site-wide KG style defaults, before any @graph line.
+
+        Priority: --kg-defaults > .vyasa `kg_defaults` > VYASA_KG_DEFAULTS.
+        The tasks extension decides which keys and values are valid.
+        """
+        raw = os.getenv('VYASA_KG_DEFAULTS_CLI') or self.get('kg_defaults', 'VYASA_KG_DEFAULTS', '')
+        return parse_key_value_defaults(raw)
 
     def get_theme_debug(self) -> bool:
         value = self.get('theme_debug', 'VYASA_THEME_DEBUG', False)
