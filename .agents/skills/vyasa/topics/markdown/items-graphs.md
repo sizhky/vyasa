@@ -234,7 +234,7 @@ ctx006/release-check:
 
 ## Fixed Layouts
 
-`layout=` replaces the free graph with a layout that places every node itself. Four exist: `sequence`, `layered`, `matrix`, and `grid`.
+`layout=` replaces the free graph with a layout that places every node itself. Five exist: `sequence`, `layered`, `matrix`, `grid`, and `arc`.
 
 Each layout owns its own keys and validates them. There is no shared grammar of `row=`/`col=` keys, because the same word would mean different things in different layouts. Write the keys of the layout you chose.
 
@@ -336,23 +336,38 @@ diagram:
 - A track value in the order list with no nodes is a spacer. Use it to separate panels in one figure, for example `grid_row_order=top,space,bottom`.
 - An edge still crosses a box when no gutter route avoids it. Move a node to another column or row, or drop the edge.
 
+### `layout=arc`
+
+An arc diagram: every node on one baseline, edges as arcs. Use it when order matters, such as steps or an outline, and the long jumps and backtracks are the point.
+
+```text
+@views
+checkout:
+	source=checkout
+	layout=arc
+	arc_order=step
+```
+
+- `arc_order` names a node attr; values sort numerically, so `10` comes after `2`. Omit it and nodes keep document order. A node without the value goes last.
+- An arc bulges to the left of travel, so a forward edge arcs above the line and a back edge arcs below. Its label sits on the apex.
+- The layout owns its edge path. A `@graph` or site `edge_path` does not reach it; only the view or an edge can pick another path.
+
 See `demo/vyasa-architecture.kg` for sequence, layered, and matrix over one pack, `demo/browser-page-load.kg` for a sequence-only pack, and `docs/simple-kg/*.kg` for grid figures.
 
 ## Styling
 
-Three style keys work in every view, fixed layout or free graph. Each is a default that a node or an edge can override with an attr of the same name.
+Style keys work in every view, fixed layout or free graph. Each is a default, and the nearest level wins:
 
-| Key | Values | Set on | Falls back to |
+node or edge attr → view → fence frontmatter or `@graph` line → site `kg_defaults` → layout default.
+
+| Key | Values | Per item | Layout default |
 | --- | --- | --- | --- |
-| `node_look` | `card`, `outline` | node attr → view → `@graph` → site | the layout default: `outline` in `grid`, `card` elsewhere |
-| `edge_path` | `ribbon`, `line`, `orthogonal` | edge attr → view → `@graph` → site | the layout default: `line` in `grid`, `ribbon` elsewhere |
-| `subtitle_from` | a node attr name | view → `@graph` → site; a node's own `subtitle=` wins | no subtitle |
-
-The site level is the `kg_defaults` setting: `--kg-defaults` beats `.vyasa`, which beats `VYASA_KG_DEFAULTS`. The highest source replaces the whole value, it does not merge key by key. It takes the same `key=value` pairs as an `@graph` line, or a `[kg_defaults]` table in `.vyasa`. A site key or value that is not a style is logged and ignored.
-
-```bash
-vyasa docs --kg-defaults "node_look=outline edge_path=orthogonal"
-```
+| `node_look` | `card`, `outline`, `sketch`, `blueprint`, `tab`, `station` | node attr | `outline` in `grid` and `arc`, `card` elsewhere |
+| `edge_path` | `ribbon`, `line`, `orthogonal`, `octilinear`, `arc` | edge attr | `line` in `grid`, `arc` in `arc`, `ribbon` elsewhere |
+| `edge_corner` | `sharp`, `round` | edge attr | `sharp` |
+| `canvas` | `plain`, `blueprint` | none, view-wide | `plain` |
+| `subtitle_from` | a node attr name | a node's own `subtitle=` wins | no subtitle |
+| `dashed` | `true` | node or edge attr only | solid |
 
 ```text
 @graph id=flow title="Flow" node_look=outline subtitle_from=summary
@@ -363,23 +378,62 @@ pipeline:
 	layout=layered
 	layered_tier=stage
 	edge_path=orthogonal
+	edge_corner=round
 ```
 
 ```text
-e7: merge -> fetch names_evidence edge_path=line
+e7: merge -> fetch names_evidence edge_path=arc dashed=true
 n4: Remediate
 	node_look=card
-	dashed=true
 ```
 
-- `outline` draws a dark box with the role colour in the border and the title, in a mono face. The subtitle shows as a muted second line and the box grows to fit it. `card` is the filled card.
-- A subtitle shows only on an outline node. Name a short attr in `subtitle_from`; a long `description` makes tall boxes.
-- `ribbon` is the tapered curve between handles. `line` runs centre to centre and is cut at each box border; use it for a hub with spokes. `orthogonal` draws L, Z, and U runs through the gaps between boxes and picks the route that crosses the fewest boxes, then the fewest bends, then the shortest; use it for a pipeline.
-- A `line` or `orthogonal` edge with no colour of its own is thin muted ink. Add `edge_color_by` only when colour is the point.
-- `layout=sequence` ignores `edge_path`, because each row's ends are pinned to the lifelines.
+A fence can set style keys for the figure it embeds, and its `default_projection` picks the view it opens. Both win over the pack, so one pack can back several figures on a page, each restyled without editing the schema:
+
+````text
+```items
+---
+items_schema: flow.kg/kg.schema
+default_projection: pipeline
+node_look: sketch
+---
+```
+````
+
+The site level is the `kg_defaults` setting: `--kg-defaults` beats `.vyasa`, which beats `VYASA_KG_DEFAULTS`. The highest source replaces the whole value; it does not merge key by key. It takes `key=value` pairs, or a `[kg_defaults]` table in `.vyasa`. A site key or value that is not a style is logged and ignored. A launchd agent does not read shell profiles, so put the setting in `.vyasa` there.
+
+```bash
+vyasa docs --kg-defaults "node_look=outline edge_path=orthogonal"
+```
+
+Node looks:
+
+- `card`: the filled card.
+- `outline`: dark box, role colour in the border and the mono title, subtitle as a muted second line. For figures of 5 to 20 nodes.
+- `sketch`: hachure fill and a hand-drawn wobble on the frame; the text stays crisp. For drafts and brainstorms.
+- `blueprint`: thin mono box in ink. Pair it with `canvas=blueprint`.
+- `tab`: C4 box. The name on a band in the role colour, then `[kind]` (the node's value for the view's `color_by`), then the subtitle.
+- `station`: a metro dot with its name above. Routes end at the dot. Pair it with `edge_path=octilinear`.
+
+A subtitle shows on `outline`, `sketch`, `blueprint`, and `tab`. Name a short attr in `subtitle_from`; a long `description` makes tall boxes.
+
+Edge paths:
+
+- `ribbon`: the tapered curve between handles.
+- `line`: centre to centre, cut at each box border. For a hub with spokes.
+- `orthogonal`: L, Z, and U runs through the gaps between boxes. It picks the route that crosses the fewest boxes, then the fewest bends, then the shortest. For a pipeline.
+- `octilinear`: 0, 45, and 90 degree runs, drawn thick like a metro line. Colour the lines with `edge_color_by`.
+- `arc`: a curve that bulges left of travel, with its label on the apex. Use it on one edge to hop over a node in the way.
+- `edge_corner=round` rounds the bends of `orthogonal` and `octilinear` runs. A straight run has no bend, so place nodes where the route turns.
+
+Rules:
+
+- `canvas=blueprint` restates the page colours for the graph pane and draws a grid, so every node and edge inside turns light on blue.
+- A routed edge with no colour of its own is thin muted ink. Add `edge_color_by` only when colour is the point.
+- `layout=sequence` ignores `edge_path`, because each row's ends are pinned to the lifelines. `layout=arc` ignores graph and site `edge_path`.
 - In a free graph the routes are solved after ELK places the nodes, and again after a drag. An open group does not block a route; a collapsed group does.
-- `dashed=true` on a node or an edge draws it dashed. Use it for what is optional, not captured, or a feedback path. It is per item only.
-- A bad `node_look` or `edge_path` on a view draws the view's error card. A bad value on a node, an edge, or `@graph` is skipped and the next level decides.
+- A bad style value on a view draws the view's error card. A bad value on a node, an edge, `@graph`, or a fence is skipped and the next level decides.
+
+See `demo/folio-books.md`: one pack, six views, one style each.
 
 ## Slides
 

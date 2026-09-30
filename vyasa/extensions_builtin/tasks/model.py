@@ -58,7 +58,7 @@ def _read_fence_frontmatter(body: str) -> tuple[dict, str]:
                 continue
             key = line[:key_index].strip()
             value = line[key_index + 1:].strip()
-            if key in {"id", "title", "group_by", "default_group_by", "default_color_by", "default_secondary_color_by", "secondary_color_by", "default_image_by", "default_design_palette", "default_projection", "base_view_label", "edge_color_by", "edge_label_from", "pair_by", "image_by", "color_palette_source", "edge_color_palette_source", "items_schema", "kg_context_id", "default_open_depth"}:
+            if key in {"id", "title", "group_by", "default_group_by", "default_color_by", "default_secondary_color_by", "secondary_color_by", "default_image_by", "default_design_palette", "default_projection", "base_view_label", "edge_color_by", "edge_label_from", "pair_by", "image_by", "color_palette_source", "edge_color_palette_source", "items_schema", "kg_context_id", "default_open_depth", *KG_STYLE_DEFAULT_KEYS}:
                 config[key] = _read_string(value)
                 cursor += 1
                 continue
@@ -693,7 +693,7 @@ def _parse_items_graph(body: str) -> dict:
         if indent == 0 and _find_unquoted(line, ":") > 0 and _find_unquoted(line, "->") < 0:
             key, value = line.split(":", 1)
             key = key.strip()
-            if key in {"id", "title", "group_by", "default_group_by", "default_color_by", "default_secondary_color_by", "secondary_color_by", "default_image_by", "default_design_palette", "default_projection", "base_view_label", "edge_color_by", "edge_label_from", "pair_by", "image_by", "color_palette_source", "edge_color_palette_source", "items_schema", "kg_context_id"}:
+            if key in {"id", "title", "group_by", "default_group_by", "default_color_by", "default_secondary_color_by", "secondary_color_by", "default_image_by", "default_design_palette", "default_projection", "base_view_label", "edge_color_by", "edge_label_from", "pair_by", "image_by", "color_palette_source", "edge_color_palette_source", "items_schema", "kg_context_id", *KG_STYLE_DEFAULT_KEYS}:
                 graph[key] = _read_string(value.strip())
                 index += 1
                 continue
@@ -1128,7 +1128,9 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
         graph["id"] = config["id"]
     if config.get("title") and not graph.get("title"):
         graph["title"] = config["title"]
-    for key in ("items_schema", "kg_context_id"):
+    # The view a fence opens and the style it draws are choices about this one
+    # embed, so they win over the pack; set first, the schema only fills gaps.
+    for key in ("items_schema", "kg_context_id", "default_projection", *KG_STYLE_DEFAULT_KEYS):
         if key in config and key not in graph:
             graph[key] = config[key]
     _apply_kg_schema(graph, current_path)

@@ -1,0 +1,8 @@
+j1: home -> search-page browse journey=browse
+j2: search-page -> book-page browse journey=browse
+j3: book-page -> cart buy journey=buy
+j4: cart -> checkout-page buy journey=buy
+j5: checkout-page -> confirmation buy journey=buy
+j6: confirmation -> returns return journey=return
+j7: returns -> refund return journey=return
+j8: home -> book-page browse journey=browse edge_path=arc dashed=true

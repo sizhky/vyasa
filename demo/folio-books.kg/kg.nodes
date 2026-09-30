@@ -1,0 +1,169 @@
+storefront: Storefront
+	kind=web
+	col=edge
+	row=middle
+	summary=Pages, cart, and account screens.
+catalog-api: Catalog API
+	kind=api
+	col=api
+	row=top
+	summary=Books, prices, and stock levels.
+orders-api: Orders API
+	kind=api
+	col=api
+	row=middle
+	summary=Carts, orders, and refunds.
+search: Search
+	kind=search
+	col=edge
+	row=top
+	summary=Title and author lookup.
+catalog-db: Catalog DB
+	kind=database
+	col=data
+	row=top
+	summary=Postgres, read-heavy.
+orders-db: Orders DB
+	kind=database
+	col=data
+	row=middle
+	summary=Postgres, the source of truth.
+order-events: Order events
+	kind=queue
+	col=api
+	row=bottom
+	summary=One message per order change.
+mailer: Mailer
+	kind=worker
+	col=data
+	row=bottom
+	summary=Receipts and shipping notices.
+cdn: CDN
+	col=entry
+	row=top
+	summary=Static assets, cached at the edge.
+balancer: Load balancer
+	col=entry
+	row=middle
+	summary=TLS ends here.
+app-cluster: App cluster
+	col=compute
+	row=middle
+	summary=3 containers, autoscaled.
+workers: Worker pool
+	col=compute
+	row=bottom
+	summary=Consumes order events.
+db-primary: Postgres primary
+	col=storage
+	row=middle
+	summary=Writes only.
+db-replica: Postgres replica
+	col=storage
+	row=top
+	summary=Catalog reads.
+object-store: Object store
+	col=storage
+	row=bottom
+	summary=Covers and invoices.
+	dashed=true
+home: Home
+	col=c1
+	row=r1
+search-page: Search
+	col=c2
+	row=r1
+book-page: Book page
+	col=c3
+	row=r1
+cart: Cart
+	col=c3
+	row=r2
+checkout-page: Checkout
+	col=c4
+	row=r2
+confirmation: Confirmation
+	col=c5
+	row=r2
+returns: Returns
+	col=c4
+	row=r3
+refund: Refund
+	col=c3
+	row=r3
+basket: 1 · Basket
+	step=1
+	role=input
+	summary=Review items.
+address: 2 · Address
+	step=2
+	role=step
+	summary=Where it goes.
+shipping: 3 · Shipping
+	step=3
+	role=step
+	summary=Speed and cost.
+payment: 4 · Payment
+	step=4
+	role=step
+	summary=Card or wallet.
+review: 5 · Review
+	step=5
+	role=step
+	summary=Last look.
+placed: 6 · Placed
+	step=6
+	role=done
+	summary=Order confirmed.
+slow-checkout: Checkout slow since Tue
+	confidence=symptom
+	summary=p95 went from 1.2 s to 6 s.
+recent-deploy: Tuesday deploy
+	confidence=confirmed
+	summary=Orders API v2.14.
+db-locks: Row locks on orders
+	confidence=suspected
+	summary=Nobody has checked pg_locks.
+	dashed=true
+payment-latency: Payment provider latency
+	confidence=ruled_out
+	summary=Their status page is green.
+cache-miss: Stock cache misses
+	confidence=suspected
+	summary=v2.14 changed the cache key.
+	dashed=true
+paid: Payment captured
+	col=s1
+	row=forward
+	role=input
+	summary=Money is held.
+picked: Picked
+	col=s2
+	row=forward
+	role=step
+	summary=Pulled from the shelf.
+packed: Packed
+	col=s3
+	row=forward
+	role=step
+	summary=Boxed and labelled.
+shipped: Shipped
+	col=s4
+	row=forward
+	role=step
+	summary=Handed to the carrier.
+delivered: Delivered
+	col=s5
+	row=forward
+	role=done
+	summary=Signed for.
+returned: Returned
+	col=s4
+	row=back
+	role=back
+	summary=Customer sent it back.
+restocked: Restocked
+	col=s1
+	row=back
+	role=back
+	summary=Back on the shelf.

@@ -13,7 +13,7 @@ Aliases keep packs written against an earlier key working.
 >>> layout_keys("nope")
 ()
 >>> sorted(all_layout_keys())[:3]
-['grid_col', 'grid_col_order', 'grid_row']
+['arc_order', 'grid_col', 'grid_col_order']
 >>> unknown_layout_keys({"layout": "matrix", "matrix_col": "layer", "matrix_rows": "flow"})
 ['matrix_rows']
 >>> unknown_layout_keys({"layout": "matrix", "matrix_col": "layer", "caption": "hi"})
@@ -40,13 +40,17 @@ LAYOUT_KEYS: dict[str, tuple[str, ...]] = {
     "layered": ("layered_tier", "layered_order", "layered_aside"),
     "matrix": ("matrix_col", "matrix_row", "matrix_col_order", "matrix_tint"),
     "grid": ("grid_col", "grid_row", "grid_col_order", "grid_row_order"),
+    # Nodes on one baseline; `arc_order` names the attr that orders them.
+    "arc": ("arc_order",),
 }
 
 # View-wide style defaults. A node or edge attr of the same name overrides them.
 # Any layout accepts them, so they are not layout keys.
 STYLE_KEYS: dict[str, tuple[str, ...]] = {
-    "node_look": ("card", "outline"),
-    "edge_path": ("ribbon", "line", "orthogonal"),
+    "node_look": ("card", "outline", "sketch", "blueprint", "tab", "station"),
+    "edge_path": ("ribbon", "line", "orthogonal", "octilinear", "arc"),
+    "edge_corner": ("sharp", "round"),
+    "canvas": ("plain", "blueprint"),
 }
 
 # Keys a site or an @graph line may set as the starting default for every view.
@@ -98,11 +102,11 @@ def layout_error(view: dict) -> str:
     >>> layout_error({"layout": "matrix", "matrix_rows": "b"})
     "layout=matrix has no key 'matrix_rows'. It accepts matrix_col, matrix_col_order, matrix_row, matrix_tint."
     >>> layout_error({"layout": "spiral"})
-    'layout=spiral is not a layout. Known layouts: grid, layered, matrix, sequence.'
+    'layout=spiral is not a layout. Known layouts: arc, grid, layered, matrix, sequence.'
     >>> layout_error({"group_by": "kind"})
     ''
     >>> layout_error({"edge_path": "curvy"})
-    'edge_path=curvy is not a style. Use one of ribbon, line, orthogonal.'
+    'edge_path=curvy is not a style. Use one of ribbon, line, orthogonal, octilinear, arc.'
     """
     for key, allowed in STYLE_KEYS.items():
         value = str(view.get(key) or "").strip().lower()

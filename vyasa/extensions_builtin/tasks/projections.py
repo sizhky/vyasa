@@ -17,7 +17,7 @@ PROJECTION_DISPLAY_KEYS = {
     "layout_direction", "collision_gap", "edge_label_width",
     "layout", "layout_error",
     # Style defaults for every node and edge in the view; see layouts.STYLE_KEYS.
-    "node_look", "edge_path", "subtitle_from",
+    "node_look", "edge_path", "subtitle_from", "edge_corner", "canvas",
     # Pairing a call with its reply is a view rule, not a layout rule, so it is
     # not in all_layout_keys() and has to be named here.
     "pair_by",

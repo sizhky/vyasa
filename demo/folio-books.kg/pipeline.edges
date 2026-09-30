@@ -1,0 +1,7 @@
+p1: paid -> picked starts
+p2: picked -> packed next
+p3: packed -> shipped next
+p4: shipped -> delivered next
+p5: delivered -> returned returns dashed=true
+p6: returned -> restocked restocks dashed=true
+p7: restocked -> picked resells dashed=true

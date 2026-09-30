@@ -1,0 +1,7 @@
+d1: cdn -> balancer forwards
+d2: balancer -> app-cluster routes
+d3: app-cluster -> db-primary writes
+d4: app-cluster -> db-replica reads
+d5: db-primary -> db-replica replicates dashed=true
+d6: workers -> db-primary writes
+d7: workers -> object-store uploads

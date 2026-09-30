@@ -3,9 +3,12 @@ import { isTasksEdgeLabelVisible, tasksEdgeLabelZForMode } from './tasks_graph_c
 import {
     TASKS_EDGE_LABEL_FOCUS_Z, TASKS_EDGE_LABEL_SELECTED_Z, TASKS_EDGE_LABEL_TEXT, TASKS_EDGE_LABEL_Z,
     TASKS_NODE_LABEL_FONT_SIZE, TASKS_PAIR_LABEL_LIFT, tasksCssFontSize, tasksOpenArrowHeadPath,
-    tasksPairedEdgePath, tasksProminentEdgeLabelScale, tasksReviewBloomColor, tasksRoutePath, tasksSideWeightedRibbonPath,
+    tasksPairedEdgePath, tasksProminentEdgeLabelScale, tasksReviewBloomColor, tasksRouteHeadPath, tasksRoutePath, tasksSideWeightedRibbonPath,
     tasksTaperedArrowHeadPath, tasksTaperedBezierPath, tasksTrimBezierEnd,
 } from './tasks_paint.js';
+
+// Corner radius of a routed edge drawn with edge_corner=round.
+const TASKS_ROUND_CORNER = 12;
 
 export function createTasksEdgeRenderer(React, rf) {
     const TasksProminentEdgeLabel = ({ labelX, labelY, labelZIndex, labelBgPadding, labelBgBorderRadius, labelMaxWidth, labelStyle, labelBgStyle, fullLabel, displayLabel }) => {
@@ -67,7 +70,16 @@ export function createTasksEdgeRenderer(React, rf) {
                 // keeps the arrowhead and the label solver working on the line
                 // that is actually drawn.
                 const pairLift = Number(props.data?.__pair_lift__) || 0;
-                const [path, rawLabelX, rawLabelY] = route ? tasksRoutePath(route) : tasksPairedEdgePath(props, pairLift, props.data?.__pair_half__ || '');
+                const [path, rawLabelX, rawLabelY] = route
+                    ? tasksRoutePath(
+                        route,
+                        props.data?.__edge_corner__ === 'round' ? TASKS_ROUND_CORNER : 0,
+                        // An arc's words belong on its apex.
+                        props.data?.__edge_path__ === 'arc' ? 'middle' : 'run',
+                    )
+                    : tasksPairedEdgePath(props, pairLift, props.data?.__pair_half__ || '');
+                // The arrowhead follows the last run, which a route states as points.
+                const headPath = route ? tasksRouteHeadPath(route) : path;
                 // A sequence row is a horizontal line, so a centred label sits right on
                 // top of it. Lift it clear of the stroke.
                 // A pair's two halves share one midpoint, so both labels land on the
@@ -160,7 +172,7 @@ export function createTasksEdgeRenderer(React, rf) {
                     ? tasksSideWeightedRibbonPath(path, Number(props.style?.strokeWidth) || 1.9, 0, casingStroke, Math.sign(pairLift))
                     : taperPath;
                 const edgeArrowPath = tasksTaperedArrowHeadPath(
-                    path,
+                    headPath,
                     arrowSize,
                     // The barb sits on the side the line was nudged toward, so a
                     // pair reads as one double harpoon rather than two arrows.
@@ -206,7 +218,7 @@ export function createTasksEdgeRenderer(React, rf) {
                 // names `sequence_message` can mark a row async at all.
                 const uml = Boolean(props.data?.__sequence_uml__);
                 const openHead = uml && String(props.data?.__sequence_message__ || '') === 'async';
-                const umlHeadPath = openHead ? tasksOpenArrowHeadPath(path, arrowSize, pairLift ? Math.sign(pairLift) : 0) : '';
+                const umlHeadPath = openHead ? tasksOpenArrowHeadPath(headPath, arrowSize, pairLift ? Math.sign(pairLift) : 0) : '';
                 const umlLineWidth = Math.max(1.4, Number(props.style?.strokeWidth) || 1.9);
                 // Shift+E turns the words off across the view, and only the edge the
                 // reader asked for by name keeps its own. That is the W preview or a

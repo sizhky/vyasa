@@ -1014,6 +1014,29 @@ export function buildGridTasksGraph(model, projection = {}) {
     return { nodes, edges: model.dependency_edges || [] };
 }
 
+// Arc diagram (Wattenberg 2002): every node on one baseline, in order. The arc
+// edge path bulges left of travel, so forward edges arc above, back edges below.
+export function buildArcTasksGraph(model, projection = {}) {
+    const orderAttr = String(projection.arc_order || '').trim();
+    const tasks = [...(model.tasks || [])];
+    if (orderAttr) {
+        const rank = (task) => layoutAttrOf(task, orderAttr);
+        // A node without the attr keeps its place after every ranked node.
+        tasks.sort((a, b) => (!rank(a) - !rank(b)) || rank(a).localeCompare(rank(b), undefined, { numeric: true }));
+    }
+    const nodes = tasks.map((task, index) => {
+        const height = taskHeight(task, TASKS_ARC.nodeWidth, model, TASKS_LAYOUTS.arc.nodeLook);
+        return {
+            ...task, __kind__: 'task', __fixed_size__: true,
+            position: { x: TASKS_ARC.left + index * (TASKS_ARC.nodeWidth + TASKS_ARC.gap), y: TASKS_ARC.baseline - height / 2 },
+            width: TASKS_ARC.nodeWidth, height,
+        };
+    });
+    return { nodes, edges: model.dependency_edges || [] };
+}
+
+const TASKS_ARC = { nodeWidth: 150, gap: 40, left: 80, baseline: 300 };
+
 const TASKS_GRID = { nodeWidth: 220, colGap: 56, rowGap: 36, stackGap: 12, emptyTrack: 40, left: 80, top: 60 };
 
 // Start offset of each track, given track sizes and the gap between tracks.
@@ -1024,6 +1047,18 @@ function tracksStart(sizes, gap, origin) {
 }
 
 export const TASKS_LAYOUTS = {
+    arc: {
+        id: 'arc',
+        label: 'Arc',
+        keys: ['arc_order'],
+        chromeKinds: [], authoredHandles: false, edgesOverNodes: false,
+        edgePath: 'arc',
+        // Arcs are the diagram. Only the view or an edge may pick another path;
+        // a graph or site default does not reach this layout.
+        ownsEdgePath: true,
+        nodeLook: 'outline',
+        build: buildArcTasksGraph,
+    },
     sequence: {
         id: 'sequence',
         label: 'Sequence',

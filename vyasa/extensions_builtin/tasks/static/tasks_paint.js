@@ -114,6 +114,8 @@ export function tasksEdgeOpacityLabel(opacity) {
 // The width an edge is drawn at, by its path. A ribbon swells its width into a
 // taper, so it starts wider; a routed line or orthogonal run draws it as is.
 export function tasksEdgeBaseWidth(edgePath, focused = false) {
+    // A metro line is the picture, so it is drawn thick.
+    if (edgePath === 'octilinear') return focused ? 7 : 5;
     if (edgePath && edgePath !== 'ribbon') return focused ? 2.5 : 1.5;
     return focused ? 4.75 : 2.5;
 }
@@ -135,25 +137,60 @@ export function tasksOutlineNodeStyle(color, active = false, dashed = false) {
 // The look-owned part of a task node's style. A card keeps the fill and border
 // it was given; an outline replaces them. A dashed node dashes either border.
 export function tasksNodeLookStyle(cardStyle, look, nodeColor, dashed = false) {
-    const style = look === 'outline' ? { ...cardStyle, ...tasksOutlineNodeStyle(nodeColor, false, dashed) } : { ...cardStyle };
+    const tint = nodeColor || 'var(--vyasa-ink)';
+    const line = dashed ? 'dashed' : 'solid';
+    const looks = {
+        outline: tasksOutlineNodeStyle(nodeColor, false, dashed),
+        // The body draws the wobbling frame, so the text above it stays crisp.
+        sketch: { background: 'transparent', border: 'none', color: tint, overflow: 'visible' },
+        blueprint: { background: 'transparent', border: `1.3px ${line} color-mix(in srgb, var(--vyasa-ink) 85%, transparent)`, color: 'var(--vyasa-ink)', borderRadius: 0 },
+        tab: { background: 'var(--vyasa-paper)', border: `1px ${line} color-mix(in srgb, ${tint} 70%, transparent)`, color: tint, borderRadius: 4 },
+        station: { background: 'transparent', border: 'none', color: 'var(--vyasa-ink)', overflow: 'visible' },
+    };
+    const style = { ...cardStyle, ...(looks[look] || {}) };
     if (dashed && typeof style.border === 'string') style.border = style.border.replace(' solid ', ' dashed ');
     return style;
+}
+
+// The fill a lit node keeps, by look. A frame drawn by the body stays clear.
+const TASKS_LIT_FILLS = { sketch: 'transparent', station: 'transparent', blueprint: 'transparent', tab: 'var(--vyasa-paper)' };
+
+// A canvas restates the theme tokens for the graph pane, so every node and edge
+// inside picks the look up without knowing about it.
+export function tasksCanvasStyle(canvas) {
+    if (canvas !== 'blueprint') return {};
+    return {
+        '--vyasa-paper': '#123a63',
+        '--vyasa-ink': '#e8f1ff',
+        '--vyasa-primary': '#8fb3d9',
+        background: '#123a63',
+        color: '#e8f1ff',
+    };
+}
+
+export function tasksCanvasBackgroundProps(canvas, props) {
+    if (canvas !== 'blueprint') return props;
+    return { ...props, variant: 'lines', gap: 24, size: 1, color: 'rgba(143, 179, 217, 0.28)' };
 }
 
 // The stroke of an edge, by its path. A ribbon keeps the node ink and its own
 // width; a routed edge is a thin muted line unless it has a colour of its own.
 export function tasksEdgeStrokeStyle(edgePath, edgeColor, dashed = false) {
+    const metro = edgePath === 'octilinear';
     return {
-        stroke: edgeColor || (edgePath === 'ribbon' ? 'currentColor' : TASKS_LINE_EDGE_INK),
+        stroke: edgeColor || (edgePath === 'ribbon' ? 'currentColor' : (metro ? 'var(--vyasa-ink)' : TASKS_LINE_EDGE_INK)),
         strokeWidth: tasksEdgeBaseWidth(edgePath),
-        ...(dashed ? { strokeDasharray: '6 5' } : {}),
+        ...(metro ? { strokeLinecap: 'round', strokeLinejoin: 'round' } : {}),
+        ...(dashed ? { strokeDasharray: metro ? '2 9' : '6 5' } : {}),
     };
 }
 
 // The fill of a lit task node. Hover and focus both read it, so an outline node
 // keeps its look when it lights up.
 export function tasksActiveNodeFill(node, nodeColor, colorMix) {
-    if (node.data?.__node_look__ === 'outline') return tasksOutlineNodeStyle(nodeColor, true).background;
+    const look = node.data?.__node_look__;
+    if (look === 'outline') return tasksOutlineNodeStyle(nodeColor, true).background;
+    if (TASKS_LIT_FILLS[look]) return TASKS_LIT_FILLS[look];
     return tasksNodeBackground(nodeColor, '', colorMix, TASKS_NODE_BG_ACTIVE, false);
 }
 
@@ -374,22 +411,59 @@ function tasksPairShiftedProps(props, lift) {
 }
 
 /**
- * SVG path and label point for a routed edge. Every paint helper reads the
- * last four points of the path as `start c1 c2 end`, so a route is padded to
- * four points at its start: the arrowhead then follows the final run.
+ * SVG path and label point for a routed edge. `radius` rounds each corner
+ * with a quadratic bend. The arrowhead reads the last run from the points,
+ * not from this path, so a route may have any number of points.
+ * `labelAt='run'` puts the label on the middle of the longest run, which suits
+ * a few straight runs. `labelAt='middle'` puts it halfway along the whole
+ * route, which is the apex of an arc.
+ *
+ * >>> tasksRoutePath([{ x: 0, y: 0 }, { x: 50, y: -40 }, { x: 100, y: 0 }], 0, 'middle').slice(1)
+ * [50, -40]
  *
  * >>> tasksRoutePath([{ x: 0, y: 0 }, { x: 90, y: 0 }])
- * ['M 0 0 L 0 0 L 0 0 L 90 0', 45, 0]
- * >>> tasksRoutePath([{ x: 0, y: 0 }, { x: 0, y: 20 }, { x: 60, y: 20 }, { x: 60, y: 40 }])[0]
- * 'M 0 0 L 0 20 L 60 20 L 60 40'
+ * ['M 0 0 L 90 0', 45, 0]
+ * >>> tasksRoutePath([{ x: 0, y: 0 }, { x: 0, y: 40 }, { x: 60, y: 40 }], 10)[0]
+ * 'M 0 0 L 0 30 Q 0 40 10 40 L 60 40'
  */
-export function tasksRoutePath(points) {
-    const padded = [...Array(Math.max(0, 4 - points.length)).fill(points[0]), ...points];
-    const [first, ...rest] = padded;
-    // The label sits on the middle of the longest run.
+export function tasksRoutePath(points, radius = 0, labelAt = 'run') {
+    let d = `M ${points[0].x} ${points[0].y}`;
+    for (let index = 1; index < points.length - 1; index++) {
+        const [prev, corner, next] = [points[index - 1], points[index], points[index + 1]];
+        const r = Math.min(radius, Math.hypot(corner.x - prev.x, corner.y - prev.y) / 2, Math.hypot(next.x - corner.x, next.y - corner.y) / 2);
+        if (!r) {
+            d += ` L ${corner.x} ${corner.y}`;
+            continue;
+        }
+        const inLen = Math.hypot(corner.x - prev.x, corner.y - prev.y) || 1;
+        const outLen = Math.hypot(next.x - corner.x, next.y - corner.y) || 1;
+        const before = { x: corner.x - ((corner.x - prev.x) / inLen) * r, y: corner.y - ((corner.y - prev.y) / inLen) * r };
+        const after = { x: corner.x + ((next.x - corner.x) / outLen) * r, y: corner.y + ((next.y - corner.y) / outLen) * r };
+        d += ` L ${before.x} ${before.y} Q ${corner.x} ${corner.y} ${after.x} ${after.y}`;
+    }
+    const last = points[points.length - 1];
+    d += ` L ${last.x} ${last.y}`;
     const runs = points.slice(1).map((point, index) => [points[index], point]);
-    const [a, b] = runs.reduce((best, run) => (Math.hypot(run[1].x - run[0].x, run[1].y - run[0].y) > Math.hypot(best[1].x - best[0].x, best[1].y - best[0].y) ? run : best), runs[0]);
-    return [`M ${first.x} ${first.y} ${rest.map((point) => `L ${point.x} ${point.y}`).join(' ')}`, (a.x + b.x) / 2, (a.y + b.y) / 2];
+    const length = ([a, b]) => Math.hypot(b.x - a.x, b.y - a.y);
+    if (labelAt === 'middle') {
+        let left = runs.reduce((sum, run) => sum + length(run), 0) / 2;
+        for (const run of runs) {
+            const size = length(run);
+            if (left <= size && size) {
+                const t = left / size;
+                return [d, run[0].x + (run[1].x - run[0].x) * t, run[0].y + (run[1].y - run[0].y) * t];
+            }
+            left -= size;
+        }
+    }
+    const [a, b] = runs.reduce((best, run) => (length(run) > length(best) ? run : best), runs[0]);
+    return [d, (a.x + b.x) / 2, (a.y + b.y) / 2];
+}
+
+// The last run of a route as the four-point path the arrowhead helpers read.
+export function tasksRouteHeadPath(points) {
+    const [a, b] = points.slice(-2);
+    return `M ${a.x} ${a.y} C ${a.x} ${a.y} ${a.x} ${a.y} ${b.x} ${b.y}`;
 }
 
 function tasksEdgePath(props) {

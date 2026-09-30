@@ -1,15 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-const { tasksActiveNodeFill, tasksEdgeStrokeStyle, tasksHoverFocusEdge, tasksNodeLookStyle, tasksRoutePath, tasksTaperedArrowHeadPath } = await import('../vyasa/extensions_builtin/tasks/static/tasks_paint.js');
-const { sizeTaskNode, tasksEdgePathOf, tasksIsDashed, tasksNodeLook, tasksOrthogonalRoute, tasksRectExitPoint, tasksRouteEdges, tasksStraightRoute } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
-const { TASKS_LAYOUTS, buildGridTasksGraph, buildLayeredTasksGraph } = await import('../vyasa/extensions_builtin/tasks/static/tasks_layouts.js');
+const { tasksActiveNodeFill, tasksCanvasStyle, tasksEdgeStrokeStyle, tasksHoverFocusEdge, tasksNodeLookStyle, tasksRouteHeadPath, tasksRoutePath, tasksTaperedArrowHeadPath } = await import('../vyasa/extensions_builtin/tasks/static/tasks_paint.js');
+const { sizeTaskNode, tasksArcRoute, tasksCanvasOf, tasksEdgeCornerOf, tasksEdgePathOf, tasksIsDashed, tasksNodeLook, tasksOctilinearRoute, tasksOrthogonalRoute, tasksRectExitPoint, tasksRouteEdges, tasksStraightRoute } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
+const { TASKS_LAYOUTS, buildArcTasksGraph, buildGridTasksGraph, buildLayeredTasksGraph } = await import('../vyasa/extensions_builtin/tasks/static/tasks_layouts.js');
 
 const nums = (path) => path.match(/-?\d*\.?\d+/g).map(Number);
 
 test('a two-point route arrowhead points along its only run', () => {
-    const [path, labelX, labelY] = tasksRoutePath([{ x: 0, y: 0 }, { x: 300, y: 90 }]);
-    const [tipX, tipY, aX, aY, bX, bY] = nums(tasksTaperedArrowHeadPath(path, 10));
+    const route = [{ x: 0, y: 0 }, { x: 300, y: 90 }];
+    const [, labelX, labelY] = tasksRoutePath(route);
+    const [tipX, tipY, aX, aY, bX, bY] = nums(tasksTaperedArrowHeadPath(tasksRouteHeadPath(route), 10));
     const baseMid = [(aX + bX) / 2, (aY + bY) / 2];
     assert.deepEqual([tipX, tipY], [300, 90]);
     assert.ok(Math.abs((baseMid[0] - tipX) * 90 - (baseMid[1] - tipY) * 300) < 1e-6);
@@ -17,8 +18,8 @@ test('a two-point route arrowhead points along its only run', () => {
 });
 
 test('an orthogonal route arrowhead follows its final run', () => {
-    const [path] = tasksRoutePath([{ x: 0, y: 0 }, { x: 0, y: 20 }, { x: 60, y: 20 }, { x: 60, y: 40 }]);
-    const [tipX, tipY, aX, aY, bX, bY] = nums(tasksTaperedArrowHeadPath(path, 10));
+    const route = [{ x: 0, y: 0 }, { x: 0, y: 20 }, { x: 60, y: 20 }, { x: 60, y: 40 }];
+    const [tipX, tipY, aX, aY, bX, bY] = nums(tasksTaperedArrowHeadPath(tasksRouteHeadPath(route), 10));
     assert.deepEqual([tipX, tipY], [60, 40]);
     assert.ok(aY < 40 && bY < 40 && aX !== bX);
 });
@@ -68,9 +69,9 @@ test('grid grows a node for the subtitle its view names', () => {
     assert.ok(nodes.told.height > nodes.bare.height);
 });
 
-test('only grid declares outline nodes', () => {
+test('the figure layouts, arc and grid, default to outline nodes', () => {
     const outlines = Object.values(TASKS_LAYOUTS).filter((layout) => layout.nodeLook === 'outline').map((layout) => layout.id);
-    assert.deepEqual(outlines, ['grid']);
+    assert.deepEqual(outlines.sort(), ['arc', 'grid']);
 });
 
 test('hover thickens a ribbon edge more than a line edge', () => {
@@ -186,4 +187,80 @@ test('routing solves only routed edges and skips open groups as obstacles', () =
 
 test('dashed accepts the usual truthy spellings', () => {
     assert.deepEqual(['true', 'yes', '1', 'false', ''].map((dashed) => tasksIsDashed({ dashed })), [true, true, true, false, false]);
+});
+
+const sq = (x, y) => ({ x, y, width: 20, height: 20 });
+
+test('round corners bend each corner and keep the straight runs', () => {
+    const [d] = tasksRoutePath([{ x: 0, y: 0 }, { x: 0, y: 40 }, { x: 60, y: 40 }], 12);
+    assert.equal(d, 'M 0 0 L 0 28 Q 0 40 12 40 L 60 40');
+    assert.equal(tasksEdgeCornerOf({ edge_corner: 'sharp' }, { edge_corner: 'round' }), 'sharp');
+    assert.equal(tasksEdgeCornerOf({}, {}), 'sharp');
+});
+
+test('octilinear runs only at 0, 45 and 90 degrees', () => {
+    const points = tasksOctilinearRoute(sq(0, 0), sq(200, 100));
+    const angles = points.slice(1).map((p, i) => Math.round((Math.atan2(p.y - points[i].y, p.x - points[i].x) * 180) / Math.PI));
+    assert.ok(angles.every((a) => a % 45 === 0), `angles ${angles}`);
+});
+
+test('an arc bulges left of travel: above going forward, below coming back', () => {
+    const forward = tasksArcRoute(sq(0, 0), sq(200, 0));
+    const back = tasksArcRoute(sq(200, 0), sq(0, 0));
+    assert.ok(forward[12].y < 0 && back[12].y > 20);
+});
+
+test('a station routes to its dot, not its label box', () => {
+    const nodes = [
+        { id: 'a', position: { x: 0, y: 0 }, width: 120, height: 48, data: { __kind__: 'task', __node_look__: 'station' } },
+        { id: 'b', position: { x: 300, y: 0 }, width: 120, height: 48, data: { __kind__: 'task', __node_look__: 'station' } },
+    ];
+    const [edge] = tasksRouteEdges(nodes, [{ id: 'e', source: 'a', target: 'b', data: { __edge_path__: 'line' } }]);
+    assert.deepEqual(edge.data.__route__[0], { x: 68, y: 24 });
+});
+
+test('looks size their boxes: a tab adds its band, a station holds a label', () => {
+    const outline = sizeTaskNode('Orders', 'task', 200, { look: 'outline' }).height;
+    assert.equal(sizeTaskNode('Orders', 'task', 200, { look: 'tab' }).height, outline + 22);
+    assert.equal(sizeTaskNode('Orders', 'task', 200, { look: 'station' }).height, 48);
+    assert.equal(sizeTaskNode('Orders', 'task', 200, { look: 'sketch' }).height, outline);
+});
+
+test('every look restyles the wrapper; a frame look keeps the lit fill clear', () => {
+    const card = { background: 'slate', border: '1px solid red' };
+    assert.equal(tasksNodeLookStyle(card, 'sketch', 'red').border, 'none');
+    assert.match(tasksNodeLookStyle(card, 'blueprint', 'red', true).border, /dashed/);
+    assert.equal(tasksNodeLookStyle(card, 'tab', 'red').background, 'var(--vyasa-paper)');
+    assert.equal(tasksActiveNodeFill({ data: { __node_look__: 'station' } }, 'red', 0), 'transparent');
+    assert.equal(tasksEdgeStrokeStyle('octilinear', '').strokeWidth, 5);
+});
+
+test('a blueprint canvas restates the theme tokens for the pane', () => {
+    assert.equal(tasksCanvasOf({ canvas: 'blueprint' }), 'blueprint');
+    assert.equal(tasksCanvasOf({ canvas: 'neon' }), 'plain');
+    assert.equal(tasksCanvasStyle('blueprint')['--vyasa-paper'], '#123a63');
+    assert.deepEqual(tasksCanvasStyle('plain'), {});
+});
+
+test('arc layout: one baseline, ordered by arc_order with numeric sort', () => {
+    const { nodes } = buildArcTasksGraph({ tasks: [
+        { id: 'c', label: 'C', step: '10' },
+        { id: 'a', label: 'A', step: '2' },
+        { id: 'z', label: 'Z' },
+        { id: 'b', label: 'B', step: '3' },
+    ] }, { arc_order: 'step' });
+    assert.deepEqual(nodes.map((n) => n.id), ['a', 'b', 'c', 'z']);
+    const centres = new Set(nodes.map((n) => n.position.y + n.height / 2));
+    assert.equal(centres.size, 1);
+    assert.equal(TASKS_LAYOUTS.arc.edgePath, 'arc');
+    // A site or graph edge_path must not replace the arcs; only the view or an edge may.
+    assert.equal(TASKS_LAYOUTS.arc.ownsEdgePath, true);
+});
+
+test('an arc label sits on the apex; a run label stays on the longest run', () => {
+    const arc = tasksArcRoute(sq(0, 0), sq(300, 0));
+    const apex = arc.reduce((top, point) => (point.y < top.y ? point : top));
+    const [, x, y] = tasksRoutePath(arc, 0, 'middle');
+    assert.ok(Math.abs(x - apex.x) < 3 && Math.abs(y - apex.y) < 1, `label ${x},${y} apex ${apex.x},${apex.y}`);
+    assert.deepEqual(tasksRoutePath([{ x: 0, y: 0 }, { x: 0, y: 10 }, { x: 100, y: 10 }]).slice(1), [50, 10]);
 });

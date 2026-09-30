@@ -2,7 +2,7 @@ import { renderTasksInlineLinks, renderTasksNodeLinkBadge, tasksIsIconifyImage, 
 import { logTasksDebug } from './tasks_diagnostics.js';
 import {
     TASKS_OUTLINE_FONT, TASKS_OUTLINE_SUBTITLE_FONT_SIZE, TASKS_OUTLINE_TITLE_FONT_SIZE,
-    normalizeTasksNodeImageUrl, tasksGraphCornerPath, tasksNodeSubtitle, tasksReviewTarget,
+    normalizeTasksNodeImageUrl, tasksGraphCornerPath, tasksIsDashed, tasksNodeSubtitle, tasksReviewTarget,
 } from './tasks_graph_core.js';
 import { TASKS_DEFAULT_CARD_STATES, tasksLogicalNodeId, tasksNodeHasChildren } from './tasks_graph_model.js';
 import { TASKS_DONE_ACCENT, TASKS_NODE_LABEL_FONT_SIZE, tasksColorOverlay } from './tasks_paint.js';
@@ -532,10 +532,8 @@ export function createTasksNodeRenderer(getState) {
                                 ...renderHandles('source')
                             );
                         }
-                        // An outline node is a figure box: mono title in the role
-                        // colour its wrapper sets, and the description under it.
-                        const outlineLook = data?.__node_look__ === 'outline';
-                        const subtitle = outlineLook ? tasksNodeSubtitle(data, model) : '';
+                        // A figure look restyles the body; a card look keeps it as is.
+                        const look = tasksLookBody(React, data?.__node_look__, data, tasksNodeSubtitle(data, model));
                         return React.createElement('div', {
                             ...reviewAttrs,
                             className: 'vyasa-task-node-body',
@@ -547,17 +545,19 @@ export function createTasksNodeRenderer(getState) {
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 gap: nodeImage ? '10px' : undefined,
-                                fontSize: outlineLook ? `${TASKS_OUTLINE_TITLE_FONT_SIZE}px` : `${TASKS_NODE_LABEL_FONT_SIZE}px`,
-                                fontWeight: outlineLook ? '500' : '600',
-                                fontFamily: outlineLook ? TASKS_OUTLINE_FONT : 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+                                fontSize: `${TASKS_NODE_LABEL_FONT_SIZE}px`,
+                                fontWeight: '600',
+                                fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
                                 textAlign: 'center',
                                 padding: '10px 12px',
                                 overflow: 'hidden',
                                 opacity: isDimmed ? 0.22 : 1,
                                 position: 'relative',
                                 background: isChecked ? `linear-gradient(135deg, color-mix(in srgb, ${taskStateColor} 12%, transparent), transparent 55%)` : undefined,
+                                ...look.body,
                             }
                         },
+                            look.frame,
                             tasksColorOverlay(React, data?.__color_levels__, data?.width, data?.height),
                             checkboxControl,
                             noteBadge,
@@ -583,16 +583,7 @@ export function createTasksNodeRenderer(getState) {
                                     textDecorationColor: isChecked ? taskStateColor : undefined,
                                     textDecorationThickness: isChecked ? '2px' : undefined,
                                 }
-                            }, labelNode, subtitle && React.createElement('span', {
-                                style: {
-                                    display: 'block',
-                                    marginTop: '3px',
-                                    fontSize: `${TASKS_OUTLINE_SUBTITLE_FONT_SIZE}px`,
-                                    fontWeight: 400,
-                                    lineHeight: 1.35,
-                                    color: 'color-mix(in srgb, var(--vyasa-ink) 64%, transparent)',
-                                },
-                            }, subtitle)),
+                            }, look.title(labelNode), ...look.after),
                             canExpand && React.createElement('button', {
                                 onClick: handleExpand,
                                 'data-vyasa-task-control': 'true',
@@ -608,6 +599,87 @@ export function createTasksNodeRenderer(getState) {
                             ...renderHandles('source')
                         );
     };
+}
+
+const TASKS_HAND_FONT = '"Comic Neue", "Chalkboard SE", "Marker Felt", "Comic Sans MS", cursive';
+const TASKS_SKETCH_FILTER_ID = 'vyasa-kg-sketch';
+
+// One SVG filter per page gives every sketch frame the same hand wobble.
+function ensureTasksSketchFilter() {
+    if (typeof document === 'undefined' || document.getElementById(TASKS_SKETCH_FILTER_ID)) return;
+    const holder = document.createElement('div');
+    holder.setAttribute('aria-hidden', 'true');
+    holder.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
+    holder.innerHTML = `<svg width="0" height="0"><filter id="${TASKS_SKETCH_FILTER_ID}"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="3"/><feDisplacementMap in="SourceGraphic" scale="3"/></filter></svg>`;
+    document.body.appendChild(holder);
+}
+
+/**
+ * The parts of a node body a look owns: body type, a frame drawn behind the
+ * label, how the title is wrapped, and what follows it. A card returns no
+ * overrides, so the card body is unchanged.
+ */
+export function tasksLookBody(React, look, data, subtitle) {
+    const h = React.createElement;
+    const dashed = tasksIsDashed(data);
+    const mono = { fontFamily: TASKS_OUTLINE_FONT, fontSize: `${TASKS_OUTLINE_TITLE_FONT_SIZE}px`, fontWeight: '500' };
+    const subtitleLine = (align = 'center', inset = '0') => (subtitle ? h('span', {
+        key: 'subtitle',
+        style: { display: 'block', marginTop: '3px', padding: `0 ${inset}`, fontSize: `${TASKS_OUTLINE_SUBTITLE_FONT_SIZE}px`, fontWeight: 400, lineHeight: 1.35, textAlign: align, color: 'color-mix(in srgb, var(--vyasa-ink) 64%, transparent)' },
+    }, subtitle) : null);
+    const plain = (title) => title;
+    if (look === 'outline' || look === 'blueprint') return { body: mono, title: plain, after: [subtitleLine()] };
+    if (look === 'sketch') {
+        ensureTasksSketchFilter();
+        return {
+            body: { fontFamily: TASKS_HAND_FONT, fontSize: '15px', fontWeight: '500' },
+            // The frame wobbles; the title sits above it in plain ink.
+            frame: h('div', {
+                'aria-hidden': 'true',
+                style: {
+                    position: 'absolute', inset: '1px', borderRadius: '3px', pointerEvents: 'none',
+                    border: `1.8px ${dashed ? 'dashed' : 'solid'} currentColor`,
+                    background: 'repeating-linear-gradient(-41deg, color-mix(in srgb, currentColor 34%, transparent) 0 1.6px, transparent 1.6px 7px)',
+                    filter: `url(#${TASKS_SKETCH_FILTER_ID})`,
+                },
+            }),
+            title: (title) => h('span', { style: { color: 'var(--vyasa-ink)' } }, title),
+            after: [subtitleLine()],
+        };
+    }
+    if (look === 'tab') {
+        const kind = String(data?.__look_kind__ || '').trim();
+        return {
+            // No side padding: the band spans the whole box, and each line
+            // under it carries its own inset.
+            body: { ...mono, fontSize: '12px', flexDirection: 'column', alignItems: 'stretch', justifyContent: 'flex-start', textAlign: 'left', padding: '0 0 8px' },
+            // C4: the name on a band in the role colour, then [kind], then the subtitle.
+            title: (title) => h('span', {
+                style: { display: 'block', marginBottom: '6px', padding: '4px 10px', background: 'currentColor', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+            }, h('span', { style: { color: 'var(--vyasa-paper)', fontWeight: 650 } }, title)),
+            after: [
+                kind ? h('span', { key: 'kind', style: { display: 'block', padding: '0 10px', fontSize: '10.5px', fontWeight: 500 } }, `[${kind}]`) : null,
+                subtitleLine('left', '10px'),
+            ],
+        };
+    }
+    if (look === 'station') {
+        return {
+            body: { fontSize: '12px', fontWeight: '650', padding: '0', justifyContent: 'flex-start', flexDirection: 'column', alignItems: 'center', overflow: 'visible' },
+            // The dot sits at the centre, where routes end; the name sits above it.
+            frame: h('div', {
+                'aria-hidden': 'true',
+                style: {
+                    position: 'absolute', left: '50%', top: '50%', width: '16px', height: '16px', transform: 'translate(-50%, -50%)',
+                    boxSizing: 'border-box', borderRadius: '50%', background: 'var(--vyasa-paper)',
+                    border: `3px ${dashed ? 'dashed' : 'solid'} var(--vyasa-ink)`, pointerEvents: 'none', zIndex: 2,
+                },
+            }),
+            title: (title) => h('span', { style: { display: 'block', lineHeight: '14px', whiteSpace: 'nowrap' } }, title),
+            after: [],
+        };
+    }
+    return { body: {}, title: plain, after: [] };
 }
 
 export const renderTasksSequenceLaneCap = (React, accent, stage, label) => React.createElement('div', {

@@ -1,0 +1,83 @@
+@graph id=folio-books title="Folio Books" default_view=services subtitle_from=summary hover_attrs=summary
+
+@sources
+nodes=kg.nodes
+services:
+	edges=services.edges
+deployment:
+	edges=deployment.edges
+journeys:
+	edges=journeys.edges
+checkout:
+	edges=checkout.edges
+incident:
+	edges=incident.edges
+pipeline:
+	edges=pipeline.edges
+palette=kg.palette
+
+@views
+services:
+	label="Services (header tabs)"
+	source=services
+	layout=grid
+	grid_col=col
+	grid_row=row
+	grid_col_order=edge,api,data
+	grid_row_order=top,middle,bottom
+	node_look=tab
+	edge_path=orthogonal
+	edge_corner=round
+	color_by=kind
+	caption="C4-style containers. The band names the service, [kind] says what it is, the last line says what it owns."
+deployment:
+	label="Deployment (blueprint)"
+	source=deployment
+	layout=grid
+	grid_col=col
+	grid_row=row
+	grid_col_order=entry,compute,storage
+	grid_row_order=top,middle,bottom
+	canvas=blueprint
+	node_look=blueprint
+	edge_path=orthogonal
+	caption="Where the services run. A blueprint canvas reads as a drawing to build from, not a live system."
+journeys:
+	label="Customer journeys (metro)"
+	source=journeys
+	layout=grid
+	grid_col=col
+	grid_row=row
+	grid_col_order=c1,c2,c3,c4,c5
+	grid_row_order=r1,r2,r3
+	node_look=station
+	edge_path=octilinear
+	edge_corner=round
+	edge_color_by=journey
+	caption="Three journeys as three lines. Book page and confirmation are interchanges: two lines stop there."
+checkout:
+	label="Checkout steps (arc)"
+	source=checkout
+	layout=arc
+	arc_order=step
+	color_by=role
+	caption="Steps in order on one line. Forward edges arc above; the two ways back arc below, so every backtrack is visible at a glance."
+incident:
+	label="Incident brainstorm (sketch)"
+	source=incident
+	node_look=sketch
+	edge_path=line
+	color_by=confidence
+	caption="Checkout got slow on Tuesday. Dashed boxes are guesses nobody has checked yet. The sketch look says: this is a draft."
+pipeline:
+	label="Fulfilment pipeline (rounded runs)"
+	source=pipeline
+	layout=grid
+	grid_col=col
+	grid_row=row
+	grid_col_order=s1,s2,s3,s4,s5
+	grid_row_order=forward,back
+	edge_path=orthogonal
+	edge_corner=round
+	color_by=role
+	caption="An order from payment to doorstep. The return loop runs back along the lower row."

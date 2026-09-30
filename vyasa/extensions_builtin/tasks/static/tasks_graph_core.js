@@ -79,7 +79,13 @@ export function sizeTaskNode(label, kind = 'task', widthOverride = null, options
     const width = Math.max(32, Number(widthOverride || spec.width));
     // An outline task node draws a mono title and its subtitle, so it is sized
     // with the metrics it is drawn with.
-    if (kind === 'task' && options?.look === 'outline') return tasksOutlineNodeSize(label, options.subtitle, width);
+    if (kind === 'task' && TASKS_FIGURE_LOOKS.includes(options?.look)) {
+        const size = tasksOutlineNodeSize(label, options.subtitle, width);
+        // A header tab adds its band and its [kind] line above the subtitle.
+        return options.look === 'tab' ? { width, height: size.height + 22 } : size;
+    }
+    // A station is a dot with its label above it; the box only holds the label.
+    if (kind === 'task' && options?.look === 'station') return { width, height: 48 };
     const imageSpec = options?.hasImage ? (TASK_NODE_IMAGE_SPECS[kind] || TASK_NODE_IMAGE_SPECS.task) : null;
     const imageReserve = imageSpec ? imageSpec.size + imageSpec.gap : 0;
     const maxTextWidth = Math.max(32, width - spec.padX - spec.reserveX - imageReserve - 8);
@@ -815,8 +821,12 @@ function edgeAnchorSides(sourceRect, targetRect, sourceNode = null, targetNode =
 
 // Style cascade. A node or edge attr wins, then the view, then the layout's own
 // default. The same key names both levels, so an override reads like the default.
-export const TASKS_NODE_LOOKS = ['card', 'outline'];
-export const TASKS_EDGE_PATHS = ['ribbon', 'line', 'orthogonal'];
+export const TASKS_NODE_LOOKS = ['card', 'outline', 'sketch', 'blueprint', 'tab', 'station'];
+export const TASKS_EDGE_PATHS = ['ribbon', 'line', 'orthogonal', 'octilinear', 'arc'];
+export const TASKS_EDGE_CORNERS = ['sharp', 'round'];
+export const TASKS_CANVASES = ['plain', 'blueprint'];
+// Looks drawn as a figure box: mono or hand type, sized for a subtitle.
+export const TASKS_FIGURE_LOOKS = ['outline', 'sketch', 'blueprint', 'tab'];
 
 const tasksCascade = (allowed, ...values) => values
     .map((value) => String(value ?? '').trim().toLowerCase())
@@ -832,6 +842,19 @@ const tasksCascade = (allowed, ...values) => values
  */
 export function tasksNodeLook(node, model, layoutDefault = 'card') {
     return tasksCascade(TASKS_NODE_LOOKS, node?.node_look, model?.node_look, layoutDefault) || 'card';
+}
+
+/**
+ * >>> tasksEdgeCornerOf({}, { edge_corner: 'round' })
+ * 'round'
+ */
+export function tasksEdgeCornerOf(edge, model) {
+    return tasksCascade(TASKS_EDGE_CORNERS, edge?.edge_corner, model?.edge_corner) || 'sharp';
+}
+
+// The canvas is view-wide: a view, then @graph, then the site default.
+export function tasksCanvasOf(model) {
+    return tasksCascade(TASKS_CANVASES, model?.canvas) || 'plain';
 }
 
 /**
@@ -955,17 +978,81 @@ export function tasksOrthogonalRoute(source, target, obstacles = [], gap = 40, t
         || [{ x: cx(source), y: cy(source) }, { x: cx(target), y: cy(target) }];
 }
 
+/**
+ * Octilinear route between rect centres: one 45 degree run and one straight
+ * run, the order that crosses fewer other rects. Ends are cut at each border.
+ *
+ * >>> tasksOctilinearRoute({ x: 0, y: 0, width: 20, height: 20 }, { x: 200, y: 100, width: 20, height: 20 }).length
+ * 3
+ */
+export function tasksOctilinearRoute(source, target, obstacles = [], targetGap = 3) {
+    const centre = (r) => ({ x: r.x + r.width / 2, y: r.y + r.height / 2 });
+    const p = centre(source);
+    const q = centre(target);
+    const dx = q.x - p.x;
+    const dy = q.y - p.y;
+    const d = Math.min(Math.abs(dx), Math.abs(dy));
+    const diagonalFirst = { x: p.x + Math.sign(dx) * d, y: p.y + Math.sign(dy) * d };
+    const straightFirst = { x: q.x - Math.sign(dx) * d, y: q.y - Math.sign(dy) * d };
+    const others = obstacles.filter((r) => r !== source && r !== target);
+    const hits = (a, b) => others.filter((r) => Math.min(a.x, b.x) < r.x + r.width - 1 && Math.max(a.x, b.x) > r.x + 1
+        && Math.min(a.y, b.y) < r.y + r.height - 1 && Math.max(a.y, b.y) > r.y + 1).length;
+    const cost = (bend) => hits(p, bend) + hits(bend, q);
+    const bend = cost(diagonalFirst) <= cost(straightFirst) ? diagonalFirst : straightFirst;
+    const points = Math.hypot(bend.x - p.x, bend.y - p.y) < 1 || Math.hypot(q.x - bend.x, q.y - bend.y) < 1 ? [p, q] : [p, bend, q];
+    points[0] = tasksRectExitPoint(source, points[1]);
+    points[points.length - 1] = tasksRectExitPoint(target, points[points.length - 2], targetGap);
+    return points;
+}
+
+/**
+ * Arc route: a curve that bulges to the left of the direction of travel, so on
+ * one baseline a forward edge arcs above and a back edge arcs below.
+ *
+ * >>> const arc = tasksArcRoute({ x: 0, y: 0, width: 20, height: 20 }, { x: 200, y: 0, width: 20, height: 20 })
+ * >>> arc.length > 8 && arc[4].y < 0
+ * true
+ */
+export function tasksArcRoute(source, target, bulge = 0.35, targetGap = 3) {
+    const centre = (r) => ({ x: r.x + r.width / 2, y: r.y + r.height / 2 });
+    const p = centre(source);
+    const q = centre(target);
+    const chord = Math.hypot(q.x - p.x, q.y - p.y) || 1;
+    // Left of travel: rotate the chord direction a quarter turn anticlockwise.
+    const nx = (q.y - p.y) / chord;
+    const ny = -(q.x - p.x) / chord;
+    const control = { x: (p.x + q.x) / 2 + nx * chord * bulge * 2, y: (p.y + q.y) / 2 + ny * chord * bulge * 2 };
+    const start = tasksRectExitPoint(source, control);
+    const end = tasksRectExitPoint(target, control, targetGap);
+    const at = (t) => ({
+        x: (1 - t) ** 2 * start.x + 2 * (1 - t) * t * control.x + t * t * end.x,
+        y: (1 - t) ** 2 * start.y + 2 * (1 - t) * t * control.y + t * t * end.y,
+    });
+    return Array.from({ length: 25 }, (_, index) => at(index / 24));
+}
+
 // The points a routed edge is drawn through, or null for a ribbon, which
 // curves between the handles instead.
 export function tasksEdgeRoute(edgePath, from, to, obstacles = [], gutter = 44) {
     if (!from || !to || edgePath === 'ribbon') return null;
-    return edgePath === 'orthogonal' ? tasksOrthogonalRoute(from, to, obstacles, gutter) : tasksStraightRoute(from, to);
+    if (edgePath === 'orthogonal') return tasksOrthogonalRoute(from, to, obstacles, gutter);
+    if (edgePath === 'octilinear') return tasksOctilinearRoute(from, to, obstacles);
+    if (edgePath === 'arc') return tasksArcRoute(from, to);
+    return tasksStraightRoute(from, to);
+}
+
+// A station's route target is its dot, not the label box around it.
+const TASKS_STATION_DOT = 16;
+function tasksRouteRect(node, rect) {
+    if (!rect || (node.data?.__node_look__ || node.__node_look__) !== 'station') return rect;
+    return { x: rect.x + rect.width / 2 - TASKS_STATION_DOT / 2, y: rect.y + rect.height / 2 - TASKS_STATION_DOT / 2, width: TASKS_STATION_DOT, height: TASKS_STATION_DOT };
 }
 
 // Solve every routed edge against the current node rects. A box a route must
 // go around is a task or a collapsed group; an open group contains its routes.
 export function tasksRouteEdges(nodes, edges, gutter = 44) {
-    const rects = absoluteNodeRects(nodes);
+    const boxes = absoluteNodeRects(nodes);
+    const rects = Object.fromEntries((nodes || []).map((node) => [node.id, tasksRouteRect(node, boxes[node.id])]));
     const obstacles = (nodes || [])
         .filter((node) => {
             const kind = node.data?.__kind__ || node.__kind__;

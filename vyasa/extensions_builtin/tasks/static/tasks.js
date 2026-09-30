@@ -12,7 +12,7 @@ import { createTasksEdgeRenderer } from './tasks_edges.js';
 import { createTasksFullscreenController } from './tasks_fullscreen.js';
 import { tasksGitHistoryRows } from './tasks_git_review.js';
 import {
-    buildTaskEdgeAnchors, tasksEdgePathOf, tasksIsDashed, tasksNodeLook, tasksRouteEdges, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable,
+    buildTaskEdgeAnchors, tasksCanvasOf, tasksEdgeCornerOf, tasksEdgePathOf, tasksIsDashed, tasksNodeLook, tasksRouteEdges, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable,
     isTasksUnspecifiedProjectionGroup, nearestTasksIncidentEdge, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon,
     selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksCenteredViewport, tasksEdgeLabelZForMode,
     tasksGraphDynamicMinZoom, tasksGraphNodeAbsoluteRect, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea,
@@ -55,7 +55,7 @@ import {
     tasksDefaultEdgeOpacity, tasksEdgeColorPaletteFor, tasksEdgeRecordId, tasksEdgeStrokeWidthForMode,
     tasksGroupBackground, tasksGroupIdsContainingSelection, tasksHoverFocusEdge, tasksHoverFocusNodeStyle,
     tasksNodeBackground, tasksNodeColorLevels, tasksNodeIsOverlaid, tasksProminentEdgeOpacity,
-    tasksActiveNodeFill, tasksEdgeStrokeStyle, tasksNodeLookStyle,
+    tasksActiveNodeFill, tasksCanvasBackgroundProps, tasksCanvasStyle, tasksEdgeStrokeStyle, tasksNodeLookStyle,
     tasksReferenceFlowEdge, tasksResolvedThemeColor, tasksUseColorOverlay,
 } from './tasks_paint.js';
 import { createTasksPanels } from './tasks_panels.js';
@@ -1567,7 +1567,8 @@ async function renderTasksGraphs(rootElement = document) {
                 const statsEl = wrapper.querySelector('[data-tasks-stats]');
                 if (statsEl) statsEl.textContent = graphStatsLabel;
             }, [graphStatsLabel]);
-            const backgroundProps = React.useMemo(() => tasksBackgroundProps(widgetId), []);
+            const graphCanvas = tasksCanvasOf(model);
+            const backgroundProps = React.useMemo(() => tasksCanvasBackgroundProps(graphCanvas, tasksBackgroundProps(widgetId)), [graphCanvas]);
             const lastPersistedPrefsScopeRef = React.useRef(tasksProjectionPrefsKey(activeProjectionId, activeContextId));
             const pendingFitActionRef = React.useRef(null);
             const lastLayoutRevisionKeyRef = React.useRef('');
@@ -2706,18 +2707,19 @@ async function renderTasksGraphs(rootElement = document) {
                             id: node.id,
                             type: 'vyasaTask',
                             position: node.position,
-                            data: { ...node, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color, __has_note__: hasNote, __default_color__: ownNodeColor ? '' : defaultNodeColor, __color_levels__: useOverlay ? colorLevels : null, __node_look__: nodeLook },
+                            data: { ...node, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color, __has_note__: hasNote, __default_color__: ownNodeColor ? '' : defaultNodeColor, __color_levels__: useOverlay ? colorLevels : null, __node_look__: nodeLook, __look_kind__: String(node?.[activeColorBy] ?? '') },
                             style: {
                                 width: node.width,
                                 height: node.height,
                                 zIndex: TASKS_TASK_Z,
-                                ...lookStyle,
-                                border: isChecked ? `2px solid color-mix(in srgb, ${stateAccent} 78%, white 22%)` : lookStyle.border,
                                 borderRadius: 6,
                                 boxShadow: isChecked
                                     ? `inset 0 0 0 2px color-mix(in srgb, ${stateAccent} 24%, transparent), 0 0 0 2px color-mix(in srgb, ${stateAccent} 34%, transparent)`
                                     : 'none',
                                 overflow: 'hidden',
+                                // A look may restate the radius and the overflow it needs.
+                                ...lookStyle,
+                                border: isChecked ? `2px solid color-mix(in srgb, ${stateAccent} 78%, white 22%)` : lookStyle.border,
                             },
                             zIndex: TASKS_TASK_Z,
                             className: 'vyasa-tasks-node--selectable',
@@ -2760,7 +2762,8 @@ async function renderTasksGraphs(rootElement = document) {
                         const rowZ = tasksFixedLayout(mode)?.edgesOverNodes ? TASKS_TASK_Z + 10 : TASKS_EDGE_Z;
                         // A layout that pins both ends of an edge itself (a sequence row)
                         // owns that edge's geometry, so the style cascade stops there.
-                        const edgePath = fixedLayout?.authoredHandles ? fixedLayout.edgePath : tasksEdgePathOf(edge, model, fixedLayout?.edgePath);
+                        const edgeDefaults = fixedLayout?.ownsEdgePath ? { edge_path: activeProjection?.edge_path } : model;
+                        const edgePath = fixedLayout?.authoredHandles ? fixedLayout.edgePath : tasksEdgePathOf(edge, edgeDefaults, fixedLayout?.edgePath);
                         const stroke = tasksEdgeStrokeStyle(edgePath, edgeColor, tasksIsDashed(edge));
                         return {
                             ...edge,
@@ -2785,10 +2788,12 @@ async function renderTasksGraphs(rootElement = document) {
                                 __labels_off__: !edgeLabelsVisible,
                                 __line_off__: Boolean(edge.__sequence_line_off__),
                                 __edge_path__: edgePath,
-                                // The prominent label is an HTML overlay, so it needs a z of
-                                // its own to clear the ribbon this layout draws over the cards.
-                                __label_z__: rowZ + 1,
-                                ...(tasksFixedLayout(mode)?.edgesOverNodes ? { __z__: rowZ } : {}),
+                                __edge_corner__: tasksEdgeCornerOf(edge, model),
+                                // The prominent label is an HTML overlay. A layout that draws its
+                                // edges over the cards pins the label just above them; every
+                                // other layout lets the label follow the edge's highlight z, or a
+                                // lit edge would paint over its own words.
+                                ...(tasksFixedLayout(mode)?.edgesOverNodes ? { __label_z__: rowZ + 1, __z__: rowZ } : {}),
                             },
                             markerEnd: { type: rf.MarkerType.ArrowClosed, width: 8, height: 8, color: stroke.stroke },
                             zIndex: rowZ,
@@ -2925,21 +2930,22 @@ async function renderTasksGraphs(rootElement = document) {
                         id: n.id,
                         type: 'vyasaTask',
                         position: n.position,
-                        data: { ...n, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color, __has_note__: hasNote, __node_image__: nodeImage, __default_color__: ownNodeColor ? '' : defaultNodeColor, __projection_branch_opacity__: branchOpacity, __color_levels__: useOverlay ? colorLevels : null, __node_look__: nodeLook },
+                        data: { ...n, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color, __has_note__: hasNote, __node_image__: nodeImage, __default_color__: ownNodeColor ? '' : defaultNodeColor, __projection_branch_opacity__: branchOpacity, __color_levels__: useOverlay ? colorLevels : null, __node_look__: nodeLook, __look_kind__: String(n?.[activeColorBy] ?? '') },
                         style: {
                             width: n.width,
                             height: n.height,
                             zIndex: nodeZ,
-                            ...lookStyle,
-                            border: isChecked
-                                ? `2px solid color-mix(in srgb, ${stateAccent} 78%, white 22%)`
-                                : lookStyle.border,
                             borderRadius: isExpanded ? 12 : 6,
                             boxShadow: isChecked
                                 ? `inset 0 0 0 2px color-mix(in srgb, ${stateAccent} 24%, transparent), 0 0 0 2px color-mix(in srgb, ${stateAccent} 34%, transparent)`
                                 : 'none',
                             opacity: branchOpacity,
                             overflow: 'hidden',
+                            // A look may restate the radius and the overflow it needs.
+                            ...lookStyle,
+                            border: isChecked
+                                ? `2px solid color-mix(in srgb, ${stateAccent} 78%, white 22%)`
+                                : lookStyle.border,
                         },
                         zIndex: nodeZ,
                         className: [
@@ -3023,6 +3029,7 @@ async function renderTasksGraphs(rootElement = document) {
                             __labels_off__: !edgeLabelsVisible,
                             __line_off__: Boolean(edge.__sequence_line_off__),
                             __edge_path__: edgePath,
+                            __edge_corner__: tasksEdgeCornerOf(edge, model),
                         },
                         markerEnd: {
                             type: rf.MarkerType.ArrowClosed,
@@ -5295,6 +5302,7 @@ async function renderTasksGraphs(rootElement = document) {
                 isolation: 'isolate',
                 overscrollBehavior: 'contain',
                 touchAction: 'none',
+                ...tasksCanvasStyle(graphCanvas),
             };
             return rf.ReactFlowProvider ? window.React.createElement(rf.ReactFlowProvider, null,
                 window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', flex: '1 1 auto', minHeight: 0, display: 'flex', alignItems: 'stretch', position: 'relative' } },
