@@ -1028,15 +1028,33 @@ document.addEventListener('toggle', (event) => {
     details.classList.toggle('is-open', details.open);
 }, true);
 
-// Esc toggles the innermost hovered <details>; bubbling on window lets overlay Esc handlers claim the key first
-window.addEventListener('keydown', (event) => {
-    if (event.key !== 'Escape' || event.defaultPrevented || event.repeat) return;
-    if (shortcutsSuspended() || isEditableShortcutEvent(event)) return;
+let standaloneMetaKey = false;
+
+function toggleHoveredDetails() {
     const details = [...document.querySelectorAll('details:hover')].pop();
     const summary = details?.querySelector(':scope > summary');
-    if (!summary) return;
-    event.preventDefault();
+    if (!summary) return false;
     summary.click();
+    return true;
+}
+
+window.addEventListener('keydown', (event) => {
+    if (event.key === 'Meta') {
+        standaloneMetaKey = !event.defaultPrevented && !event.repeat
+            && !shortcutsSuspended() && !isEditableShortcutEvent(event)
+            && !event.shiftKey && !event.altKey && !event.ctrlKey
+            && !document.querySelector('a[data-vyasa-link-preview="true"]:hover');
+        return;
+    }
+    if (standaloneMetaKey && event.metaKey) standaloneMetaKey = false;
+});
+
+window.addEventListener('keyup', (event) => {
+    if (event.key !== 'Meta') return;
+    const shouldToggle = standaloneMetaKey;
+    standaloneMetaKey = false;
+    if (!shouldToggle || event.defaultPrevented || shortcutsSuspended() || isEditableShortcutEvent(event)) return;
+    if (toggleHoveredDetails()) event.preventDefault();
 });
 
 function syncFoldAllButton(button, allOpen) {
