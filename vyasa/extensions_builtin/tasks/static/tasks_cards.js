@@ -538,6 +538,7 @@ export function renderTasksCardDetailsAndNotes(React, options = {}) {
 }
 
 // Server-rendered attr HTML gets the page's markdown hydration, so $...$ becomes KaTeX.
+// A ref runs on mount only, so each span is keyed by its HTML below.
 const hydrateTasksRenderedValue = (element) => {
     if (element) hydrateMarkdown(element);
 };
@@ -568,7 +569,9 @@ export function renderTasksDetailEntries(React, entries, options = {}) {
                 : renderedValues.length
                 ? React.createElement('span', { className: 'vyasa-task-node-card-value', style: { display: 'grid', gap: '4px' } },
                     ...renderedValues.map((renderedValue, renderedIndex) => React.createElement('span', {
-                        key: `${renderedIndex}`,
+                        // Keyed by its HTML: new content mounts a new span, so the
+                        // hydrating ref runs again after a live reload changes the value.
+                        key: `${renderedIndex}:${renderedValue}`,
                         ref: hydrateTasksRenderedValue,
                         dangerouslySetInnerHTML: { __html: renderedValue },
                     })))
