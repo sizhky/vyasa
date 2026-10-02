@@ -64,6 +64,7 @@ import {
 } from './tasks_theme.js';
 import { createTasksPanels } from './tasks_panels.js';
 import { tasksHighlightGraph } from './tasks_highlight.js';
+import { tasksRoleOf } from './tasks_roles.js';
 import {
     TASKS_EDGES_VISIBLE_KEY, TASKS_HOVER_CARD_MODES, TASKS_HOVER_CARD_MODE_KEY, buildTasksNodeNotesBackup,
     checkedNodeIdsFromStates, clearTasksGlobalToggle, downloadTasksNodeNotes, readTasksCheckedNodeIds,
@@ -491,8 +492,10 @@ function tasksGraphNodeAtFlowPoint(nodes, point) {
         // an edge preview, because it has no incident edge and kills the hit.
         // A chrome kind that carries its own card is the exception, and it claims
         // a hit rect small enough not to shadow what it covers.
-        .filter((node) => !TASKS_PASSIVE_NODE_KINDS.has(node.data?.__kind__)
+        .filter((node) => (!TASKS_PASSIVE_NODE_KINDS.has(node.data?.__kind__)
             || isTasksGraphNodeSelectable(node.data?.__kind__))
+            // A junction takes no hover: the pointer reaches what lies under it.
+            && tasksRoleOf(node.data).interactive)
         .map((node) => ({ node, rect: tasksGraphNodeHitRect(node, byId), z: Number(node.zIndex || node.style?.zIndex || 0) }))
         .filter(({ rect }) => point.x >= rect.x && point.x <= rect.x + rect.width && point.y >= rect.y && point.y <= rect.y + rect.height)
         .sort((a, b) => b.z - a.z)[0] || null;
@@ -2760,19 +2763,24 @@ async function renderTasksGraphs(rootElement = document) {
                             };
                         }
                         const nodeLook = tasksNodeLook(node, model, tasksFixedLayout(mode)?.nodeLook);
+                        const interactive = tasksRoleOf(node, nodeLook).interactive;
                         return {
                             id: node.id,
                             type: 'vyasaTask',
                             position: node.position,
                             data: { ...node, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color, __has_note__: hasNote, __default_color__: ownNodeColor ? '' : defaultNodeColor, __color_levels__: useOverlay ? colorLevels : null, __node_look__: nodeLook, __look_kind__: String(node?.[activeColorBy] ?? '') },
-                            style: tasksTaskWrapperStyle({
-                                nodeColor, colorMix, useOverlay, look: nodeLook, dashed: tasksIsDashed(node), isChecked, stateAccent,
-                                width: node.width, height: node.height, zIndex: TASKS_TASK_Z,
-                            }),
+                            style: {
+                                ...tasksTaskWrapperStyle({
+                                    nodeColor, colorMix, useOverlay, look: nodeLook, dashed: tasksIsDashed(node), isChecked, stateAccent,
+                                    width: node.width, height: node.height, zIndex: TASKS_TASK_Z,
+                                }),
+                                // A junction takes no pointer: clicks and hovers reach what lies under it.
+                                ...(interactive ? {} : { pointerEvents: 'none' }),
+                            },
                             zIndex: TASKS_TASK_Z,
-                            className: 'vyasa-tasks-node--selectable',
+                            className: interactive ? 'vyasa-tasks-node--selectable' : 'vyasa-tasks-node--passive',
                             draggable: false,
-                            selectable: true,
+                            selectable: interactive,
                         };
                     });
                     nodesWithStyle.push(...nodesWithStyle.filter((node) => node.data?.__layout_open__).map((node) => tasksGroupTitleFlowNode(node.data, {
@@ -2974,6 +2982,7 @@ async function renderTasksGraphs(rootElement = document) {
                         ? tasksGroupFrameStyle(n, { groupColor, isExpanded, nodeLook, transparent: useOverlay, fillExpanded: groupFillExpanded, fillCollapsed: groupFillCollapsed, borderMix: groupBorderMix })
                         : null;
                     const groupEmphasis = groupFrame?.ring || 'none';
+                    const interactive = tasksRoleOf(n, nodeLook).interactive;
                     const branchOpacity = isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1;
                     const rfNode = {
                         id: n.id,
@@ -3002,14 +3011,15 @@ async function renderTasksGraphs(rootElement = document) {
                                 width: n.width, height: n.height, zIndex: nodeZ,
                             }),
                             opacity: branchOpacity,
+                            ...(interactive ? {} : { pointerEvents: 'none' }),
                         },
                         zIndex: nodeZ,
                         className: [
-                            `vyasa-tasks-node--${hitArea}`,
+                            `vyasa-tasks-node--${interactive ? hitArea : 'passive'}`,
                             isExpanded ? 'vyasa-tasks-node--expanded-group' : '',
                         ].filter(Boolean).join(' '),
                         draggable: nodeConnectionExperiment,
-                        selectable: isTasksGraphNodeSelectable(n.__kind__, isExpanded),
+                        selectable: interactive && isTasksGraphNodeSelectable(n.__kind__, isExpanded),
                     };
                     if (n.parentId) {
                         rfNode.parentId = n.parentId;
@@ -4350,8 +4360,10 @@ async function renderTasksGraphs(rootElement = document) {
                     ? new Set(model.ego_selected_ids.map((id) => String(id || '').trim()).filter(Boolean))
                     : null;
                 const isEgoSeed = (node) => egoSeedIds !== null && egoSeedIds.has(node.id);
+                // A role's bands set the outline: full, thin, or none for a junction.
                 const activeNodes = nodes.filter((node) => (
-                    !['none', 'dim'].includes(node.data?.highlightMode || 'none') || isEgoSeed(node)
+                    (!['none', 'dim'].includes(node.data?.highlightMode || 'none') || isEgoSeed(node))
+                    && tasksRoleOf(node.data).bands !== 'none'
                 ));
                 return React.createElement(rf.ViewportPortal, null, ...activeNodes.flatMap((node) => {
                     const rect = tasksGraphNodeAbsoluteRect(node, byId);
@@ -4366,7 +4378,8 @@ async function renderTasksGraphs(rootElement = document) {
                     // A hover reads through the usual bands, so the seed marker only
                     // shows while the node carries no highlight of its own.
                     const seedBand = ['none', 'dim'].includes(mode) && isEgoSeed(node);
-                    const width = hoverOutline ? 12 : 4;
+                    const thin = tasksRoleOf(node.data).bands === 'thin';
+                    const width = hoverOutline ? (thin ? 3 : 12) : (thin ? 1.5 : 4);
                     const bands = central || seedBand
                         ? [[width, 3]]
                         : [[width / 3, 3], [width / 3, 3 + ((width / 3) * 2)]];

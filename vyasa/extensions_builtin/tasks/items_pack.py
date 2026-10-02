@@ -7,7 +7,7 @@ import shlex
 import re
 from typing import TYPE_CHECKING, Any, Union
 
-from .layouts import KG_STYLE_DEFAULT_KEYS
+from .layouts import KG_STYLE_DEFAULT_KEYS, PRESENTATION_ATTRS
 from .query import resolve_context_id
 
 if TYPE_CHECKING:
@@ -1052,7 +1052,8 @@ def apply_attrs(path: PathLike, nodes: dict[str, dict], edges: dict[str, dict]) 
         if not line.startswith((" ", "\t")) and stripped.endswith(":"):
             current_key = stripped[:-1].strip()
             index_key = "node" if section == "@node_attrs" else "edge"
-            if current_key and current_key not in indexed[index_key]:
+            # A presentation key is an assignment, not a dimension to filter by.
+            if current_key and current_key not in indexed[index_key] and current_key not in PRESENTATION_ATTRS:
                 indexed[index_key].append(current_key)
             continue
         if current_key and line.startswith((" ", "\t")) and ":" in stripped:

@@ -13,6 +13,7 @@ import {
 import {
     TASKS_DIM_EDGE_INK, TASKS_DIM_LABEL_INK, TASKS_DIM_OPACITY, TASKS_SELECTION_DIM_OPACITY, tasksCheckedShadow, tasksEdgeStateWidth, tasksStateShadow,
 } from './tasks_theme.js';
+import { tasksRoleOf } from './tasks_roles.js';
 
 export const TASKS_EDGE_LABEL_FOCUS_FONT_SIZE = 16;
 
@@ -31,6 +32,8 @@ export function tasksHighlightGraph(input, ctx) {
         effectiveQueryFilters, effectiveSwatchFilters, searchMatches, filteredSelectionIds, colorMix, hoverFontSize,
     } = ctx;
     const result = {};
+    // A role sets how strongly a lit node rings: full, thin, or not at all.
+    const bandsOf = (node) => tasksRoleOf(node.data).bands;
     // One colour context per node: its colour, the colour its rings take, the
     // border a lit node shows, and the checked-state shadow.
     const colorsOf = (node) => {
@@ -84,7 +87,7 @@ export function tasksHighlightGraph(input, ctx) {
                     ...node.style,
                     opacity: hit ? 1 : (node.data?.__projection_branch_opacity__ ?? 1) * TASKS_DIM_OPACITY,
                     '--vyasa-tasks-active-border': hit ? nodeColor : undefined,
-                    boxShadow: hit ? tasksStateShadow('endpoint', nodeColor) : node.style.boxShadow,
+                    boxShadow: hit ? tasksStateShadow('endpoint', nodeColor, 'none', bandsOf(node)) : node.style.boxShadow,
                 },
             };
         }));
@@ -166,7 +169,7 @@ export function tasksHighlightGraph(input, ctx) {
                 ...node.style,
                     opacity: (node.data?.__projection_branch_opacity__ ?? 1) * (selected ? 1 : TASKS_DIM_OPACITY),
                     '--vyasa-tasks-active-border': selected ? activeBorderColor : undefined,
-                    boxShadow: selected ? tasksStateShadow('picked', ringColor) : node.style.boxShadow,
+                    boxShadow: selected ? tasksStateShadow('picked', ringColor, 'none', bandsOf(node)) : node.style.boxShadow,
                 },
             };
         }));
@@ -350,7 +353,7 @@ export function tasksHighlightGraph(input, ctx) {
                 '--vyasa-tasks-active-border': mode === 'dim' ? undefined : activeBorderColor,
                 background: mode === 'dim' ? node.style.background : tasksLitNodeFill(node, nodeColor, displayColor, colorMix, 10),
                 opacity: mode === 'dim' ? branchOpacity * TASKS_SELECTION_DIM_OPACITY : 1,
-                boxShadow: ringState ? tasksStateShadow(ringState, ringColor, checkedShadow) : checkedShadow,
+                boxShadow: ringState ? tasksStateShadow(ringState, ringColor, checkedShadow, bandsOf(node)) : checkedShadow,
             },
             zIndex,
         };

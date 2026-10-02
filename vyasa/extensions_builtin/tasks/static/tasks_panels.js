@@ -12,6 +12,7 @@ import {
     tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksGroupByOptions,
     tasksHoverAttrs, tasksHoverCardEntries, tasksLogicalNodeId, tasksNodeMetaEntries, tasksNodeMetaLabel, tasksProjectionLayout,
 } from './tasks_graph_model.js';
+import { tasksRoleOf } from './tasks_roles.js';
 import { tasksIsFixedMode, tasksLayoutById } from './tasks_layouts.js';
 import { tasksGitHistoryRows, tasksGitLaneColor, tasksReviewCountsLabel, tasksReviewFieldText } from './tasks_git_review.js';
 import {
@@ -168,7 +169,8 @@ export function createTasksPanels(getState) {
                 ) : null
             ) : renderTasksDetailEntries(React, entries, { copyValues: true, currentPath: sourceModel?.document_path || '' })
             ),
-            notes: review ? null : nodeNotesEditor,
+            // A mark or a junction keeps no notes; an item and a group do.
+            notes: review || !tasksRoleOf(selectedNode).notes ? null : nodeNotesEditor,
         });
     };
 

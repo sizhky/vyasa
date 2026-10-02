@@ -77,3 +77,16 @@ test('a figure group has a label title and no CSS ring; a card group keeps its b
     assert.match(label.body.fontFamily, /Comic/, 'a sketch group label keeps the hand font');
     assert.equal(theme.tasksGroupTitleLook('card', '#1f9e7a'), null);
 });
+
+test('a look sets a default role; a node_role attr overrides it; an authored role is content', async () => {
+    const { tasksNodeRole, tasksRoleOf } = await import('../vyasa/extensions_builtin/tasks/static/tasks_roles.js');
+    assert.deepEqual(['card', 'outline', 'point', 'circle', 'text'].map((look) => tasksNodeRole({}, look)), ['item', 'item', 'junction', 'mark', 'mark']);
+    assert.equal(tasksNodeRole({ node_role: 'item' }, 'circle'), 'item');
+    assert.equal(tasksNodeRole({ role: 'junction' }, 'card'), 'item', 'role is an authored attr, not the node role');
+    const mark = tasksRoleOf({ __node_look__: 'text' });
+    assert.deepEqual([mark.cardState, mark.notes, mark.interactive, mark.bands], [false, false, true, 'thin']);
+    const junction = tasksRoleOf({ __node_look__: 'point' });
+    assert.deepEqual([junction.interactive, junction.bands, junction.joinsRoutes], [false, 'none', true]);
+    assert.equal(theme.tasksStateShadow('hover', '#f00', 'none', 'none'), 'none');
+    assert.equal(theme.tasksStateShadow('hover', '#f00', 'none', 'thin'), '0 0 0 1px color-mix(in srgb, #f00 76%, transparent)');
+});

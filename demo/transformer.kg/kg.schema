@@ -8,6 +8,7 @@ node_hidden_attrs=column,track,part
 
 @sources
 nodes=kg.nodes
+attrs=kg.attrs
 base:
 	edges=kg.edges
 palette=kg.palette

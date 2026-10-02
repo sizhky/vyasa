@@ -2,8 +2,9 @@
 // The shared viewport owns the gesture binder; KG re-exports only what it uses.
 export { clampScale, nextWheelState } from '../../../static/viewport_core.js';
 import {
-    TASKS_CANVASES, TASKS_EDGE_PATHS, TASKS_NODE_LOOKS, tasksGroupTitleMode, tasksLabelTitleSize, tasksLookJoinsRoutes, tasksLookRouteRect, tasksLookSize,
+    TASKS_CANVASES, TASKS_EDGE_PATHS, TASKS_NODE_LOOKS, tasksGroupTitleMode, tasksLabelTitleSize, tasksLookRouteRect, tasksLookSize,
 } from './tasks_theme.js';
+import { tasksRoleOf } from './tasks_roles.js';
 
 export function tasksReviewTarget(data, id, widgetId) {
     const sourceNodeId = data?.__kind__ === 'groupTitle' ? data?.sourceGroupId : id;
@@ -800,9 +801,10 @@ function edgeAnchorSides(sourceRect, targetRect, sourceNode = null, targetNode =
 
 // Style cascade. A node or edge attr wins, then the view, then the layout's own
 // default. The same key names both levels, so an override reads like the default.
-// Attrs that set how an item is drawn, never what it says. Detail cards and
-// filters skip them; layouts.py STYLE_KEYS lists the view-level ones.
-export const TASKS_STYLE_ATTRS = new Set(['node_look', 'edge_path', 'edge_corner', 'canvas', 'subtitle_from', 'dashed', 'source_port', 'target_port']);
+// Attrs that set how an item is drawn or which role a node plays, never what
+// it says. Detail cards and filters skip them; layouts.py PRESENTATION_ATTRS
+// is the same set.
+export const TASKS_STYLE_ATTRS = new Set(['node_look', 'edge_path', 'edge_corner', 'canvas', 'subtitle_from', 'dashed', 'source_port', 'target_port', 'node_role']);
 export const TASKS_EDGE_CORNERS = ['sharp', 'round'];
 
 const tasksCascade = (allowed, ...values) => values
@@ -1163,8 +1165,12 @@ export function tasksEdgeRoute(edgePath, from, to, obstacles = [], gutter = 44, 
     return tasksStraightRoute(from, to, targetGap);
 }
 
+// Routes meet a junction at its centre, so edges join into one line; any other
+// node at the rect its look gives.
 function tasksRouteRect(node, rect) {
-    return tasksLookRouteRect(node.data?.__node_look__ || node.__node_look__, rect);
+    const data = node.data || node;
+    if (rect && tasksRoleOf(data).joinsRoutes) return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, width: 0, height: 0 };
+    return tasksLookRouteRect(data.__node_look__, rect);
 }
 
 // Solve every routed edge against the current node rects. A box a route must
@@ -1181,10 +1187,9 @@ export function tasksRouteEdges(nodes, edges, gutter = 44) {
         .filter(Boolean);
     const sourceEdges = edges || [];
     const portsOf = (edge) => [tasksParsePort(edge.source_port), tasksParsePort(edge.target_port)];
-    const looks = new Map((nodes || []).map((node) => [node.id, node.data?.__node_look__ || node.__node_look__]));
-    const lookOf = (id) => looks.get(id);
+    const joins = new Map((nodes || []).map((node) => [node.id, tasksRoleOf(node.data || node).joinsRoutes]));
     // An arrow stops short of a box; a line into a junction meets it exactly.
-    const targetGapOf = (edge) => (tasksLookJoinsRoutes(lookOf(edge.target)) ? 0 : 3);
+    const targetGapOf = (edge) => (joins.get(edge.target) ? 0 : 3);
     const orthogonalRoutes = new Map();
     const routed = [];
     sourceEdges.map((edge, index) => ({ edge, index }))

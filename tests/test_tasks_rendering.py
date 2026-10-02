@@ -2459,3 +2459,17 @@ def test_trimmed_edge_end_stays_on_the_drawn_curve():
         }
     """
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
+def test_kg_attrs_assigns_presentation_keys_without_making_them_filters(tmp_path):
+    from vyasa.extensions_builtin.tasks.items_pack import apply_attrs
+
+    attrs = tmp_path / "kg.attrs"
+    attrs.write_text("@node_attrs\nnode_look:\n  point: a b\nnode_role:\n  mark: b\nrole:\n  context: a\n", encoding="utf-8")
+    nodes = {"a": {"id": "a"}, "b": {"id": "b"}}
+
+    indexed = apply_attrs(attrs, nodes, {})
+
+    assert nodes["a"]["node_look"] == "point" and nodes["b"]["node_role"] == "mark"
+    # An authored `role` is content, so it stays a filter dimension.
+    assert indexed["node"] == ["role"]

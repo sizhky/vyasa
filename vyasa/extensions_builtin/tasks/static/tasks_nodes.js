@@ -3,6 +3,7 @@ import { logTasksDebug } from './tasks_diagnostics.js';
 import {
     normalizeTasksNodeImageUrl, tasksGraphCornerPath, tasksIsDashed, tasksNodeSubtitle, tasksReviewTarget,
 } from './tasks_graph_core.js';
+import { tasksRoleOf } from './tasks_roles.js';
 import { tasksGroupTitleLook, tasksLookBody } from './tasks_theme.js';
 import { TASKS_DEFAULT_CARD_STATES, tasksLogicalNodeId, tasksNodeHasChildren } from './tasks_graph_model.js';
 import { TASKS_DONE_ACCENT, TASKS_NODE_LABEL_FONT_SIZE, tasksColorOverlay } from './tasks_paint.js';
@@ -50,7 +51,9 @@ export function createTasksNodeRenderer(getState) {
                         // (see useMemo below) stops React Flow from remounting every node on
                         // each hover, which was destroying the node DOM mid-click and
                         // swallowing clicks (deselect / neighbor-activate never fired).
-                        const showCheckbox = highlightMode === 'selected' || highlightMode === 'selected-focus' || highlightMode === 'neighbor-focus' || data?.__hover_checkbox__ === true;
+                        // Only a role that keeps card state offers the checkbox and a note badge.
+                        const role = tasksRoleOf(data);
+                        const showCheckbox = role.cardState && (highlightMode === 'selected' || highlightMode === 'selected-focus' || highlightMode === 'neighbor-focus' || data?.__hover_checkbox__ === true);
                         const isActiveNode = highlightMode === 'none' || highlightMode === 'selected' || highlightMode === 'selected-focus';
                         const linksInteractive = isActiveNode;
                         const linkKinds = Array.from(tasksNodeLinkKinds(data));
@@ -510,7 +513,7 @@ export function createTasksNodeRenderer(getState) {
                             onClick: () => toggleCheckedNode(logicalNodeId),
                             style: { border: 'none', background: 'transparent', padding: 0, width: '10px', height: '10px', cursor: 'pointer' },
                         })) : null;
-                        const noteBadge = data?.__has_note__
+                        const noteBadge = role.notes && data?.__has_note__
                             ? renderTasksNodeLinkBadge(React, { kinds: ['note'], title: 'Has note', top: 'auto', bottom: '8px', right: canExpand ? '34px' : '8px' })
                             : null;
                         const handleExpand = (e) => {

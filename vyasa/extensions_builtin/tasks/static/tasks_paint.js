@@ -1,5 +1,6 @@
 import { logTasksDebug, logTasksDebugVerbose } from './tasks_diagnostics.js';
 import { tasksIsDashed } from './tasks_graph_core.js';
+import { tasksRoleOf } from './tasks_roles.js';
 import { tasksCheckedShadow, tasksEdgeBaseWidth, tasksGroupLook, tasksGroupRingTokens, tasksLookLitFill, tasksNodeLookStyle, tasksStateShadow } from './tasks_theme.js';
 import {
     TASKS_CARD_STATE_ATTR, TASKS_DEFAULT_CARD_STATES, TASKS_HAS_NOTE_ATTR, TASKS_SPECIAL_NODE_ATTRS,
@@ -1180,7 +1181,7 @@ export function tasksHoverFocusNodeStyle(node, nodeColor, displayColor, activeBo
         opacity: 1,
         '--vyasa-tasks-active-border': activeBorderColor,
         background: tasksLitNodeFill(node, nodeColor, displayColor, colorMix, primary ? 12 : 8),
-        boxShadow: tasksStateShadow(primary ? 'hover' : 'hoverNeighbor', displayColor, checkedShadow),
+        boxShadow: tasksStateShadow(primary ? 'hover' : 'hoverNeighbor', displayColor, checkedShadow, tasksRoleOf(node.data).bands),
     };
 }
 

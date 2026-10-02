@@ -85,17 +85,20 @@ const symbolBody = (h, { subtitle }) => {
 /**
  * Look records. Fields:
  * - font: the type family the look draws its text in; '' keeps the page font.
+ * - role: the role a node with this look plays unless its `node_role` names
+ *   another (tasks_roles.js).
  * - frame: wrapper fill, border and type colour that replace the card's.
  * - litFill: the fill a lit node keeps; null uses the card's lit fill.
  * - size: the box a layout gives the node; null uses the card's text sizing.
  * - body: the parts of the node body the look owns: type, a frame behind the
  *   label, how the title is wrapped, and what follows it.
- * - route: where routed edges meet the node: its box, its centre, or its dot.
+ * - route: where routed edges meet the node: its box or its dot.
  * - groupLook: the look a group with this look takes for its frame.
  * - title: a group's title as a 'bar' over the frame or a plain 'label'.
  */
 const TASKS_LOOKS = {
     card: {
+        role: 'item',
         font: '',
         frame: () => ({}),
         litFill: () => null,
@@ -106,6 +109,7 @@ const TASKS_LOOKS = {
         title: 'bar',
     },
     outline: {
+        role: 'item',
         font: TASKS_OUTLINE_FONT,
         frame: ({ color, dashed }) => tasksOutlineNodeStyle(color, false, dashed),
         litFill: (color) => tasksOutlineNodeStyle(color, true).background,
@@ -116,6 +120,7 @@ const TASKS_LOOKS = {
         title: 'label',
     },
     sketch: {
+        role: 'item',
         font: TASKS_HAND_FONT,
         // The body draws the wobbling frame, so the text above it stays crisp.
         frame: ({ tint }) => ({ background: 'transparent', border: 'none', color: tint, overflow: 'visible' }),
@@ -145,6 +150,7 @@ const TASKS_LOOKS = {
         title: 'label',
     },
     blueprint: {
+        role: 'item',
         font: TASKS_OUTLINE_FONT,
         frame: ({ line }) => ({ background: 'transparent', border: `1.3px ${line} color-mix(in srgb, var(--vyasa-ink) 85%, transparent)`, color: 'var(--vyasa-ink)', borderRadius: 0 }),
         litFill: () => 'transparent',
@@ -155,6 +161,7 @@ const TASKS_LOOKS = {
         title: 'label',
     },
     tab: {
+        role: 'item',
         font: TASKS_OUTLINE_FONT,
         frame: ({ tint, line }) => ({ background: 'var(--vyasa-paper)', border: `1px ${line} color-mix(in srgb, ${tint} 70%, transparent)`, color: tint, borderRadius: 4 }),
         litFill: () => 'var(--vyasa-paper)',
@@ -181,6 +188,7 @@ const TASKS_LOOKS = {
         title: 'label',
     },
     station: {
+        role: 'item',
         font: '',
         frame: () => ({ background: 'transparent', border: 'none', color: 'var(--vyasa-ink)', overflow: 'visible' }),
         litFill: () => 'transparent',
@@ -206,17 +214,19 @@ const TASKS_LOOKS = {
     },
     // A point is where routes join; the lines are the mark.
     point: {
+        role: 'junction',
         font: TASKS_OUTLINE_FONT,
         frame: () => ({ background: 'transparent', border: 'none', borderRadius: '50%', overflow: 'visible' }),
         litFill: () => 'transparent',
         size: () => ({ width: TASKS_POINT_SIZE, height: TASKS_POINT_SIZE }),
         body: () => ({ body: { padding: '0' }, title: () => null, after: [] }),
-        route: 'centre',
+        route: 'box',
         groupLook: 'outline',
         title: 'label',
     },
     // A circle holds a symbol such as `+`.
     circle: {
+        role: 'mark',
         font: TASKS_OUTLINE_FONT,
         frame: ({ color, dashed }) => {
             const ring = tasksOutlineNodeStyle(color, false, dashed);
@@ -234,6 +244,7 @@ const TASKS_LOOKS = {
     },
     // Text is a bare mono label.
     text: {
+        role: 'mark',
         font: TASKS_OUTLINE_FONT,
         frame: ({ tint }) => ({ background: 'transparent', border: 'none', color: `color-mix(in srgb, ${tint} 82%, var(--vyasa-ink))`, overflow: 'visible' }),
         litFill: () => 'transparent',
@@ -292,19 +303,17 @@ export function tasksLookBody(React, look, { dashed = false, kind = '' } = {}, s
     return tasksLook(look).body(React.createElement, { dashed, kind: String(kind || '').trim(), subtitle });
 }
 
-// The rect routed edges meet: the node box, its centre point, or its dot.
+// The rect routed edges meet: the node box, or the station dot.
 export function tasksLookRouteRect(look, rect) {
-    const route = tasksLook(look).route;
-    if (!rect || route === 'box') return rect;
+    if (!rect || tasksLook(look).route === 'box') return rect;
     const cx = rect.x + rect.width / 2;
     const cy = rect.y + rect.height / 2;
-    if (route === 'centre') return { x: cx, y: cy, width: 0, height: 0 };
     return { x: cx - TASKS_STATION_DOT / 2, y: cy - TASKS_STATION_DOT / 2, width: TASKS_STATION_DOT, height: TASKS_STATION_DOT };
 }
 
-// Edges join at a centre point with no arrowhead and no gap.
-export function tasksLookJoinsRoutes(look) {
-    return tasksLook(look).route === 'centre';
+// The role a node with this look plays unless it names its own.
+export function tasksLookDefaultRole(look) {
+    return tasksLook(look).role;
 }
 
 // The look a group frame takes, and whether its title is a bar or a label.
@@ -443,13 +452,20 @@ const TASKS_STATE_RINGS = {
 
 /**
  * The box shadow of a lit node: its checked shadow first, then the state's
- * ring and glow in the node's colour.
+ * ring and glow in the node's colour, at the strength its role's bands allow.
  *
  * >>> tasksStateShadow('endpoint', '#f00')
  * '0 0 0 2px color-mix(in srgb, #f00 70%, transparent)'
+ * >>> tasksStateShadow('hover', '#f00', 'none', 'thin')
+ * '0 0 0 1px color-mix(in srgb, #f00 76%, transparent)'
  */
-export function tasksStateShadow(state, color, checkedShadow = 'none') {
-    const { ring, glow } = TASKS_STATE_RINGS[state];
+export function tasksStateShadow(state, color, checkedShadow = 'none', bands = 'full') {
+    // A role with thin bands keeps a 1px ring and no glow; one with none keeps
+    // only its checked shadow.
+    if (bands === 'none') return checkedShadow;
+    const { ring: fullRing, glow: fullGlow } = TASKS_STATE_RINGS[state];
+    const ring = bands === 'thin' ? [1, fullRing[1]] : fullRing;
+    const glow = bands === 'thin' ? null : fullGlow;
     return [
         checkedShadow !== 'none' ? checkedShadow : '',
         `0 0 0 ${ring[0]}px color-mix(in srgb, ${color} ${ring[1]}%, transparent)`,

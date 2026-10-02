@@ -53,6 +53,16 @@ STYLE_KEYS: dict[str, tuple[str, ...]] = {
     "canvas": ("plain", "blueprint"),
 }
 
+# Values of the `node_role` attr: what a node is, apart from how it is drawn.
+# An item has card state and notes, a mark is an inspectable figure part, and a
+# junction only joins routes. tasks_roles.js holds the behaviour of each role.
+NODE_ROLES: tuple[str, ...] = ("item", "mark", "junction")
+
+# Attrs that set how a node or edge is drawn or which role a node plays, never
+# what it says. kg.attrs may assign them in bulk; they never become filter or
+# group-by dimensions. TASKS_STYLE_ATTRS in tasks_graph_core.js mirrors this set.
+PRESENTATION_ATTRS: frozenset[str] = frozenset({*STYLE_KEYS, "subtitle_from", "dashed", "source_port", "target_port", "node_role"})
+
 # Keys a site or an @graph line may set as the starting default for every view.
 KG_STYLE_DEFAULT_KEYS: tuple[str, ...] = (*STYLE_KEYS, "subtitle_from")
 

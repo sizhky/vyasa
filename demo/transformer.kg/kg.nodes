@@ -9,7 +9,6 @@ model: Transformer
 	enc_in: INPUTS
 		column=enc
 		track=io
-		node_look=text
 		shape=[B, T] int
 		description=Source token ids, padded to length T. A padding mask of shape [B, 1, 1, T] travels with them.
 	enc_emb: INPUT EMBEDDING
@@ -23,14 +22,12 @@ model: Transformer
 	enc_add: +
 		column=enc
 		track=plus
-		node_look=circle
 		op=$\mathrm{Dropout}(x + PE)$
 		shape=[B, T, 512]
 		description=Element-wise sum, then dropout 0.1. Order information exists only from here on.
 	enc_pe: ~
 		column=enc_wave
 		track=plus
-		node_look=circle
 		op=|
 			$PE_{(pos,\,2i)} = \sin\left(pos / 10000^{2i/d_{model}}\right)$
 
@@ -41,11 +38,9 @@ model: Transformer
 	enc_pe_note: POSITIONAL ENCODING
 		column=enc_note
 		track=plus
-		node_look=text
 	enc_nx: Nx
 		column=enc_wave
 		track=fork2
-		node_look=text
 		description=The encoder layer repeats N = 6 times. Each layer has its own weights.
 	encoder: Encoder
 		inherit=column,part
@@ -56,11 +51,9 @@ model: Transformer
 		description=Each layer is self-attention, then a position-wise feed-forward network. Each sublayer is wrapped as LayerNorm(x + Sublayer(x)).
 		enc_r1: residual
 			track=res
-			node_look=point
 			description=Copy of x for the skip connection around self-attention.
 		enc_f1: qkv
 			track=qkv
-			node_look=point
 			description=Self-attention: one tensor x serves as query, key, and value.
 		enc_an1: ADD & NORM
 			track=norm1
@@ -79,7 +72,6 @@ model: Transformer
 			description=h = 8 heads, d_k = d_v = 64. Cost is O(T² · d_model). The padding mask sets scores at pad keys to −∞.
 		enc_r2: residual
 			track=fork2
-			node_look=point
 			description=Copy of x for the skip connection around the feed-forward network.
 		enc_an2: ADD & NORM
 			track=norm2
@@ -95,13 +87,11 @@ model: Transformer
 	kv: memory
 		column=mid
 		track=fork2
-		node_look=point
 		shape=[B, T, 512]
 		description=Encoder output. Every decoder layer reads it as K and V. It is computed once per source sentence.
 	dec_in: OUTPUTS (SHIFTED RIGHT)
 		column=dec
 		track=io
-		node_look=text
 		shape=[B, T'] int
 		description=Target ids shifted right by one, with BOS first. Position t sees only tokens before t (teacher forcing).
 	dec_emb: OUTPUT EMBEDDING
@@ -114,24 +104,20 @@ model: Transformer
 	dec_add: +
 		column=dec
 		track=plus
-		node_look=circle
 		op=$\mathrm{Dropout}(y + PE)$
 		shape=[B, T', 512]
 	dec_pe: ~
 		column=dec_wave
 		track=plus
-		node_look=circle
 		op=Same sinusoids as the encoder
 		shape=[T', 512]
 		params=none
 	dec_pe_note: POSITIONAL ENCODING
 		column=dec_note
 		track=plus
-		node_look=text
 	dec_nx: Nx
 		column=dec_wave
 		track=attn2
-		node_look=text
 		description=The decoder layer repeats N = 6 times. Each layer has its own weights.
 	decoder: Decoder
 		inherit=column,part
@@ -142,11 +128,9 @@ model: Transformer
 		description=Each layer is masked self-attention, then cross-attention over the encoder memory, then a feed-forward network.
 		dec_r1: residual
 			track=res
-			node_look=point
 			description=Copy of y for the skip connection around masked self-attention.
 		dec_f1: qkv
 			track=qkv
-			node_look=point
 			description=Self-attention: one tensor y serves as query, key, and value.
 		dec_an1: ADD & NORM
 			track=norm1
@@ -161,7 +145,6 @@ model: Transformer
 			description=The causal mask keeps position i from reading later positions. Training then predicts all T' tokens in one pass.
 		dec_r2: residual
 			track=fork2
-			node_look=point
 			description=Copy of y for the skip connection around cross-attention. The same tensor is the query.
 		dec_an2: ADD & NORM
 			track=norm2
@@ -176,7 +159,6 @@ model: Transformer
 			description=Cross-attention. Each target position looks over the whole source sentence.
 		dec_r3: residual
 			track=fork3
-			node_look=point
 			description=Copy of y for the skip connection around the feed-forward network.
 		dec_an3: ADD & NORM
 			track=norm3
@@ -206,6 +188,5 @@ model: Transformer
 	prob: OUTPUT PROBABILITIES
 		column=dec
 		track=prob
-		node_look=text
 		shape=[B, T', V]
 		description=p(y_t | y_<t, x) for every position. At inference, decode one token at a time with beam size 4.
