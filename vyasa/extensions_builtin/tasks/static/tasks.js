@@ -2660,11 +2660,15 @@ async function renderTasksGraphs(rootElement = document) {
                             const laneColor = lane
                                 ? (resolveTasksNodeColor(lane, model, activeColorBy, activeColorPalette) || defaultNodeColor)
                                 : '';
+                            // A grid frame takes the colour its group would have as a node.
+                            const frameColor = node.__kind__ === 'gridFrame'
+                                ? (resolveTasksNodeColor(node, model, activeColorBy, activeColorPalette) || defaultNodeColor)
+                                : '';
                             return {
                                 id: node.id,
                                 type: 'vyasaTask',
                                 position: node.position,
-                                data: laneColor ? { ...node, __sequence_color__: laneColor } : node,
+                                data: laneColor ? { ...node, __sequence_color__: laneColor } : (frameColor ? { ...node, __frame_color__: frameColor } : node),
                                 // The wrapper stays transparent to the pointer even when
                                 // the node is selectable: only the small part the
                                 // renderer marks as interactive takes a click.

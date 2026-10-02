@@ -123,6 +123,26 @@ export function createTasksNodeRenderer(getState) {
                                 }, 'Fix the view in the pack schema. Every other view still works.')
                             );
                         }
+                        if (data?.__kind__ === 'gridFrame') {
+                            const tint = data.__frame_color__ || 'var(--vyasa-ink)';
+                            return React.createElement('div', {
+                                style: {
+                                    width: '100%',
+                                    height: '100%',
+                                    boxSizing: 'border-box',
+                                    background: tasksIsDashed(data) ? 'transparent' : `color-mix(in srgb, ${tint} 9%, transparent)`,
+                                    border: `1.5px ${tasksIsDashed(data) ? 'dashed' : 'solid'} color-mix(in srgb, ${tint} 70%, transparent)`,
+                                    borderRadius: '3px',
+                                    color: `color-mix(in srgb, ${tint} 78%, var(--vyasa-ink))`,
+                                    fontFamily: TASKS_OUTLINE_FONT,
+                                    fontSize: '12px',
+                                    fontWeight: 600,
+                                    letterSpacing: '.06em',
+                                    textTransform: 'uppercase',
+                                    padding: '8px 0 0 12px',
+                                },
+                            }, data?.label || '');
+                        }
                         if (data?.__kind__ === 'layeredBand') {
                             const palette = model?.node_color_palettes?.[data.__layered_attr__ || ''] || {};
                             const tint = palette[data.__layered_value__] || 'currentColor';
@@ -635,6 +655,10 @@ export function tasksLookBody(React, look, data, subtitle) {
     }, subtitle) : null);
     const plain = (title) => title;
     if (look === 'outline' || look === 'blueprint') return { body: mono, title: plain, after: [subtitleLine()] };
+    if (look === 'point') return { body: { padding: '0' }, title: () => null, after: [] };
+    if (look === 'circle' || look === 'text') {
+        return { body: { ...mono, padding: '0', justifyContent: 'center', textAlign: 'center', lineHeight: 1.3 }, title: plain, after: [] };
+    }
     if (look === 'sketch') {
         ensureTasksSketchFilter();
         return {

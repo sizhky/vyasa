@@ -146,6 +146,13 @@ export function tasksNodeLookStyle(cardStyle, look, nodeColor, dashed = false) {
         blueprint: { background: 'transparent', border: `1.3px ${line} color-mix(in srgb, var(--vyasa-ink) 85%, transparent)`, color: 'var(--vyasa-ink)', borderRadius: 0 },
         tab: { background: 'var(--vyasa-paper)', border: `1px ${line} color-mix(in srgb, ${tint} 70%, transparent)`, color: tint, borderRadius: 4 },
         station: { background: 'transparent', border: 'none', color: 'var(--vyasa-ink)', overflow: 'visible' },
+        // A point is where routes join; the lines are the mark.
+        point: { background: 'transparent', border: 'none', borderRadius: '50%', overflow: 'visible' },
+        circle: (() => {
+            const ring = tasksOutlineNodeStyle(nodeColor, false, dashed);
+            return { ...ring, border: ring.border.replace(/^2px/, '1.5px'), borderRadius: '50%' };
+        })(),
+        text: { background: 'transparent', border: 'none', color: `color-mix(in srgb, ${tint} 82%, var(--vyasa-ink))`, overflow: 'visible' },
     };
     const style = { ...cardStyle, ...(looks[look] || {}) };
     if (dashed && typeof style.border === 'string') style.border = style.border.replace(' solid ', ' dashed ');
@@ -153,7 +160,7 @@ export function tasksNodeLookStyle(cardStyle, look, nodeColor, dashed = false) {
 }
 
 // The fill a lit node keeps, by look. A frame drawn by the body stays clear.
-const TASKS_LIT_FILLS = { sketch: 'transparent', station: 'transparent', blueprint: 'transparent', tab: 'var(--vyasa-paper)' };
+const TASKS_LIT_FILLS = { sketch: 'transparent', station: 'transparent', blueprint: 'transparent', tab: 'var(--vyasa-paper)', point: 'transparent', text: 'transparent' };
 
 // A canvas restates the theme tokens for the graph pane, so every node and edge
 // inside picks the look up without knowing about it.

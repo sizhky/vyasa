@@ -47,7 +47,7 @@ LAYOUT_KEYS: dict[str, tuple[str, ...]] = {
 # View-wide style defaults. A node or edge attr of the same name overrides them.
 # Any layout accepts them, so they are not layout keys.
 STYLE_KEYS: dict[str, tuple[str, ...]] = {
-    "node_look": ("card", "outline", "sketch", "blueprint", "tab", "station"),
+    "node_look": ("card", "outline", "sketch", "blueprint", "tab", "station", "point", "circle", "text"),
     "edge_path": ("ribbon", "line", "orthogonal", "octilinear", "arc"),
     "edge_corner": ("sharp", "round"),
     "canvas": ("plain", "blueprint"),

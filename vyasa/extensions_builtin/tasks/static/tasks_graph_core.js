@@ -84,6 +84,9 @@ export function sizeTaskNode(label, kind = 'task', widthOverride = null, options
         // A header tab adds its band and its [kind] line above the subtitle.
         return options.look === 'tab' ? { width, height: size.height + 22 } : size;
     }
+    // A glyph look sizes itself from its label; the layout's width does not apply.
+    const glyph = kind === 'task' ? tasksGlyphNodeSize(options?.look, label) : null;
+    if (glyph) return glyph;
     // A station is a dot with its label above it; the box only holds the label.
     if (kind === 'task' && options?.look === 'station') return { width, height: 48 };
     const imageSpec = options?.hasImage ? (TASK_NODE_IMAGE_SPECS[kind] || TASK_NODE_IMAGE_SPECS.task) : null;
@@ -126,6 +129,39 @@ export function tasksOutlineNodeSize(title, subtitle, width) {
     const subtitleHeight = subtitleLines ? 3 + subtitleLines * TASKS_OUTLINE_SUBTITLE_FONT_SIZE * 1.35 : 0;
     return { width, height: Math.max(44, Math.ceil(titleHeight + subtitleHeight + TASKS_OUTLINE_PAD.y)) };
 }
+
+/**
+ * Size of a glyph node: a `point` joins routes, a `circle` holds a symbol such
+ * as `+`, and `text` is a bare mono label. Other looks return null.
+ *
+ * >>> tasksGlyphNodeSize('point', 'fork')
+ * { width: 8, height: 8 }
+ * >>> tasksGlyphNodeSize('circle', '+')
+ * { width: 36, height: 36 }
+ * >>> tasksGlyphNodeSize('text', 'Nx')
+ * { width: 30, height: 29 }
+ * >>> tasksGlyphNodeSize('outline', 'Gate')
+ * null
+ */
+export function tasksGlyphNodeSize(look, label) {
+    if (look === 'point') return { width: TASKS_POINT_SIZE, height: TASKS_POINT_SIZE };
+    const charWidth = TASKS_OUTLINE_TITLE_FONT_SIZE * TASKS_OUTLINE_CHAR_EM;
+    const length = String(label || '').length;
+    if (look === 'circle') {
+        const diameter = Math.max(36, Math.ceil(length * charWidth) + 18);
+        return { width: diameter, height: diameter };
+    }
+    if (look !== 'text') return null;
+    const lineWidth = TASKS_TEXT_MAX_WIDTH - 12;
+    const lines = Math.max(1, Math.ceil((length * charWidth) / lineWidth));
+    return {
+        width: Math.min(TASKS_TEXT_MAX_WIDTH, Math.ceil(length * charWidth) + 12),
+        height: Math.ceil(lines * TASKS_OUTLINE_TITLE_FONT_SIZE * 1.3 + 10),
+    };
+}
+
+export const TASKS_POINT_SIZE = 8;
+const TASKS_TEXT_MAX_WIDTH = 220;
 
 export function isTasksGraphNodeSelectable(kind, isExpanded = false) {
     return tasksGraphNodeHitArea(kind, isExpanded) !== 'passive';
@@ -821,7 +857,9 @@ function edgeAnchorSides(sourceRect, targetRect, sourceNode = null, targetNode =
 
 // Style cascade. A node or edge attr wins, then the view, then the layout's own
 // default. The same key names both levels, so an override reads like the default.
-export const TASKS_NODE_LOOKS = ['card', 'outline', 'sketch', 'blueprint', 'tab', 'station'];
+export const TASKS_NODE_LOOKS = ['card', 'outline', 'sketch', 'blueprint', 'tab', 'station', 'point', 'circle', 'text'];
+// Looks sized by their label, not by the layout's node width.
+export const TASKS_GLYPH_LOOKS = ['point', 'circle', 'text'];
 export const TASKS_EDGE_PATHS = ['ribbon', 'line', 'orthogonal', 'octilinear', 'arc'];
 export const TASKS_EDGE_CORNERS = ['sharp', 'round'];
 export const TASKS_CANVASES = ['plain', 'blueprint'];
@@ -929,7 +967,7 @@ export function tasksIsDashed(item) {
  * >>> tasksOrthogonalRoute({ x: 0, y: 0, width: 100, height: 40 }, { x: 0, y: 100, width: 100, height: 40 }, [], 40)
  * [{ x: 50, y: 40 }, { x: 50, y: 97 }]
  */
-export function tasksOrthogonalRoute(source, target, obstacles = [], gap = 40, targetGap = 3, reservedRoutes = []) {
+export function tasksOrthogonalRoute(source, target, obstacles = [], gap = 40, targetGap = 3, reservedRoutes = [], trackRects = []) {
     const gapX = Number(gap?.x ?? gap);
     const gapY = Number(gap?.y ?? gap);
     const cx = (r) => r.x + r.width / 2;
@@ -959,12 +997,14 @@ export function tasksOrthogonalRoute(source, target, obstacles = [], gap = 40, t
     // Straight: the rects overlap on one axis, so one run joins facing sides.
     const overlapX = [Math.max(source.x, target.x), Math.min(right(source), right(target))];
     const overlapY = [Math.max(source.y, target.y), Math.min(bottom(source), bottom(target))];
-    if (overlapX[1] - overlapX[0] > 8) {
+    // A point end has no width, so any shared coordinate is a straight run.
+    const minOverlap = Math.min(source.width, source.height, target.width, target.height) < 1 ? -0.5 : 8;
+    if (overlapX[1] - overlapX[0] > minOverlap) {
         const x = (overlapX[0] + overlapX[1]) / 2;
         const down = cy(target) > cy(source);
         push([{ x, y: down ? bottom(source) : source.y }, { x, y: down ? target.y - targetGap : bottom(target) + targetGap }]);
     }
-    if (overlapY[1] - overlapY[0] > 8) {
+    if (overlapY[1] - overlapY[0] > minOverlap) {
         const y = (overlapY[0] + overlapY[1]) / 2;
         const east = cx(target) > cx(source);
         push([{ x: east ? right(source) : source.x, y }, { x: east ? target.x - targetGap : right(target) + targetGap, y }]);
@@ -984,6 +1024,11 @@ export function tasksOrthogonalRoute(source, target, obstacles = [], gap = 40, t
     // Z or U: the middle run sits in a gutter beside either end or a reserved lane.
     const verticalTracks = [source.x - gapX / 2, right(source) + gapX / 2, target.x - gapX / 2, right(target) + gapX / 2];
     const horizontalTracks = [source.y - gapY / 2, bottom(source) + gapY / 2, target.y - gapY / 2, bottom(target) + gapY / 2];
+    // A port end is a point, so the boxes it belongs to still lend their gutters.
+    for (const r of trackRects) {
+        verticalTracks.push(r.x - gapX / 2, right(r) + gapX / 2);
+        horizontalTracks.push(r.y - gapY / 2, bottom(r) + gapY / 2);
+    }
     const laneSpacing = 14;
     for (const reserved of priorRoutes) {
         const points = reserved.points;
@@ -1101,20 +1146,91 @@ export function tasksArcRoute(source, target, bulge = 0.35, targetGap = 3) {
     return Array.from({ length: 25 }, (_, index) => at(index / 24));
 }
 
+/**
+ * A port names where an edge meets a box: a side, then optionally the percent
+ * along it from the top or the left.
+ *
+ * >>> tasksParsePort('bottom:25')
+ * { side: 'bottom', offsetPct: 25 }
+ * >>> tasksParsePort('left')
+ * { side: 'left', offsetPct: 50 }
+ * >>> tasksParsePort('middle')
+ * null
+ */
+export function tasksParsePort(value) {
+    const match = /^(top|right|bottom|left)(?::(\d+(?:\.\d+)?))?$/.exec(String(value ?? '').trim().toLowerCase());
+    return match ? { side: match[1], offsetPct: Math.min(100, Number(match[2] ?? 50)) } : null;
+}
+
+const TASKS_PORT_NORMAL = { top: [0, -1], right: [1, 0], bottom: [0, 1], left: [-1, 0] };
+// The straight run out of a port before a route may turn. It holds a round
+// corner (8) plus a full arrowhead (10), so the head never sits on the bend.
+export const TASKS_PORT_STUB = 24;
+
+function tasksPortPoint(rect, port, out = 0) {
+    const point = tasksHandlePoint(rect, port);
+    const [nx, ny] = TASKS_PORT_NORMAL[port.side];
+    return { x: point.x + nx * out, y: point.y + ny * out };
+}
+
+/**
+ * Drop zero-length runs and join runs that continue on one line.
+ *
+ * >>> tasksSimplifyRoute([{ x: 0, y: 0 }, { x: 0, y: 10 }, { x: 0, y: 10 }, { x: 0, y: 20 }, { x: 5, y: 20 }])
+ * [{ x: 0, y: 0 }, { x: 0, y: 20 }, { x: 5, y: 20 }]
+ */
+export function tasksSimplifyRoute(points) {
+    const same = (a, b) => Math.abs(a - b) < 0.5;
+    return points.reduce((out, point) => {
+        const last = out[out.length - 1];
+        if (last && same(last.x, point.x) && same(last.y, point.y)) return out;
+        const prev = out[out.length - 2];
+        if (prev && ((same(prev.x, last.x) && same(last.x, point.x)) || (same(prev.y, last.y) && same(last.y, point.y)))) out.pop();
+        out.push(point);
+        return out;
+    }, []);
+}
+
+/**
+ * A route whose ends name ports. A line runs port to port. An orthogonal route
+ * leaves each port square to its side for a short stub, and the run between
+ * the stubs is solved as any other orthogonal route.
+ *
+ * >>> tasksPortRoute('orthogonal', { x: 0, y: 0, width: 100, height: 40 }, { x: 0, y: 100, width: 100, height: 40 }, null, { side: 'top', offsetPct: 20 })
+ * [{ x: 20, y: 40 }, { x: 20, y: 97 }]
+ */
+export function tasksPortRoute(edgePath, source, target, sourcePort, targetPort, obstacles = [], gutter = 44, reserved = [], targetGap = 3) {
+    const startAt = sourcePort ? tasksPortPoint(source, sourcePort) : null;
+    const endAt = targetPort ? tasksPortPoint(target, targetPort, targetGap) : null;
+    if (edgePath !== 'orthogonal') {
+        const centre = (r) => ({ x: r.x + r.width / 2, y: r.y + r.height / 2 });
+        const from = startAt || tasksRectExitPoint(source, endAt || centre(target));
+        return [from, endAt || tasksRectExitPoint(target, from, targetGap)];
+    }
+    const stub = (rect, port) => ({ ...tasksPortPoint(rect, port, TASKS_PORT_STUB), width: 0, height: 0 });
+    const from = sourcePort ? stub(source, sourcePort) : source;
+    const to = targetPort ? stub(target, targetPort) : target;
+    const middle = tasksOrthogonalRoute(from, to, obstacles, gutter, targetPort ? 0 : targetGap, reserved, [source, target]);
+    return tasksSimplifyRoute([...(startAt ? [startAt] : []), ...middle, ...(endAt ? [endAt] : [])]);
+}
+
 // The points a routed edge is drawn through, or null for a ribbon, which
 // curves between the handles instead.
-export function tasksEdgeRoute(edgePath, from, to, obstacles = [], gutter = 44) {
+export function tasksEdgeRoute(edgePath, from, to, obstacles = [], gutter = 44, targetGap = 3) {
     if (!from || !to || edgePath === 'ribbon') return null;
-    if (edgePath === 'orthogonal') return tasksOrthogonalRoute(from, to, obstacles, gutter);
-    if (edgePath === 'octilinear') return tasksOctilinearRoute(from, to, obstacles);
-    if (edgePath === 'arc') return tasksArcRoute(from, to);
-    return tasksStraightRoute(from, to);
+    if (edgePath === 'orthogonal') return tasksOrthogonalRoute(from, to, obstacles, gutter, targetGap);
+    if (edgePath === 'octilinear') return tasksOctilinearRoute(from, to, obstacles, targetGap);
+    if (edgePath === 'arc') return tasksArcRoute(from, to, 0.35, targetGap);
+    return tasksStraightRoute(from, to, targetGap);
 }
 
 // A station's route target is its dot, not the label box around it.
 const TASKS_STATION_DOT = 16;
 function tasksRouteRect(node, rect) {
-    if (!rect || (node.data?.__node_look__ || node.__node_look__) !== 'station') return rect;
+    const look = node.data?.__node_look__ || node.__node_look__;
+    // Routes meet at a point's centre, so several edges join into one line.
+    if (rect && look === 'point') return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, width: 0, height: 0 };
+    if (!rect || look !== 'station') return rect;
     return { x: rect.x + rect.width / 2 - TASKS_STATION_DOT / 2, y: rect.y + rect.height / 2 - TASKS_STATION_DOT / 2, width: TASKS_STATION_DOT, height: TASKS_STATION_DOT };
 }
 
@@ -1131,23 +1247,38 @@ export function tasksRouteEdges(nodes, edges, gutter = 44) {
         .map((node) => rects[node.id])
         .filter(Boolean);
     const sourceEdges = edges || [];
+    const portsOf = (edge) => [tasksParsePort(edge.source_port), tasksParsePort(edge.target_port)];
+    const looks = new Map((nodes || []).map((node) => [node.id, node.data?.__node_look__ || node.__node_look__]));
+    const lookOf = (id) => looks.get(id);
+    // An arrow stops short of a box; a line into a point meets it exactly.
+    const targetGapOf = (edge) => (lookOf(edge.target) === 'point' ? 0 : 3);
     const orthogonalRoutes = new Map();
     const routed = [];
     sourceEdges.map((edge, index) => ({ edge, index }))
         .filter(({ edge }) => edge.data?.__edge_path__ === 'orthogonal' && rects[edge.source] && rects[edge.target])
         .sort((a, b) => String(a.edge.id || '').localeCompare(String(b.edge.id || '')) || a.index - b.index)
         .forEach(({ edge, index }) => {
-            const route = tasksOrthogonalRoute(rects[edge.source], rects[edge.target], obstacles, gutter, 3, routed);
+            const [sourcePort, targetPort] = portsOf(edge);
+            // Edges out of one node may share a run, so a fan-out reads as one trunk.
+            const reserved = routed.filter((prior) => prior.source !== edge.source);
+            const route = sourcePort || targetPort
+                ? tasksPortRoute('orthogonal', rects[edge.source], rects[edge.target], sourcePort, targetPort, obstacles, gutter, reserved, targetGapOf(edge))
+                : tasksSimplifyRoute(tasksOrthogonalRoute(rects[edge.source], rects[edge.target], obstacles, gutter, targetGapOf(edge), reserved));
             orthogonalRoutes.set(index, route);
-            routed.push(route);
+            routed.push({ points: route, source: edge.source });
         });
     return sourceEdges.map((edge, index) => {
         const edgePath = edge.data?.__edge_path__;
-        if (!edgePath || edgePath === 'ribbon') return edge;
+        // A point is a junction, so an edge into one draws no arrowhead.
+        const headOff = targetGapOf(edge) === 0 ? { __head_off__: true } : {};
+        if (!edgePath || edgePath === 'ribbon') return headOff.__head_off__ ? { ...edge, data: { ...edge.data, ...headOff } } : edge;
+        const [sourcePort, targetPort] = portsOf(edge);
         const route = edgePath === 'orthogonal' && orthogonalRoutes.has(index)
             ? orthogonalRoutes.get(index)
-            : tasksEdgeRoute(edgePath, rects[edge.source], rects[edge.target], obstacles, gutter);
-        return { ...edge, data: { ...edge.data, __route__: route } };
+            : edgePath === 'line' && (sourcePort || targetPort) && rects[edge.source] && rects[edge.target]
+                ? tasksPortRoute('line', rects[edge.source], rects[edge.target], sourcePort, targetPort, [], gutter, [], targetGapOf(edge))
+                : tasksEdgeRoute(edgePath, rects[edge.source], rects[edge.target], obstacles, gutter, targetGapOf(edge));
+        return { ...edge, data: { ...edge.data, ...headOff, __route__: route } };
     });
 }
 

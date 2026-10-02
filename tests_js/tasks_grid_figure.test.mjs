@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 const { tasksActiveNodeFill, tasksCanvasStyle, tasksEdgeStrokeStyle, tasksHoverFocusEdge, tasksNodeLookStyle, tasksRouteHeadPath, tasksRoutePath, tasksTaperedArrowHeadPath } = await import('../vyasa/extensions_builtin/tasks/static/tasks_paint.js');
-const { sizeTaskNode, tasksArcRoute, tasksCanvasOf, tasksEdgeCornerOf, tasksEdgePathOf, tasksIsDashed, tasksNodeLook, tasksOctilinearRoute, tasksOrthogonalRoute, tasksRectExitPoint, tasksRouteEdges, tasksStraightRoute } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
+const { sizeTaskNode, tasksArcRoute, tasksGlyphNodeSize, tasksParsePort, tasksCanvasOf, tasksEdgeCornerOf, tasksEdgePathOf, tasksIsDashed, tasksNodeLook, tasksOctilinearRoute, tasksOrthogonalRoute, tasksRectExitPoint, tasksRouteEdges, tasksStraightRoute } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
 const { TASKS_LAYOUTS, buildArcTasksGraph, buildGridTasksGraph, buildLayeredTasksGraph } = await import('../vyasa/extensions_builtin/tasks/static/tasks_layouts.js');
 
 const nums = (path) => path.match(/-?\d*\.?\d+/g).map(Number);
@@ -263,4 +263,130 @@ test('an arc label sits on the apex; a run label stays on the longest run', () =
     const [, x, y] = tasksRoutePath(arc, 0, 'middle');
     assert.ok(Math.abs(x - apex.x) < 3 && Math.abs(y - apex.y) < 1, `label ${x},${y} apex ${apex.x},${apex.y}`);
     assert.deepEqual(tasksRoutePath([{ x: 0, y: 0 }, { x: 0, y: 10 }, { x: 100, y: 10 }]).slice(1), [50, 10]);
+});
+
+const rfNode = (id, rect, look = 'outline') => ({ id, position: { x: rect.x, y: rect.y }, width: rect.width, height: rect.height, data: { __kind__: 'task', __node_look__: look } });
+const rfEdge = (id, source, target, attrs = {}) => ({ id, source, target, ...attrs, data: { __edge_path__: 'orthogonal' } });
+const routeOf = (edges, id) => edges.find((edge) => edge.id === id).data.__route__;
+
+test('a port names a side and a percent along it', () => {
+    assert.deepEqual(tasksParsePort('bottom:25'), { side: 'bottom', offsetPct: 25 });
+    assert.deepEqual(tasksParsePort('Left'), { side: 'left', offsetPct: 50 });
+    assert.equal(tasksParsePort('centre'), null);
+});
+
+test('a residual edge enters its target through the left port, beside the block it skips', () => {
+    const nodes = [
+        rfNode('tap', { x: 106, y: 300, width: 8, height: 8 }, 'point'),
+        rfNode('attention', { x: 0, y: 200, width: 220, height: 60 }),
+        rfNode('norm', { x: 0, y: 140, width: 220, height: 44 }),
+    ];
+    const route = routeOf(tasksRouteEdges(nodes, [rfEdge('r', 'tap', 'norm', { target_port: 'left' })]), 'r');
+    const end = route[route.length - 1];
+    assert.deepEqual(end, { x: -3, y: 162 });
+    assert.deepEqual(route[0], { x: 110, y: 304 }, 'starts at the point centre');
+    assert.ok(route.every((point) => point.x <= 0 || point.y > 260), 'stays clear of the attention block');
+});
+
+test('edges out of one point share a trunk and end at their bottom ports', () => {
+    const nodes = [rfNode('fork', { x: 106, y: 300, width: 8, height: 8 }, 'point'), rfNode('attention', { x: 0, y: 200, width: 220, height: 60 })];
+    const edges = tasksRouteEdges(nodes, ['bottom:20', 'bottom:80'].map((port, index) => rfEdge(`q${index}`, 'fork', 'attention', { target_port: port })));
+    const [left, right] = [routeOf(edges, 'q0'), routeOf(edges, 'q1')];
+    assert.equal(left[1].y, right[1].y, 'both leave the fork on one horizontal run');
+    assert.deepEqual([left.at(-1).x, right.at(-1).x], [44, 176]);
+    assert.ok(left.at(-1).y > 260 && right.at(-1).y > 260);
+});
+
+test('an edge into a point meets its centre and draws no arrowhead', () => {
+    const nodes = [rfNode('norm', { x: 0, y: 140, width: 220, height: 44 }), rfNode('tap', { x: 106, y: 40, width: 8, height: 8 }, 'point')];
+    const [edge] = tasksRouteEdges(nodes, [rfEdge('in', 'norm', 'tap')]);
+    assert.equal(edge.data.__head_off__, true);
+    assert.deepEqual(edge.data.__route__.at(-1), { x: 110, y: 44 });
+});
+
+test('glyph looks size themselves; other looks take the layout width', () => {
+    assert.deepEqual(tasksGlyphNodeSize('point', 'tap'), { width: 8, height: 8 });
+    assert.deepEqual(tasksGlyphNodeSize('circle', '+'), { width: 36, height: 36 });
+    assert.equal(tasksGlyphNodeSize('outline', 'Gate'), null);
+    assert.equal(sizeTaskNode('+', 'task', 220, { look: 'circle' }).width, 36);
+});
+
+test('grid centres a glyph in its column, and a glyph-only column is narrow', () => {
+    const nodes = place([
+        { id: 'box', label: 'Attention', column: 'a', track: 'top' },
+        { id: 'tap', label: 'tap', column: 'a', track: 'bottom', node_look: 'point' },
+        { id: 'wave', label: '~', column: 'b', track: 'top', node_look: 'circle' },
+    ]);
+    assert.equal(nodes.tap.position.x + nodes.tap.width / 2, nodes.box.position.x + nodes.box.width / 2);
+    assert.equal(nodes.wave.position.x - (nodes.box.position.x + nodes.box.width), 56 + 40 + 56);
+});
+
+test('grid draws a frame around each group, an outer frame around the inner one', () => {
+    const { nodes } = buildGridTasksGraph({
+        groups: [{ id: 'model', label: 'Model', dashed: 'true' }, { id: 'enc', label: 'Encoder', parent_group_id: 'model' }],
+        tasks: [
+            { id: 'in', label: 'Inputs', column: 'a', track: 'bottom', group_id: 'model' },
+            { id: 'mha', label: 'Attention', column: 'a', track: 'top', group_id: 'enc' },
+        ],
+    }, view);
+    const byId = Object.fromEntries(nodes.map((node) => [node.id, node]));
+    const inner = byId.__frame_enc;
+    const outer = byId.__frame_model;
+    const contains = (frame, rect) => frame.position.x < rect.position.x && frame.position.y < rect.position.y
+        && frame.position.x + frame.width > rect.position.x + rect.width && frame.position.y + frame.height > rect.position.y + rect.height;
+    assert.equal(inner.__kind__, 'gridFrame');
+    assert.ok(contains(inner, byId.mha) && !contains(inner, byId.in));
+    assert.ok(contains(outer, inner) && contains(outer, byId.in));
+    assert.ok(inner.__z__ > outer.__z__);
+    assert.ok(TASKS_LAYOUTS.grid.chromeKinds.includes('gridFrame'));
+});
+
+// Two sibling stacks inside one outer frame, the shape of an encoder-decoder figure.
+const stacks = {
+    groups: [
+        { id: 'model', label: 'Model', dashed: 'true' },
+        { id: 'enc', label: 'Encoder', parent_group_id: 'model' },
+        { id: 'dec', label: 'Decoder', parent_group_id: 'model' },
+    ],
+    tasks: [
+        { id: 'in', label: 'Inputs', column: 'a', track: 'bottom', group_id: 'model' },
+        { id: 'tap', label: 'tap', column: 'a', track: 'space', group_id: 'enc', node_look: 'point' },
+        { id: 'norm', label: 'Add & Norm', column: 'a', track: 'top', group_id: 'enc' },
+        { id: 'attn', label: 'Attention', column: 'b', track: 'top', group_id: 'dec' },
+        { id: 'head', label: 'Linear', column: 'b', track: 'head', group_id: 'model' },
+    ],
+    dependency_edges: [{ id: 'r', source: 'tap', target: 'norm', target_port: 'left' }],
+};
+const stackView = { ...view, grid_row_order: 'head,top,space,bottom' };
+const rectOf = (node) => ({ x: node.position.x, y: node.position.y, width: node.width, height: node.height });
+const overlaps = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+
+test('no frame covers a node outside its group, whatever the title and ports need', () => {
+    const { nodes } = buildGridTasksGraph(stacks, stackView);
+    const frames = nodes.filter((node) => node.__kind__ === 'gridFrame');
+    const members = (groupId) => {
+        const groups = new Set([groupId]);
+        stacks.groups.forEach(() => stacks.groups.forEach((group) => groups.has(group.parent_group_id) && groups.add(group.id)));
+        return new Set(stacks.tasks.filter((task) => groups.has(task.group_id)).map((task) => task.id));
+    };
+    assert.equal(frames.length, 3);
+    for (const frame of frames) {
+        const own = members(frame.id.replace('__frame_', ''));
+        for (const node of nodes.filter((item) => item.__kind__ === 'task' && !own.has(item.id))) {
+            assert.ok(!overlaps(rectOf(frame), rectOf(node)), `${frame.id} covers ${node.id}`);
+        }
+    }
+});
+
+test('a residual route into a left port stays inside its frame', () => {
+    const { nodes, edges } = buildGridTasksGraph(stacks, stackView);
+    const rf = nodes.map((node) => ({ id: node.id, position: node.position, width: node.width, height: node.height, data: { __kind__: node.__kind__, __node_look__: node.node_look || 'outline' } }));
+    const [edge] = tasksRouteEdges(rf, edges.map((item) => ({ ...item, data: { __edge_path__: 'orthogonal' } })));
+    const frame = rectOf(nodes.find((node) => node.id === '__frame_enc'));
+    assert.ok(edge.data.__route__.every((point) => point.x > frame.x && point.x < frame.x + frame.width));
+});
+
+test('a node inside a frame span but outside its group is reported, not covered', () => {
+    const stray = { ...stacks, tasks: [...stacks.tasks, { id: 'nx', label: 'Nx', column: 'a', track: 'top', group_id: 'model' }] };
+    assert.throws(() => buildGridTasksGraph(stray, stackView), /grid group enc spans node nx/);
 });

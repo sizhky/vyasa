@@ -1,0 +1,24 @@
+@graph id=transformer title="Transformer"
+default_view=figure
+color_by=part
+node_look=outline
+edge_path=orthogonal
+hover_attrs=op,shape,params,description,note
+
+@sources
+nodes=kg.nodes
+base:
+	edges=kg.edges
+palette=kg.palette
+
+@views
+figure:
+	source=base
+	layout=grid
+	grid_col=column
+	grid_row=track
+	grid_col_order=enc_note,enc_wave,enc,mid,dec,dec_wave,dec_note
+	grid_row_order=prob,softmax,linear,ff3,fork3,attn2,fork2,attn1,qkv,res,plus,embed,io
+	color_by=part
+	edge_label_from=shape
+	caption="Transformer block diagram, after Attention Is All You Need."

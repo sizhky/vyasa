@@ -303,7 +303,7 @@ export function createTasksEdgeRenderer(React, rf) {
                         strokeLinejoin: 'round',
                         pointerEvents: 'none',
                     }),
-                    !pairReply && !lineOff && (openHead ? umlHeadPath : edgeArrowPath) && React.createElement('path', {
+                    !pairReply && !lineOff && !props.data?.__head_off__ && (openHead ? umlHeadPath : edgeArrowPath) && React.createElement('path', {
                         d: openHead ? umlHeadPath : edgeArrowPath,
                         fill: openHead ? 'none' : 'var(--vyasa-paper)',
                         stroke: 'var(--vyasa-paper)',
@@ -368,7 +368,7 @@ export function createTasksEdgeRenderer(React, rf) {
                         opacity: props.style?.opacity ?? 1,
                         pointerEvents: 'none',
                     }),
-                    !pairReply && !lineOff && (openHead ? umlHeadPath : edgeArrowPath) && React.createElement('path', {
+                    !pairReply && !lineOff && !props.data?.__head_off__ && (openHead ? umlHeadPath : edgeArrowPath) && React.createElement('path', {
                         d: openHead ? umlHeadPath : edgeArrowPath,
                         fill: openHead ? 'none' : (props.style?.stroke || 'currentColor'),
                         stroke: openHead ? (props.style?.stroke || 'currentColor') : 'none',

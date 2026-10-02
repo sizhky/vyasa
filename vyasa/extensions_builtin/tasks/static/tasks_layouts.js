@@ -1,7 +1,7 @@
 import { logTasksDebug, logTasksDebugVerbose, rectSummary } from './tasks_diagnostics.js';
 import {
     layoutDisconnectedTaskNodes, packTaskChildRects, resolveTasksNodeImage, sizeTaskNode,
-    tasksExpandedRootRect, tasksNodeLook, tasksNodeSubtitle,
+    TASKS_PORT_STUB, tasksExpandedRootRect, tasksParsePort, tasksNodeLook, tasksNodeSubtitle,
 } from './tasks_graph_core.js';
 import {
     TASKS_LAYOUT_ERROR_MODE, appendProjectedEdge, buildGanttTasksGraph, buildLayoutErrorGraph,
@@ -34,10 +34,13 @@ const labelHeight = (label, width, kind = 'task') => sizeTaskNode(String(label |
 
 // A task's height under its own look, so an outline node has room for its
 // subtitle. `view` is the view's model, which carries the view and graph defaults.
-const taskHeight = (task, width, view, layoutDefault, kind = 'task') => {
+// A glyph look (point, circle, text) returns its own width; every other look
+// takes the width the layout gives it.
+const taskSize = (task, width, view, layoutDefault, kind = 'task') => {
     const look = tasksNodeLook(task, view, layoutDefault);
-    return sizeTaskNode(String(task.label || task.id), look === 'outline' ? 'task' : kind, width, { look, subtitle: tasksNodeSubtitle(task, view) }).height;
+    return sizeTaskNode(String(task.label || task.id), look === 'outline' ? 'task' : kind, width, { look, subtitle: tasksNodeSubtitle(task, view) });
 };
+const taskHeight = (...args) => taskSize(...args).height;
 
 const TASKS_SEQUENCE_LANE_WIDTH = 196;
 const TASKS_SEQUENCE_LANE_GAP = 102;
@@ -984,8 +987,8 @@ export function buildGridTasksGraph(model, projection = {}) {
         const col = colValues.indexOf(layoutAttrOf(task, colAttr));
         const row = rowValues.indexOf(layoutAttrOf(task, rowAttr));
         if (col < 0 || row < 0) throw new Error(`grid cannot place node ${task.id}`);
-        const height = taskHeight(task, TASKS_GRID.nodeWidth, model, TASKS_LAYOUTS.grid.nodeLook);
-        return { task, col, row, height };
+        const { width, height } = taskSize(task, TASKS_GRID.nodeWidth, model, TASKS_LAYOUTS.grid.nodeLook);
+        return { task, col, row, width, height };
     });
     const cells = new Map();
     for (const item of placed) {
@@ -999,19 +1002,107 @@ export function buildGridTasksGraph(model, projection = {}) {
     const rowHeights = rowValues.map((_, row) => Math.max(0, ...[...cells.entries()]
         .filter(([key]) => Number(key.split(':')[1]) === row)
         .map(([, stack]) => cellHeight(stack))));
-    const colUsed = colValues.map((_, col) => placed.some((item) => item.col === col));
+    // A column is as wide as its widest node, and a narrower node sits centred.
+    const colWidths = colValues.map((_, col) => Math.max(0, ...placed.filter((item) => item.col === col).map((item) => item.width)));
     // An empty track is a spacer the author asked for, so it keeps a gap's width.
-    const rowY = tracksStart(rowHeights.map((height) => height || TASKS_GRID.emptyTrack), TASKS_GRID.rowGap, TASKS_GRID.top);
-    const colX = tracksStart(colUsed.map((used) => (used ? TASKS_GRID.nodeWidth : TASKS_GRID.emptyTrack)), TASKS_GRID.colGap, TASKS_GRID.left);
-    const nodes = placed.map(({ task, col, row, height, offset }) => {
+    const rowSizes = rowHeights.map((height) => height || TASKS_GRID.emptyTrack);
+    const colSizes = colWidths.map((width) => width || TASKS_GRID.emptyTrack);
+    // Frames are sized before tracks: each claims room in the gutters around its span.
+    const frames = gridFrameSpans(model.groups || [], placed, model.dependency_edges || []);
+    const rowY = tracksStart(rowSizes, gridGutters(frames, 'row', rowSizes.length, TASKS_GRID.rowGap), TASKS_GRID.top + gridLeadInset(frames, 'row'));
+    const colX = tracksStart(colSizes, gridGutters(frames, 'col', colSizes.length, TASKS_GRID.colGap), TASKS_GRID.left + gridLeadInset(frames, 'col'));
+    const nodes = placed.map(({ task, col, row, width, height, offset }) => {
         const stackHeight = cellHeight(cells.get(`${col}:${row}`));
         return {
             ...task, __kind__: 'task', __fixed_size__: true,
-            position: { x: colX[col], y: rowY[row] + (rowHeights[row] - stackHeight) / 2 + offset },
-            width: TASKS_GRID.nodeWidth, height,
+            position: { x: colX[col] + (colWidths[col] - width) / 2, y: rowY[row] + (rowHeights[row] - stackHeight) / 2 + offset },
+            width, height,
         };
     });
-    return { nodes, edges: model.dependency_edges || [] };
+    const frameNodes = frames.map((frame) => {
+        const x = colX[frame.col[0]] - frame.inset.left;
+        const y = rowY[frame.row[0]] - frame.inset.top;
+        return {
+            ...frame.group,
+            id: `__frame_${frame.id}`,
+            __kind__: 'gridFrame',
+            __fixed_size__: true,
+            // An inner frame paints over the frame that holds it.
+            __z__: frame.depth,
+            position: { x, y },
+            width: colX[frame.col[1]] + colSizes[frame.col[1]] + frame.inset.right - x,
+            height: rowY[frame.row[1]] + rowSizes[frame.row[1]] + frame.inset.bottom - y,
+        };
+    });
+    return { nodes: [...frameNodes, ...nodes], edges: model.dependency_edges || [] };
+}
+
+/**
+ * The track span and side insets of each group frame. A frame spans the tracks
+ * its members sit on. Its inset on a side is its own margin, plus a port stub
+ * when a member on that boundary has a port facing out, plus the inset of a
+ * child frame that shares the boundary.
+ */
+function gridFrameSpans(groups, placed, edges) {
+    const byId = new Map(groups.map((group) => [group.id, group]));
+    const parentOf = (id) => (byId.has(byId.get(id)?.parent_group_id) ? byId.get(id).parent_group_id : null);
+    const spans = new Map();
+    for (const item of placed) {
+        for (let id = byId.has(item.task.group_id) ? item.task.group_id : null, seen = new Set(); id && !seen.has(id); id = parentOf(id)) {
+            seen.add(id);
+            const span = spans.get(id) || { id, group: byId.get(id), row: [Infinity, -Infinity], col: [Infinity, -Infinity], members: new Set(), ports: new Set() };
+            span.row = [Math.min(span.row[0], item.row), Math.max(span.row[1], item.row)];
+            span.col = [Math.min(span.col[0], item.col), Math.max(span.col[1], item.col)];
+            span.members.add(item.task.id);
+            spans.set(id, span);
+        }
+    }
+    // A frame is drawn over its whole span, so a non-member inside it would sit under the frame.
+    for (const span of spans.values()) {
+        const stray = placed.find((item) => !span.members.has(item.task.id)
+            && item.row >= span.row[0] && item.row <= span.row[1] && item.col >= span.col[0] && item.col <= span.col[1]);
+        if (stray) throw new Error(`grid group ${span.id} spans node ${stray.task.id}, which is not in it. Move one of them to another row or column.`);
+    }
+    const itemById = new Map(placed.map((item) => [item.task.id, item]));
+    const onBoundary = { top: (item, span) => item.row === span.row[0], bottom: (item, span) => item.row === span.row[1], left: (item, span) => item.col === span.col[0], right: (item, span) => item.col === span.col[1] };
+    for (const edge of edges) {
+        for (const [nodeId, value] of [[edge.source, edge.source_port], [edge.target, edge.target_port]]) {
+            const side = tasksParsePort(value)?.side;
+            const item = itemById.get(nodeId);
+            // The stub sits in the innermost frame around the node.
+            const span = side && item ? spans.get(item.task.group_id) : null;
+            if (span && onBoundary[side](item, span)) span.ports.add(side);
+        }
+    }
+    const children = (id) => [...spans.values()].filter((span) => parentOf(span.id) === id);
+    const boundary = { top: (span) => span.row[0], bottom: (span) => span.row[1], left: (span) => span.col[0], right: (span) => span.col[1] };
+    const inset = (span, side) => {
+        const own = (side === 'top' && String(span.group.label || '').trim() ? TASKS_GRID.frameTitle : TASKS_GRID.frameInset)
+            + (span.ports.has(side) ? TASKS_PORT_STUB : 0);
+        const nested = children(span.id).filter((child) => boundary[side](child) === boundary[side](span)).map((child) => inset(child, side));
+        return own + Math.max(0, ...nested);
+    };
+    const depthOf = (id, seen = new Set()) => (parentOf(id) && spans.has(parentOf(id)) && !seen.has(id) ? 1 + depthOf(parentOf(id), seen.add(id)) : 0);
+    return [...spans.values()]
+        .map((span) => ({ ...span, depth: depthOf(span.id), inset: Object.fromEntries(['top', 'right', 'bottom', 'left'].map((side) => [side, inset(span, side)])) }))
+        .sort((a, b) => a.depth - b.depth);
+}
+
+// The gutter after each track: the plain gap, or the frame edges that fall in
+// it, ending frames on one side and starting frames on the other, with a gap between.
+function gridGutters(frames, axis, count, gap) {
+    const [endSide, startSide] = axis === 'row' ? ['bottom', 'top'] : ['right', 'left'];
+    return Array.from({ length: Math.max(0, count - 1) }, (_, index) => {
+        const ending = Math.max(0, ...frames.filter((frame) => frame[axis][1] === index).map((frame) => frame.inset[endSide]));
+        const starting = Math.max(0, ...frames.filter((frame) => frame[axis][0] === index + 1).map((frame) => frame.inset[startSide]));
+        return ending || starting ? Math.max(gap, ending + starting + TASKS_GRID.frameGap) : gap;
+    });
+}
+
+// Room before the first track for frames that start on it.
+function gridLeadInset(frames, axis) {
+    const side = axis === 'row' ? 'top' : 'left';
+    return Math.max(0, ...frames.filter((frame) => frame[axis][0] === 0).map((frame) => frame.inset[side]));
 }
 
 // Arc diagram (Wattenberg 2002): every node on one baseline, in order. The arc
@@ -1037,12 +1128,12 @@ export function buildArcTasksGraph(model, projection = {}) {
 
 const TASKS_ARC = { nodeWidth: 150, gap: 40, left: 80, baseline: 300 };
 
-const TASKS_GRID = { nodeWidth: 220, colGap: 56, rowGap: 36, stackGap: 12, emptyTrack: 40, left: 80, top: 60 };
+const TASKS_GRID = { nodeWidth: 220, colGap: 56, rowGap: 36, stackGap: 12, emptyTrack: 40, left: 80, top: 60, frameInset: 14, frameTitle: 32, frameGap: 14 };
 
-// Start offset of each track, given track sizes and the gap between tracks.
-function tracksStart(sizes, gap, origin) {
+// Start offset of each track, given track sizes and the gap after each track.
+function tracksStart(sizes, gaps, origin) {
     const starts = [];
-    sizes.reduce((at, size) => (starts.push(at), at + size + gap), origin);
+    sizes.reduce((at, size, index) => (starts.push(at), at + size + (Array.isArray(gaps) ? gaps[index] ?? 0 : gaps)), origin);
     return starts;
 }
 
@@ -1100,7 +1191,7 @@ export const TASKS_LAYOUTS = {
         id: 'grid',
         label: 'Grid',
         keys: ['grid_col', 'grid_row', 'grid_col_order', 'grid_row_order'],
-        chromeKinds: [], authoredHandles: false, edgesOverNodes: false,
+        chromeKinds: ['gridFrame'], authoredHandles: false, edgesOverNodes: false,
         // Hand-placed cells read as a figure, so edges default to straight lines.
         edgePath: 'line',
         gutter: { x: TASKS_GRID.colGap, y: TASKS_GRID.rowGap },
