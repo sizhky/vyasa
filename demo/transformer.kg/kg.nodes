@@ -19,7 +19,7 @@ model: Transformer
 		op=$E[x] \cdot \sqrt{d_{model}}$
 		shape=[B, T] → [B, T, 512]
 		params=V × 512, shared with the output embedding and the pre-softmax linear
-		description=A table lookup. The √d_model scale keeps embeddings comparable in size to the positional encoding.
+		description=A table lookup. The $\sqrt{d_{model}}$ scale keeps embeddings comparable in size to the positional encoding.
 	enc_add: +
 		column=enc
 		track=plus
