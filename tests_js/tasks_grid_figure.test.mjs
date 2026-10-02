@@ -410,3 +410,38 @@ test('a group title fits above its members, sized as the renderer sizes it', () 
     const titleHeight = tasksGroupTitleSize('outline', 'Encoder', byId.enc.width - 16).height;
     assert.ok(byId.enc.position.y + 8 + titleHeight < byId.norm.position.y, 'title clears the first member');
 });
+
+test('an orthogonal lane sits halfway between a box and its neighbour, outside both clearances', () => {
+    // Three stacked items and a wall to their left.
+    const nodes = [
+        rfNode('top', { x: 0, y: 0, width: 220, height: 44 }),
+        rfNode('middle', { x: 0, y: 80, width: 220, height: 44 }),
+        rfNode('bottom', { x: 0, y: 160, width: 220, height: 44 }),
+        rfNode('wall', { x: -90, y: 60, width: 40, height: 80 }),
+    ];
+    // The straight drop from top to bottom crosses the middle box, so the route takes a side lane.
+    const route = routeOf(tasksRouteEdges(nodes, [rfEdge('e', 'top', 'bottom')], { x: 56, y: 36 }), 'e');
+    const lane = route.find((point, index) => index > 0 && point.x === route[index - 1].x && point.x < 0).x;
+    // Halfway between the wall's right side (-50) and the stack's left side (0).
+    assert.equal(lane, -25);
+});
+
+test('a route keeps off an item by its clearance, and off a junction by nothing', () => {
+    const blocker = (look) => [
+        rfNode('a', { x: 0, y: 0, width: 60, height: 40 }),
+        rfNode('b', { x: 300, y: 0, width: 60, height: 40 }),
+        rfNode('mid', { x: 150, y: 28, width: 40, height: 40 }, look),
+    ];
+    const straight = (look) => routeOf(tasksRouteEdges(blocker(look), [rfEdge('e', 'a', 'b')]), 'e');
+    // The straight run at y=20 passes 8px above the middle box: inside an item's 16px clearance.
+    assert.ok(straight('outline').length > 2, 'the route bends around an item');
+    assert.equal(straight('point').length, 2, 'a junction claims no clearance');
+});
+
+test('a routed label moves along its route until it clears every box', () => {
+    const nodes = [rfNode('a', { x: 0, y: 0, width: 100, height: 40 }), rfNode('b', { x: 0, y: 200, width: 100, height: 40 }), rfNode('c', { x: -10, y: 90, width: 40, height: 40 })];
+    const [edge] = tasksRouteEdges(nodes, [{ ...rfEdge('e', 'a', 'b'), label: 'produces', labelStyle: { fontSize: '12px' } }]);
+    const at = edge.data.__route_label__;
+    const box = { x: at.x - 40, y: at.y - 15, width: 80, height: 30 };
+    assert.ok(box.y + box.height <= 90 || box.y >= 130, `label at ${at.y} clears the box at 90..130`);
+});

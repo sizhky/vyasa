@@ -102,11 +102,13 @@ export function createTasksEdgeRenderer(React, rf) {
                     : 0;
                 const labelPairOffsetX = labelUp * labelNormalX * labelLift;
                 const labelPairOffsetY = labelUp * labelNormalY * labelLift;
-                const labelX = rawLabelX + labelPairOffsetX;
+                // The router places a routed label clear of the node boxes when it can.
+                const routeLabel = route ? props.data?.__route_label__ : null;
+                const labelX = (routeLabel ? routeLabel.x : rawLabelX) + labelPairOffsetX;
                 // A reply drawn on a row of its own still reads with its call, so
                 // the layout may move the TEXT back to the call's row. The line
                 // does not move: the frame between them needs that height.
-                const labelBaseY = rawLabelY + (Number(props.data?.__sequence_label_dy__) || 0);
+                const labelBaseY = (routeLabel ? routeLabel.y : rawLabelY) + (Number(props.data?.__sequence_label_dy__) || 0);
                 const labelY = pairLift
                     ? labelBaseY + labelPairOffsetY
                     : labelBaseY - (Number(props.data?.__sequence_label_lift__) || 0);

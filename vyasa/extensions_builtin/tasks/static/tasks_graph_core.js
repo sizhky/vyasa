@@ -962,14 +962,31 @@ export function tasksOrthogonalRoute(source, target, obstacles = [], gap = 40, t
     if (outsideY(source, cy(target)) && outsideX(target, cx(source))) {
         push([{ x: cx(source), y: sideY(source, cy(target)) }, { x: cx(source), y: cy(target) }, { x: sideX(target, cx(source), targetGap), y: cy(target) }]);
     }
-    // Z or U: the middle run sits in a gutter beside either end or a reserved lane.
-    const verticalTracks = [source.x - gapX / 2, right(source) + gapX / 2, target.x - gapX / 2, right(target) + gapX / 2];
-    const horizontalTracks = [source.y - gapY / 2, bottom(source) + gapY / 2, target.y - gapY / 2, bottom(target) + gapY / 2];
-    // A port end is a point, so the boxes it belongs to still lend their gutters.
-    for (const r of trackRects) {
-        verticalTracks.push(r.x - gapX / 2, right(r) + gapX / 2);
-        horizontalTracks.push(r.y - gapY / 2, bottom(r) + gapY / 2);
-    }
+    // Z or U: the middle run sits in a lane beside either end or a reserved lane.
+    // A lane sits halfway to the nearest box on that side, so it keeps off both
+    // boxes; with no box near, it sits half a gutter out.
+    const others = obstacles.filter((r) => r !== source && r !== target);
+    const laneOffset = (r, side) => {
+        const across = side === 'left' || side === 'right';
+        const gapOut = across ? gapX : gapY;
+        const facing = others.filter((o) => (across
+            ? o.y < bottom(r) + gapY && bottom(o) > r.y - gapY
+            : o.x < right(r) + gapX && right(o) > r.x - gapX));
+        const distances = facing.map((o) => ({
+            left: r.x - right(o), right: o.x - right(r), top: r.y - bottom(o), bottom: o.y - bottom(r),
+        }[side])).filter((distance) => distance > 0 && distance < gapOut * 3);
+        return distances.length ? Math.min(...distances) / 2 : gapOut / 2;
+    };
+    const lanesBeside = (r) => {
+        verticalTracks.push(r.x - laneOffset(r, 'left'), right(r) + laneOffset(r, 'right'));
+        horizontalTracks.push(r.y - laneOffset(r, 'top'), bottom(r) + laneOffset(r, 'bottom'));
+    };
+    const verticalTracks = [];
+    const horizontalTracks = [];
+    lanesBeside(source);
+    lanesBeside(target);
+    // A port end is a point, so the boxes it belongs to still lend their lanes.
+    trackRects.forEach(lanesBeside);
     const laneSpacing = 14;
     for (const reserved of priorRoutes) {
         const points = reserved.points;
@@ -991,9 +1008,13 @@ export function tasksOrthogonalRoute(source, target, obstacles = [], gap = 40, t
         if (!outsideY(source, y) || !outsideY(target, y)) continue;
         push([{ x: cx(source), y: sideY(source, y) }, { x: cx(source), y }, { x: cx(target), y }, { x: cx(target), y: sideY(target, y, targetGap) }]);
     }
-    const others = obstacles.filter((r) => r !== source && r !== target);
-    const hits = (a, b) => others.filter((r) => Math.min(a.x, b.x) < right(r) - 1 && Math.max(a.x, b.x) > r.x + 1
-        && Math.min(a.y, b.y) < bottom(r) - 1 && Math.max(a.y, b.y) > r.y + 1).length;
+    // A box counts as hit when a run enters its clearance: the space its
+    // highlight bands draw into (`buffer`, set from the node's role).
+    const hits = (a, b) => others.filter((r) => {
+        const pad = Number(r.buffer) || 0;
+        return Math.min(a.x, b.x) < right(r) + pad - 1 && Math.max(a.x, b.x) > r.x - pad + 1
+            && Math.min(a.y, b.y) < bottom(r) + pad - 1 && Math.max(a.y, b.y) > r.y - pad + 1;
+    }).length;
     const edgeConflicts = (a, b) => priorRoutes.reduce((total, reserved) => {
         const points = reserved.points;
         return total + points.slice(1).reduce((score, point, index) => {
@@ -1155,6 +1176,36 @@ export function tasksPortRoute(edgePath, source, target, sourcePort, targetPort,
     return tasksSimplifyRoute([...(startAt ? [startAt] : []), ...middle, ...(endAt ? [endAt] : [])]);
 }
 
+/**
+ * Where a routed edge's label goes: the first point, on its runs from longest
+ * to shortest, whose label box clears every node box by `margin`. Each run is
+ * tried at its middle, then at 30% and 70%. Null means no point is clear, and
+ * the renderer keeps its own placement.
+ *
+ * >>> tasksRouteLabelPoint([{ x: 0, y: 0 }, { x: 0, y: 200 }], 'produces', [{ x: -40, y: 80, width: 80, height: 40 }])
+ * { x: 0, y: 60 }
+ */
+export function tasksRouteLabelPoint(route, label, rects, fontSize = 12, margin = 4) {
+    const text = String(label || '');
+    if (!text || !Array.isArray(route) || route.length < 2) return null;
+    const halfWidth = (text.length * fontSize * 0.6 + 12) / 2 + margin;
+    const halfHeight = (fontSize * 1.4 + 6) / 2 + margin;
+    const clear = (x, y) => (rects || []).every((r) => x + halfWidth <= r.x || x - halfWidth >= r.x + r.width
+        || y + halfHeight <= r.y || y - halfHeight >= r.y + r.height);
+    const runs = route.slice(1)
+        .map((point, index) => ({ a: route[index], b: point, length: Math.hypot(point.x - route[index].x, point.y - route[index].y) }))
+        .filter((run) => run.length > 0)
+        .sort((x, y) => y.length - x.length);
+    for (const run of runs) {
+        for (const t of [0.5, 0.3, 0.7]) {
+            const x = Math.round(run.a.x + (run.b.x - run.a.x) * t);
+            const y = Math.round(run.a.y + (run.b.y - run.a.y) * t);
+            if (clear(x, y)) return { x, y };
+        }
+    }
+    return null;
+}
+
 // The points a routed edge is drawn through, or null for a ribbon, which
 // curves between the handles instead.
 export function tasksEdgeRoute(edgePath, from, to, obstacles = [], gutter = 44, targetGap = 3) {
@@ -1183,7 +1234,11 @@ export function tasksRouteEdges(nodes, edges, gutter = 44) {
             const kind = node.data?.__kind__ || node.__kind__;
             return kind === 'task' || (kind === 'group' && !String(node.className || '').includes('expanded-group'));
         })
-        .map((node) => rects[node.id])
+        .map((node) => {
+            const rect = rects[node.id];
+            if (rect) rect.buffer = tasksRoleOf(node.data || node).clearance;
+            return rect;
+        })
         .filter(Boolean);
     const sourceEdges = edges || [];
     const portsOf = (edge) => [tasksParsePort(edge.source_port), tasksParsePort(edge.target_port)];
@@ -1216,7 +1271,10 @@ export function tasksRouteEdges(nodes, edges, gutter = 44) {
             : edgePath === 'line' && (sourcePort || targetPort) && rects[edge.source] && rects[edge.target]
                 ? tasksPortRoute('line', rects[edge.source], rects[edge.target], sourcePort, targetPort, [], gutter, [], targetGapOf(edge))
                 : tasksEdgeRoute(edgePath, rects[edge.source], rects[edge.target], obstacles, gutter, targetGapOf(edge));
-        return { ...edge, data: { ...edge.data, ...headOff, __route__: route } };
+        // An arc's words belong on its apex; any other route places its label clear of the boxes.
+        const fontSize = Number.parseFloat(edge.labelStyle?.fontSize) || 12;
+        const labelPoint = edgePath === 'arc' ? null : tasksRouteLabelPoint(route, edge.label, obstacles, fontSize);
+        return { ...edge, data: { ...edge.data, ...headOff, __route__: route, __route_label__: labelPoint } };
     });
 }
 

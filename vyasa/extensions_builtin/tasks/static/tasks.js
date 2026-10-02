@@ -86,7 +86,13 @@ window.tasksSetEdgeLabelsVisible = tasksSetEdgeLabelsVisible;
 
 // ELK keeps free nodes at least this far apart, so a routed edge runs its
 // middle leg through the middle of that gap.
-const TASKS_FREE_GUTTER = 44;
+// The free graph routes in the gaps ELK leaves: node spacing across a layer,
+// layer spacing between layers. A sideways layout swaps the two axes.
+function tasksFreeRouteGutter(layoutConfig) {
+    const across = Number(layoutConfig?.nodeSpacing) || 44;
+    const between = Number(layoutConfig?.layerSpacing) || 96;
+    return /^(RIGHT|LEFT)$/i.test(String(layoutConfig?.elkDirection || '')) ? { x: between, y: across } : { x: across, y: between };
+}
 const TASKS_AUTO_FIT_ON_EXPAND_DEFAULT = false;
 const TASKS_AUTO_FIT_ON_FILTER_DEFAULT = true;
 // A share of the widget, not a pixel count, so the panel keeps its
@@ -1554,12 +1560,12 @@ async function renderTasksGraphs(rootElement = document) {
                             },
                         },
                     }));
-                    const routed = tasksRouteEdges(anchoredNodes, anchored.edges, TASKS_FREE_GUTTER);
+                    const routed = tasksRouteEdges(anchoredNodes, anchored.edges, tasksFreeRouteGutter(layoutConfig));
                     graphBaseRef.current = { nodes: anchoredNodes, edges: routed };
                     setEdges(routed);
                     return anchoredNodes;
                 });
-            }, [nodeConnectionExperiment]);
+            }, [nodeConnectionExperiment, layoutConfig]);
             const reviewTargets = React.useMemo(() => [
                 ...nodes
                     .filter((node) => node.data?.highlightMode && !['dim', 'none'].includes(node.data.highlightMode))
@@ -3104,7 +3110,7 @@ async function renderTasksGraphs(rootElement = document) {
                 });
                 // ELK has placed every node, so routed edges are solved against
                 // those rects; a drag solves them again.
-                const baseEdges = tasksRouteEdges(baseNodes, styledEdges, TASKS_FREE_GUTTER);
+                const baseEdges = tasksRouteEdges(baseNodes, styledEdges, tasksFreeRouteGutter(layoutConfig));
                 const anchoredNodes = baseNodes.map((node) => ({
                     ...node,
                     data: {
