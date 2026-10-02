@@ -11,7 +11,7 @@ import {
     tasksGroupIdsContainingSelection, tasksHoverFocusEdge, tasksHoverFocusNodeStyle, tasksLitNodeFill, tasksProminentEdgeOpacity, tasksStateZIndex,
 } from './tasks_paint.js';
 import {
-    TASKS_DIM_EDGE_INK, TASKS_DIM_LABEL_INK, TASKS_DIM_OPACITY, TASKS_SELECTION_DIM_OPACITY, tasksCheckedShadow, tasksStateShadow,
+    TASKS_DIM_EDGE_INK, TASKS_DIM_LABEL_INK, TASKS_DIM_OPACITY, TASKS_SELECTION_DIM_OPACITY, tasksCheckedShadow, tasksEdgeStateWidth, tasksStateShadow,
 } from './tasks_theme.js';
 
 export const TASKS_EDGE_LABEL_FOCUS_FONT_SIZE = 16;
@@ -92,9 +92,6 @@ export function tasksHighlightGraph(input, ctx) {
             const focused = edge === selectedEdge;
             const hit = focused || (Boolean(mateId) && tasksEdgeRecordId(edge) === mateId);
             const edgeColor = edge.data?.edgeColor || edge.style?.stroke || 'currentColor';
-            // A focus stroke of 4.5 would close the gap a pair is drawn
-            // with, turning the two harpoons back into one fat line.
-            const focusWidth = edge.data?.__pair_half__ ? 2.6 : 4.5;
             return {
                 ...edge,
                 zIndex: hit ? TASKS_EDGE_FOCUS_Z : TASKS_EDGE_Z,
@@ -107,7 +104,7 @@ export function tasksHighlightGraph(input, ctx) {
                 data: { ...edge.data, highlightMode: hit ? 'selected' : 'dim', strokeMode: hit ? 'selected' : 'dim', edgeCardActive: hit, pinBloomKey: focused && edgePinBloom?.edgeId === tasksEdgeRecordId(edge) ? edgePinBloom.key : '' },
                 labelStyle: { ...(edge.labelStyle || {}), fill: hit ? edgeColor : TASKS_DIM_LABEL_INK, opacity: hit ? 1 : 0.12 },
                 labelBgStyle: { ...(edge.labelBgStyle || {}), fill: TASKS_EDGE_LABEL_BG, fillOpacity: hit ? 0.86 : 0.04 },
-                style: { ...edge.style, stroke: hit ? edgeColor : TASKS_DIM_EDGE_INK, opacity: hit ? 1 : 0.08, strokeWidth: hit ? focusWidth : (edge.data?.__pair_half__ ? 1.9 : 2.5) },
+                style: { ...edge.style, stroke: hit ? edgeColor : TASKS_DIM_EDGE_INK, opacity: hit ? 1 : 0.08, strokeWidth: tasksEdgeStateWidth(edge, hit, hit ? 4.5 : 2.5) },
             };
         }));
         return result;
@@ -190,7 +187,7 @@ export function tasksHighlightGraph(input, ctx) {
                 },
                 labelStyle: { ...(edge.labelStyle || {}), fill: hit ? edgeColor : TASKS_DIM_LABEL_INK, opacity: (hit ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.12, edgeOpacity)) * branchOpacity },
                 labelBgStyle: { ...(edge.labelBgStyle || {}), fill: TASKS_EDGE_LABEL_BG, fillOpacity: hit ? 0.82 : 0.06 },
-                style: { ...edge.style, stroke: hit ? edgeColor : TASKS_DIM_EDGE_INK, opacity: tasksApplyEdgeOpacity(hit ? 0.98 : 0.08, edgeOpacity) * branchOpacity, strokeWidth: edge.data?.__pair_half__ ? (hit ? 2.6 : 1.9) : (hit ? 4.5 : 2.5), strokeLinecap: hit ? 'round' : undefined, '--vyasa-edge-flow-duration': hit ? '0.7s' : '0.6s' },
+                style: { ...edge.style, stroke: hit ? edgeColor : TASKS_DIM_EDGE_INK, opacity: tasksApplyEdgeOpacity(hit ? 0.98 : 0.08, edgeOpacity) * branchOpacity, strokeWidth: tasksEdgeStateWidth(edge, hit, hit ? 4.5 : 2.5), strokeLinecap: hit ? 'round' : undefined, '--vyasa-edge-flow-duration': hit ? '0.7s' : '0.6s' },
             };
         }));
         return result;
@@ -280,7 +277,7 @@ export function tasksHighlightGraph(input, ctx) {
                     ...edge.style,
                     stroke: hit ? edgeColor : TASKS_DIM_EDGE_INK,
                     opacity: tasksApplyEdgeOpacity(hit ? 0.98 : 0.08, edgeOpacity) * branchOpacity,
-                    strokeWidth: hit ? 4.5 : 2.5,
+                    strokeWidth: tasksEdgeStateWidth(edge, hit, hit ? 4.5 : 2.5),
                     strokeLinecap: hit ? 'round' : undefined,
                     '--vyasa-edge-flow-duration': hit ? '0.7s' : '0.6s',
                 },
@@ -408,7 +405,7 @@ export function tasksHighlightGraph(input, ctx) {
                 opacity: activeOpacity * ((mode === 'focused-in' || mode === 'focused-out')
                     ? tasksProminentEdgeOpacity()
                     : (highlighted ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.08, edgeOpacity))),
-                strokeWidth: tasksEdgeStrokeWidthForMode(strokeMode),
+                strokeWidth: tasksEdgeStateWidth(edge, highlighted, tasksEdgeStrokeWidthForMode(strokeMode)),
                 '--vyasa-edge-flow-duration': (mode === 'focused-in' || mode === 'focused-out') ? '0.72s' : '0.64s',
                 strokeLinecap: highlighted ? 'round' : undefined,
             },

@@ -377,6 +377,17 @@ export function tasksEdgeBaseWidth(edgePath, focused = false) {
     return focused ? style.focused : style.width;
 }
 
+// The width of a lit or dimmed edge in a highlight pass. A ribbon takes the
+// pass's width, and one half of a pair stays no wider than 2.6 lit or 1.9
+// dimmed, so the pair keeps its gap.
+// A routed or metro edge keeps its path's own widths.
+export function tasksEdgeStateWidth(edge, lit, ribbonWidth) {
+    const path = edge?.data?.__edge_path__;
+    if (path && path !== 'ribbon') return tasksEdgeBaseWidth(path, lit);
+    if (edge?.data?.__pair_half__) return Math.min(lit ? 2.6 : 1.9, ribbonWidth);
+    return ribbonWidth;
+}
+
 // The stroke of an edge, by its path. An edge colour wins over the path's ink.
 export function tasksEdgeStrokeStyle(edgePath, edgeColor, dashed = false) {
     const style = tasksEdgePathStyle(edgePath);
