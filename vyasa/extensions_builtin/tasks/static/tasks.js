@@ -3170,6 +3170,8 @@ async function renderTasksGraphs(rootElement = document) {
                 setEdges((prev) => tasksReuseGraphElements(prev, nextEdges.map(tasksGraphPaint)));
             }, []);
             const applyHighlight = React.useCallback((nodeId, hoveredNodeId = null, selectedIds = new Set(), edgeId = '') => {
+                // colorMix and hoverFontSize derive from model, a dependency below. colorMix is
+                // a new object each render, so listing it would rerun the highlight effect forever.
                 const highlighted = tasksHighlightGraph({
                     baseNodes: graphBaseRef.current.nodes || [],
                     authoredGraphEdges: graphBaseRef.current.edges || [],
@@ -3212,7 +3214,7 @@ async function renderTasksGraphs(rootElement = document) {
                 }
                 setNodesReusing(highlighted.nodes);
                 setEdgesReusing(highlighted.edges);
-            }, [effectiveQueryFilters, effectiveSwatchFilters, effectiveEdgeTypes, searchMatches, model, activeColorBy, activeColorPalette, activeColorLevelSpecs, expanded, edgesVisible, edgeOpacity, edgePinBloom, filteredSelectionIds, colorMix, hoverFontSize]);
+            }, [effectiveQueryFilters, effectiveSwatchFilters, effectiveEdgeTypes, searchMatches, model, activeColorBy, activeColorPalette, activeColorLevelSpecs, expanded, edgesVisible, edgeOpacity, edgePinBloom, filteredSelectionIds]);
             React.useLayoutEffect(() => {
                 const baseNodeIds = new Set((graphBaseRef.current.nodes || []).map((node) => node.id));
                 if (selectedNodeId && !baseNodeIds.has(selectedNodeId)) {
