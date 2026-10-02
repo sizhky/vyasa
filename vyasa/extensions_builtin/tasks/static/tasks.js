@@ -12,7 +12,7 @@ import { createTasksEdgeRenderer } from './tasks_edges.js';
 import { createTasksFullscreenController } from './tasks_fullscreen.js';
 import { tasksGitHistoryRows } from './tasks_git_review.js';
 import {
-    buildTaskEdgeAnchors, tasksCanvasOf, tasksEdgeCornerOf, tasksEdgePathOf, tasksIsDashed, tasksNodeLook, tasksRouteEdges, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable,
+    buildTaskEdgeAnchors, tasksCanvasOf, tasksGroupTitleSize, tasksEdgeCornerOf, tasksEdgePathOf, tasksIsDashed, tasksNodeLook, tasksRouteEdges, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable,
     isTasksUnspecifiedProjectionGroup, nearestTasksIncidentEdge, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon,
     selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksCenteredViewport, tasksEdgeLabelZForMode,
     tasksGraphDynamicMinZoom, tasksGraphNodeAbsoluteRect, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea,
@@ -55,9 +55,13 @@ import {
     tasksDefaultEdgeOpacity, tasksEdgeColorPaletteFor, tasksEdgeRecordId, tasksEdgeStrokeWidthForMode,
     tasksGroupBackground, tasksGroupIdsContainingSelection, tasksHoverFocusEdge, tasksHoverFocusNodeStyle,
     tasksNodeBackground, tasksNodeColorLevels, tasksNodeIsOverlaid, tasksProminentEdgeOpacity,
-    tasksActiveNodeFill, tasksCanvasBackgroundProps, tasksCanvasStyle, tasksEdgeStrokeStyle, tasksNodeLookStyle,
+    tasksActiveNodeFill,
     tasksReferenceFlowEdge, tasksResolvedThemeColor, tasksUseColorOverlay,
 } from './tasks_paint.js';
+import {
+    tasksCanvasBackgroundProps, tasksCanvasStyle, tasksEdgeStrokeStyle, tasksGroupLook, tasksGroupRingTokens,
+    tasksGroupTitleLook, tasksNodeLookStyle,
+} from './tasks_theme.js';
 import { createTasksPanels } from './tasks_panels.js';
 import {
     TASKS_EDGES_VISIBLE_KEY, TASKS_HOVER_CARD_MODES, TASKS_HOVER_CARD_MODE_KEY, buildTasksNodeNotesBackup,
@@ -119,8 +123,9 @@ const tasksCaptionElement = (holder, style, attr = 'caption') => {
 };
 
 // The frame of a group, open or closed, in the free graph and in a fixed layout.
-// A group's border is one pixel heavier than a card's look, and a look with no
-// border gets a ring instead.
+// The frame takes the group look of the node look. A group's border is one pixel
+// heavier than a card's look, and a look with no border gets a ring instead.
+// `tokens` set the CSS ring an open group draws.
 function tasksGroupFrameStyle(group, { groupColor, isExpanded, nodeLook, transparent = false, fillExpanded = 0, fillCollapsed = 14, borderMix = 70 }) {
     const background = isExpanded
         ? tasksGroupBackground(groupColor, '', TASKS_GROUP_EXPANDED_BG, { mode: 'transparent', intensity: fillExpanded })
@@ -128,25 +133,24 @@ function tasksGroupFrameStyle(group, { groupColor, isExpanded, nodeLook, transpa
     const border = groupColor
         ? `1px solid color-mix(in srgb, var(--vyasa-paper) ${100 - borderMix}%, ${groupColor} ${borderMix}%)`
         : TASKS_NODE_BORDER;
-    const lookStyle = tasksNodeLookStyle({ background: transparent ? 'transparent' : background, border }, nodeLook, groupColor, tasksIsDashed(group));
+    const lookStyle = tasksNodeLookStyle({ background: transparent ? 'transparent' : background, border }, tasksGroupLook(nodeLook), groupColor, tasksIsDashed(group));
     if (typeof lookStyle.border === 'string') {
         lookStyle.border = lookStyle.border.replace(/^(\d+(?:\.\d+)?)px\b/, (_, width) => `${Number(width) + 1}px`);
     }
     const ring = !lookStyle.border || lookStyle.border === 'none'
         ? `0 0 0 1px color-mix(in srgb, ${groupColor || 'var(--vyasa-ink)'} 42%, transparent)`
         : 'none';
-    return { lookStyle, ring };
+    return { lookStyle, ring, tokens: tasksGroupRingTokens(nodeLook) };
 }
 
-// The title bar of an open group: its own node, laid over the frame's top-left.
+// The title of an open group: its own node, laid over the frame's top-left.
+// A card group's title is a bar with a ring; a figure group's is a label.
 function tasksGroupTitleFlowNode(group, { position, depth, look, color, opacity = 1, model, nodeLabels }) {
     const titleWidth = Math.max(80, group.width - 16);
     const titleImage = resolveTasksNodeImage(group, model);
-    const titleHeight = sizeTaskNode(group.label || group.id, 'groupTitle', titleWidth, { hasImage: Boolean(titleImage), nodeLabels }).height;
-    const titleLookStyle = tasksNodeLookStyle({ background: TASKS_GROUP_TITLE_BG, border: 'none' }, look, color, tasksIsDashed(group));
-    if (typeof titleLookStyle.border === 'string') {
-        titleLookStyle.border = titleLookStyle.border.replace(/^(\d+(?:\.\d+)?)px\b/, (_, width) => `${Number(width) + 1}px`);
-    }
+    const titleHeight = tasksGroupTitleSize(look, group.label || group.id, titleWidth, { hasImage: Boolean(titleImage), nodeLabels }).height;
+    const titleLookStyle = tasksGroupTitleLook(look, color)?.style
+        || { background: TASKS_GROUP_TITLE_BG, border: 'none', boxShadow: `0 0 0 1px color-mix(in srgb, ${color} 42%, transparent)` };
     const titleZ = TASKS_TITLE_Z + depth;
     return {
         id: `${group.id}__title`,
@@ -158,10 +162,7 @@ function tasksGroupTitleFlowNode(group, { position, depth, look, color, opacity 
             height: titleHeight,
             zIndex: titleZ,
             ...titleLookStyle,
-            borderRadius: titleLookStyle.borderRadius ?? 6,
-            boxShadow: !titleLookStyle.border || titleLookStyle.border === 'none'
-                ? `0 0 0 1px color-mix(in srgb, ${color} 42%, transparent)`
-                : 'none',
+            borderRadius: 6,
             overflow: 'hidden',
             opacity,
             pointerEvents: 'auto',
@@ -2743,7 +2744,7 @@ async function renderTasksGraphs(rootElement = document) {
                         if (node.__kind__ === 'group') {
                             // A layout that frames a group holds it open: the frame is the group node.
                             const groupLook = tasksNodeLook(node, model, tasksFixedLayout(mode)?.nodeLook);
-                            const { lookStyle, ring } = tasksGroupFrameStyle(node, { groupColor: nodeColor, isExpanded: true, nodeLook: groupLook });
+                            const { lookStyle, ring, tokens } = tasksGroupFrameStyle(node, { groupColor: nodeColor, isExpanded: true, nodeLook: groupLook });
                             const groupZ = TASKS_GROUP_BG_Z + (Number(node.__depth__) || 0);
                             return {
                                 id: node.id,
@@ -2758,6 +2759,7 @@ async function renderTasksGraphs(rootElement = document) {
                                     boxShadow: isChecked ? `0 0 0 2px color-mix(in srgb, ${stateAccent} 34%, transparent)` : ring,
                                     overflow: 'hidden',
                                     ...lookStyle,
+                                    ...tokens,
                                 },
                                 zIndex: groupZ,
                                 className: `vyasa-tasks-node--${tasksGraphNodeHitArea('group', true)} vyasa-tasks-node--expanded-group`,
@@ -3033,6 +3035,7 @@ async function renderTasksGraphs(rootElement = document) {
                             overflow: 'hidden',
                             // A look may restate the radius and the overflow it needs.
                             ...lookStyle,
+                            ...(groupFrame?.tokens || {}),
                             border: isChecked
                                 ? `2px solid color-mix(in srgb, ${stateAccent} 78%, white 22%)`
                                 : lookStyle.border,

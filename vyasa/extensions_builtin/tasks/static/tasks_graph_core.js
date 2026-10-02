@@ -1,6 +1,9 @@
 
 // The shared viewport owns the gesture binder; KG re-exports only what it uses.
 export { clampScale, nextWheelState } from '../../../static/viewport_core.js';
+import {
+    TASKS_CANVASES, TASKS_EDGE_PATHS, TASKS_NODE_LOOKS, tasksGroupTitleMode, tasksLabelTitleSize, tasksLookJoinsRoutes, tasksLookRouteRect, tasksLookSize,
+} from './tasks_theme.js';
 
 export function tasksReviewTarget(data, id, widgetId) {
     const sourceNodeId = data?.__kind__ === 'groupTitle' ? data?.sourceGroupId : id;
@@ -77,18 +80,9 @@ export function tasksInlineLinkPlainText(value, nodeLabels = {}) {
 export function sizeTaskNode(label, kind = 'task', widthOverride = null, options = {}) {
     const spec = TASK_NODE_SPECS[kind] || TASK_NODE_SPECS.task;
     const width = Math.max(32, Number(widthOverride || spec.width));
-    // An outline task node draws a mono title and its subtitle, so it is sized
-    // with the metrics it is drawn with.
-    if (kind === 'task' && TASKS_FIGURE_LOOKS.includes(options?.look)) {
-        const size = tasksOutlineNodeSize(label, options.subtitle, width);
-        // A header tab adds its band and its [kind] line above the subtitle.
-        return options.look === 'tab' ? { width, height: size.height + 22 } : size;
-    }
-    // A glyph look sizes itself from its label; the layout's width does not apply.
-    const glyph = kind === 'task' ? tasksGlyphNodeSize(options?.look, label) : null;
-    if (glyph) return glyph;
-    // A station is a dot with its label above it; the box only holds the label.
-    if (kind === 'task' && options?.look === 'station') return { width, height: 48 };
+    // A look other than card sizes a task with the metrics it is drawn with.
+    const looked = kind === 'task' ? tasksLookSize(options?.look, label, options?.subtitle, width) : null;
+    if (looked) return looked;
     const imageSpec = options?.hasImage ? (TASK_NODE_IMAGE_SPECS[kind] || TASK_NODE_IMAGE_SPECS.task) : null;
     const imageReserve = imageSpec ? imageSpec.size + imageSpec.gap : 0;
     const maxTextWidth = Math.max(32, width - spec.padX - spec.reserveX - imageReserve - 8);
@@ -104,64 +98,13 @@ export function sizeTaskNode(label, kind = 'task', widthOverride = null, options
     };
 }
 
-// Outline node type metrics. The renderer draws with these and the layout sizes
-// with them, so a box always fits its text.
-export const TASKS_OUTLINE_FONT = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
-export const TASKS_OUTLINE_TITLE_FONT_SIZE = 14;
-export const TASKS_OUTLINE_SUBTITLE_FONT_SIZE = 11;
-const TASKS_OUTLINE_CHAR_EM = 0.62;
-const TASKS_OUTLINE_PAD = { x: 28, y: 22 };
-
-/**
- * Height of an outline node: wrapped mono title plus wrapped subtitle.
- *
- * >>> tasksOutlineNodeSize('Gate', '', 220)
- * { width: 220, height: 44 }
- * >>> tasksOutlineNodeSize('1 · Gate', 'anchored? judged? generic? duplicate?', 220).height
- * 73
- */
-export function tasksOutlineNodeSize(title, subtitle, width) {
-    const textWidth = Math.max(40, width - TASKS_OUTLINE_PAD.x);
-    const lines = (text, size) => String(text || '').split(/\r?\n/).filter(Boolean)
-        .reduce((count, part) => count + Math.max(1, Math.ceil((part.length * size * TASKS_OUTLINE_CHAR_EM) / textWidth)), 0);
-    const titleHeight = Math.max(1, lines(title, TASKS_OUTLINE_TITLE_FONT_SIZE)) * TASKS_OUTLINE_TITLE_FONT_SIZE * 1.3;
-    const subtitleLines = lines(subtitle, TASKS_OUTLINE_SUBTITLE_FONT_SIZE);
-    const subtitleHeight = subtitleLines ? 3 + subtitleLines * TASKS_OUTLINE_SUBTITLE_FONT_SIZE * 1.35 : 0;
-    return { width, height: Math.max(44, Math.ceil(titleHeight + subtitleHeight + TASKS_OUTLINE_PAD.y)) };
+// The height of an open group's title: a card group's title bar, or a figure
+// group's label. Layout and the title node both size it here.
+export function tasksGroupTitleSize(look, label, width, options = {}) {
+    return tasksGroupTitleMode(look) === 'label'
+        ? tasksLabelTitleSize(label, width)
+        : sizeTaskNode(label, 'groupTitle', width, options);
 }
-
-/**
- * Size of a glyph node: a `point` joins routes, a `circle` holds a symbol such
- * as `+`, and `text` is a bare mono label. Other looks return null.
- *
- * >>> tasksGlyphNodeSize('point', 'fork')
- * { width: 8, height: 8 }
- * >>> tasksGlyphNodeSize('circle', '+')
- * { width: 36, height: 36 }
- * >>> tasksGlyphNodeSize('text', 'Nx')
- * { width: 30, height: 29 }
- * >>> tasksGlyphNodeSize('outline', 'Gate')
- * null
- */
-export function tasksGlyphNodeSize(look, label) {
-    if (look === 'point') return { width: TASKS_POINT_SIZE, height: TASKS_POINT_SIZE };
-    const charWidth = TASKS_OUTLINE_TITLE_FONT_SIZE * TASKS_OUTLINE_CHAR_EM;
-    const length = String(label || '').length;
-    if (look === 'circle') {
-        const diameter = Math.max(36, Math.ceil(length * charWidth) + 18);
-        return { width: diameter, height: diameter };
-    }
-    if (look !== 'text') return null;
-    const lineWidth = TASKS_TEXT_MAX_WIDTH - 12;
-    const lines = Math.max(1, Math.ceil((length * charWidth) / lineWidth));
-    return {
-        width: Math.min(TASKS_TEXT_MAX_WIDTH, Math.ceil(length * charWidth) + 12),
-        height: Math.ceil(lines * TASKS_OUTLINE_TITLE_FONT_SIZE * 1.3 + 10),
-    };
-}
-
-export const TASKS_POINT_SIZE = 8;
-const TASKS_TEXT_MAX_WIDTH = 220;
 
 export function isTasksGraphNodeSelectable(kind, isExpanded = false) {
     return tasksGraphNodeHitArea(kind, isExpanded) !== 'passive';
@@ -857,17 +800,10 @@ function edgeAnchorSides(sourceRect, targetRect, sourceNode = null, targetNode =
 
 // Style cascade. A node or edge attr wins, then the view, then the layout's own
 // default. The same key names both levels, so an override reads like the default.
-export const TASKS_NODE_LOOKS = ['card', 'outline', 'sketch', 'blueprint', 'tab', 'station', 'point', 'circle', 'text'];
 // Attrs that set how an item is drawn, never what it says. Detail cards and
 // filters skip them; layouts.py STYLE_KEYS lists the view-level ones.
 export const TASKS_STYLE_ATTRS = new Set(['node_look', 'edge_path', 'edge_corner', 'canvas', 'subtitle_from', 'dashed', 'source_port', 'target_port']);
-// Looks sized by their label, not by the layout's node width.
-export const TASKS_GLYPH_LOOKS = ['point', 'circle', 'text'];
-export const TASKS_EDGE_PATHS = ['ribbon', 'line', 'orthogonal', 'octilinear', 'arc'];
 export const TASKS_EDGE_CORNERS = ['sharp', 'round'];
-export const TASKS_CANVASES = ['plain', 'blueprint'];
-// Looks drawn as a figure box: mono or hand type, sized for a subtitle.
-export const TASKS_FIGURE_LOOKS = ['outline', 'sketch', 'blueprint', 'tab'];
 
 const tasksCascade = (allowed, ...values) => values
     .map((value) => String(value ?? '').trim().toLowerCase())
@@ -1227,14 +1163,8 @@ export function tasksEdgeRoute(edgePath, from, to, obstacles = [], gutter = 44, 
     return tasksStraightRoute(from, to, targetGap);
 }
 
-// A station's route target is its dot, not the label box around it.
-const TASKS_STATION_DOT = 16;
 function tasksRouteRect(node, rect) {
-    const look = node.data?.__node_look__ || node.__node_look__;
-    // Routes meet at a point's centre, so several edges join into one line.
-    if (rect && look === 'point') return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, width: 0, height: 0 };
-    if (!rect || look !== 'station') return rect;
-    return { x: rect.x + rect.width / 2 - TASKS_STATION_DOT / 2, y: rect.y + rect.height / 2 - TASKS_STATION_DOT / 2, width: TASKS_STATION_DOT, height: TASKS_STATION_DOT };
+    return tasksLookRouteRect(node.data?.__node_look__ || node.__node_look__, rect);
 }
 
 // Solve every routed edge against the current node rects. A box a route must
@@ -1253,8 +1183,8 @@ export function tasksRouteEdges(nodes, edges, gutter = 44) {
     const portsOf = (edge) => [tasksParsePort(edge.source_port), tasksParsePort(edge.target_port)];
     const looks = new Map((nodes || []).map((node) => [node.id, node.data?.__node_look__ || node.__node_look__]));
     const lookOf = (id) => looks.get(id);
-    // An arrow stops short of a box; a line into a point meets it exactly.
-    const targetGapOf = (edge) => (lookOf(edge.target) === 'point' ? 0 : 3);
+    // An arrow stops short of a box; a line into a junction meets it exactly.
+    const targetGapOf = (edge) => (tasksLookJoinsRoutes(lookOf(edge.target)) ? 0 : 3);
     const orthogonalRoutes = new Map();
     const routed = [];
     sourceEdges.map((edge, index) => ({ edge, index }))

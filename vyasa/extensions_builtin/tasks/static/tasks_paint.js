@@ -1,4 +1,5 @@
 import { logTasksDebug, logTasksDebugVerbose } from './tasks_diagnostics.js';
+import { tasksEdgeBaseWidth, tasksLookLitFill } from './tasks_theme.js';
 import {
     TASKS_CARD_STATE_ATTR, TASKS_DEFAULT_CARD_STATES, TASKS_HAS_NOTE_ATTR, TASKS_SPECIAL_NODE_ATTRS,
     clampTasksEdgeOpacity, clampTasksProjectionDisplayOpacity, collectTasksGroupDescendantIds, collectTasksGroupDescendants,
@@ -111,94 +112,11 @@ export function tasksEdgeOpacityLabel(opacity) {
     return 'Clear';
 }
 
-// The width an edge is drawn at, by its path. A ribbon swells its width into a
-// taper, so it starts wider; a routed line or orthogonal run draws it as is.
-export function tasksEdgeBaseWidth(edgePath, focused = false) {
-    // A metro line is the picture, so it is drawn thick.
-    if (edgePath === 'octilinear') return focused ? 7 : 5;
-    if (edgePath && edgePath !== 'ribbon') return focused ? 2.5 : 1.5;
-    return focused ? 4.75 : 2.5;
-}
-
-// A routed edge with no colour of its own is muted ink, so colour stays for emphasis.
-export const TASKS_LINE_EDGE_INK = 'color-mix(in srgb, var(--vyasa-ink) 58%, transparent)';
-
-// An outline node carries its role colour in the border and the title, not in
-// the fill, so a figure of many roles stays quiet.
-export function tasksOutlineNodeStyle(color, active = false, dashed = false) {
-    const tint = color || 'var(--vyasa-ink)';
-    return {
-        background: `color-mix(in srgb, ${tint} ${active ? 12 : 6}%, var(--vyasa-paper))`,
-        border: `2px ${dashed ? 'dashed' : 'solid'} color-mix(in srgb, ${tint} 86%, transparent)`,
-        color: `color-mix(in srgb, ${tint} 82%, var(--vyasa-ink))`,
-    };
-}
-
-// The look-owned part of a task node's style. A card keeps the fill and border
-// it was given; an outline replaces them. A dashed node dashes either border.
-export function tasksNodeLookStyle(cardStyle, look, nodeColor, dashed = false) {
-    const tint = nodeColor || 'var(--vyasa-ink)';
-    const line = dashed ? 'dashed' : 'solid';
-    const looks = {
-        outline: tasksOutlineNodeStyle(nodeColor, false, dashed),
-        // The body draws the wobbling frame, so the text above it stays crisp.
-        sketch: { background: 'transparent', border: 'none', color: tint, overflow: 'visible' },
-        blueprint: { background: 'transparent', border: `1.3px ${line} color-mix(in srgb, var(--vyasa-ink) 85%, transparent)`, color: 'var(--vyasa-ink)', borderRadius: 0 },
-        tab: { background: 'var(--vyasa-paper)', border: `1px ${line} color-mix(in srgb, ${tint} 70%, transparent)`, color: tint, borderRadius: 4 },
-        station: { background: 'transparent', border: 'none', color: 'var(--vyasa-ink)', overflow: 'visible' },
-        // A point is where routes join; the lines are the mark.
-        point: { background: 'transparent', border: 'none', borderRadius: '50%', overflow: 'visible' },
-        circle: (() => {
-            const ring = tasksOutlineNodeStyle(nodeColor, false, dashed);
-            return { ...ring, border: ring.border.replace(/^2px/, '1.5px'), borderRadius: '50%' };
-        })(),
-        text: { background: 'transparent', border: 'none', color: `color-mix(in srgb, ${tint} 82%, var(--vyasa-ink))`, overflow: 'visible' },
-    };
-    const style = { ...cardStyle, ...(looks[look] || {}) };
-    if (dashed && typeof style.border === 'string') style.border = style.border.replace(' solid ', ' dashed ');
-    return style;
-}
-
-// The fill a lit node keeps, by look. A frame drawn by the body stays clear.
-const TASKS_LIT_FILLS = { sketch: 'transparent', station: 'transparent', blueprint: 'transparent', tab: 'var(--vyasa-paper)', point: 'transparent', text: 'transparent' };
-
-// A canvas restates the theme tokens for the graph pane, so every node and edge
-// inside picks the look up without knowing about it.
-export function tasksCanvasStyle(canvas) {
-    if (canvas !== 'blueprint') return {};
-    return {
-        '--vyasa-paper': '#123a63',
-        '--vyasa-ink': '#e8f1ff',
-        '--vyasa-primary': '#8fb3d9',
-        background: '#123a63',
-        color: '#e8f1ff',
-    };
-}
-
-export function tasksCanvasBackgroundProps(canvas, props) {
-    if (canvas !== 'blueprint') return props;
-    return { ...props, variant: 'lines', gap: 24, size: 1, color: 'rgba(143, 179, 217, 0.28)' };
-}
-
-// The stroke of an edge, by its path. A ribbon keeps the node ink and its own
-// width; a routed edge is a thin muted line unless it has a colour of its own.
-export function tasksEdgeStrokeStyle(edgePath, edgeColor, dashed = false) {
-    const metro = edgePath === 'octilinear';
-    return {
-        stroke: edgeColor || (edgePath === 'ribbon' ? 'currentColor' : (metro ? 'var(--vyasa-ink)' : TASKS_LINE_EDGE_INK)),
-        strokeWidth: tasksEdgeBaseWidth(edgePath),
-        ...(metro ? { strokeLinecap: 'round', strokeLinejoin: 'round' } : {}),
-        ...(dashed ? { strokeDasharray: metro ? '2 9' : '6 5' } : {}),
-    };
-}
-
-// The fill of a lit task node. Hover and focus both read it, so an outline node
-// keeps its look when it lights up.
+// The fill of a lit task node. Hover and focus both read it, so a node keeps
+// its look when it lights up.
 export function tasksActiveNodeFill(node, nodeColor, colorMix) {
-    const look = node.data?.__node_look__;
-    if (look === 'outline') return tasksOutlineNodeStyle(nodeColor, true).background;
-    if (TASKS_LIT_FILLS[look]) return TASKS_LIT_FILLS[look];
-    return tasksNodeBackground(nodeColor, '', colorMix, TASKS_NODE_BG_ACTIVE, false);
+    return tasksLookLitFill(node.data?.__node_look__, nodeColor)
+        ?? tasksNodeBackground(nodeColor, '', colorMix, TASKS_NODE_BG_ACTIVE, false);
 }
 
 export function tasksEdgeStrokeWidthForMode(mode) {

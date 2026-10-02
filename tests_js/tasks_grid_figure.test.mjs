@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-const { tasksActiveNodeFill, tasksCanvasStyle, tasksEdgeStrokeStyle, tasksHoverFocusEdge, tasksNodeLookStyle, tasksRouteHeadPath, tasksRoutePath, tasksTaperedArrowHeadPath } = await import('../vyasa/extensions_builtin/tasks/static/tasks_paint.js');
-const { sizeTaskNode, tasksArcRoute, tasksGlyphNodeSize, tasksParsePort, tasksCanvasOf, tasksEdgeCornerOf, tasksEdgePathOf, tasksIsDashed, tasksNodeLook, tasksOctilinearRoute, tasksOrthogonalRoute, tasksRectExitPoint, tasksRouteEdges, tasksStraightRoute } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
+const { tasksActiveNodeFill, tasksHoverFocusEdge, tasksRouteHeadPath, tasksRoutePath, tasksTaperedArrowHeadPath } = await import('../vyasa/extensions_builtin/tasks/static/tasks_paint.js');
+const { sizeTaskNode, tasksArcRoute, tasksGroupTitleSize, tasksParsePort, tasksCanvasOf, tasksEdgeCornerOf, tasksEdgePathOf, tasksIsDashed, tasksNodeLook, tasksOctilinearRoute, tasksOrthogonalRoute, tasksRectExitPoint, tasksRouteEdges, tasksStraightRoute } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
+const { tasksCanvasStyle, tasksEdgeStrokeStyle, tasksLookSize, tasksNodeLookStyle } = await import('../vyasa/extensions_builtin/tasks/static/tasks_theme.js');
 const { TASKS_LAYOUTS, buildArcTasksGraph, buildGridTasksGraph, buildLayeredTasksGraph } = await import('../vyasa/extensions_builtin/tasks/static/tasks_layouts.js');
 
 const nums = (path) => path.match(/-?\d*\.?\d+/g).map(Number);
@@ -305,9 +306,9 @@ test('an edge into a point meets its centre and draws no arrowhead', () => {
 });
 
 test('glyph looks size themselves; other looks take the layout width', () => {
-    assert.deepEqual(tasksGlyphNodeSize('point', 'tap'), { width: 8, height: 8 });
-    assert.deepEqual(tasksGlyphNodeSize('circle', '+'), { width: 36, height: 36 });
-    assert.equal(tasksGlyphNodeSize('outline', 'Gate'), null);
+    assert.deepEqual(tasksLookSize('point', 'tap', '', 220), { width: 8, height: 8 });
+    assert.deepEqual(tasksLookSize('circle', '+', '', 220), { width: 36, height: 36 });
+    assert.equal(tasksLookSize('card', 'Gate', '', 220), null);
     assert.equal(sizeTaskNode('+', 'task', 220, { look: 'circle' }).width, 36);
 });
 
@@ -405,6 +406,7 @@ test('detail cards skip style attrs, which say how an item is drawn, not what it
 test('a group title fits above its members, sized as the renderer sizes it', () => {
     const { nodes } = buildGridTasksGraph(stacks, stackView);
     const byId = Object.fromEntries(nodes.map((node) => [node.id, node]));
-    const titleHeight = sizeTaskNode('Encoder', 'groupTitle', byId.enc.width - 16).height;
+    // The grid's outline look gives a group a label title.
+    const titleHeight = tasksGroupTitleSize('outline', 'Encoder', byId.enc.width - 16).height;
     assert.ok(byId.enc.position.y + 8 + titleHeight < byId.norm.position.y, 'title clears the first member');
 });

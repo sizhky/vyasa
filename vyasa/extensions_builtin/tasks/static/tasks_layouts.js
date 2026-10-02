@@ -1,8 +1,9 @@
 import { logTasksDebug, logTasksDebugVerbose, rectSummary } from './tasks_diagnostics.js';
 import {
     layoutDisconnectedTaskNodes, packTaskChildRects, resolveTasksNodeImage, sizeTaskNode,
-    TASKS_PORT_STUB, tasksExpandedRootRect, tasksParsePort, tasksNodeLook, tasksNodeSubtitle,
+    TASKS_PORT_STUB, tasksExpandedRootRect, tasksGroupTitleSize, tasksParsePort, tasksNodeLook, tasksNodeSubtitle,
 } from './tasks_graph_core.js';
+import { tasksLookSize } from './tasks_theme.js';
 import {
     TASKS_LAYOUT_ERROR_MODE, appendProjectedEdge, buildGanttTasksGraph, buildLayoutErrorGraph,
     buildTasksGroupedState, buildTasksUngroupedState, buildVisibleTasksGraph, reduceTransitiveEdges,
@@ -34,11 +35,13 @@ const labelHeight = (label, width, kind = 'task') => sizeTaskNode(String(label |
 
 // A task's height under its own look, so an outline node has room for its
 // subtitle. `view` is the view's model, which carries the view and graph defaults.
-// A glyph look (point, circle, text) returns its own width; every other look
-// takes the width the layout gives it.
+// A look sizes its node with the metrics it is drawn with; a card look uses
+// the card text sizing for the kind the layout asks for.
 const taskSize = (task, width, view, layoutDefault, kind = 'task') => {
     const look = tasksNodeLook(task, view, layoutDefault);
-    return sizeTaskNode(String(task.label || task.id), look === 'outline' ? 'task' : kind, width, { look, subtitle: tasksNodeSubtitle(task, view) });
+    const label = String(task.label || task.id);
+    const subtitle = tasksNodeSubtitle(task, view);
+    return tasksLookSize(look, label, subtitle, width) || sizeTaskNode(label, kind, width, { look, subtitle });
 };
 const taskHeight = (...args) => taskSize(...args).height;
 
@@ -1081,7 +1084,8 @@ function gridGroupSpans(groups, placed, edges, colSizes, model) {
         const spanWidth = colSizes.slice(span.col[0], span.col[1] + 1).reduce((sum, size) => sum + size, 0);
         const titleWidth = Math.max(80, spanWidth + 2 * TASKS_GRID.frameInset - 16);
         const label = String(span.group.label || span.id);
-        return 8 + sizeTaskNode(label, 'groupTitle', titleWidth, { hasImage: Boolean(resolveTasksNodeImage(span.group, model)) }).height + 8;
+        const look = tasksNodeLook(span.group, model, TASKS_LAYOUTS.grid.nodeLook);
+        return 8 + tasksGroupTitleSize(look, label, titleWidth, { hasImage: Boolean(resolveTasksNodeImage(span.group, model)) }).height + 8;
     };
     const boundary = { top: (span) => span.row[0], bottom: (span) => span.row[1], left: (span) => span.col[0], right: (span) => span.col[1] };
     const inset = (span, side) => {

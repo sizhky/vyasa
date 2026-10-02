@@ -1,9 +1,9 @@
 import { renderTasksInlineLinks, renderTasksNodeLinkBadge, tasksIsIconifyImage, tasksNodeLinkKinds } from './tasks_cards.js';
 import { logTasksDebug } from './tasks_diagnostics.js';
 import {
-    TASKS_OUTLINE_FONT, TASKS_OUTLINE_SUBTITLE_FONT_SIZE, TASKS_OUTLINE_TITLE_FONT_SIZE,
     normalizeTasksNodeImageUrl, tasksGraphCornerPath, tasksIsDashed, tasksNodeSubtitle, tasksReviewTarget,
 } from './tasks_graph_core.js';
+import { tasksGroupTitleLook, tasksLookBody } from './tasks_theme.js';
 import { TASKS_DEFAULT_CARD_STATES, tasksLogicalNodeId, tasksNodeHasChildren } from './tasks_graph_model.js';
 import { TASKS_DONE_ACCENT, TASKS_NODE_LABEL_FONT_SIZE, tasksColorOverlay } from './tasks_paint.js';
 
@@ -384,8 +384,8 @@ export function createTasksNodeRenderer(getState) {
                             }, data?.label || '');
                         }
                         if (data?.__kind__ === 'groupTitle') {
-                            const titleLookBody = tasksLookBody(React, data?.__node_look__, data, '');
-                            const titleFrame = data?.__node_look__ === 'sketch' ? titleLookBody.frame : null;
+                            // A figure group's title is a label on its frame; a card group's is a bar.
+                            const titleLabel = tasksGroupTitleLook(data?.__node_look__, data?.__group_color__);
                             const handleCollapse = (e) => {
                                 e.stopPropagation();
                                 if (egoMode) return;
@@ -405,13 +405,12 @@ export function createTasksNodeRenderer(getState) {
         	                            justifyContent: 'space-between',
                                     gap: '8px',
                                     padding: '6px 10px',
-                                    fontFamily: titleLookBody.body.fontFamily,
                                     fontWeight: '600',
                                     fontSize: '16px',
                                     position: 'relative',
+                                    ...(titleLabel?.body || {}),
                                 }
                             },
-                                titleFrame,
                                 linkKinds.length ? renderTasksNodeLinkBadge(React, { right: '32px', kinds: linkKinds }) : null,
                                 React.createElement('span', {
                                     style: {
@@ -540,7 +539,7 @@ export function createTasksNodeRenderer(getState) {
                             );
                         }
                         // A figure look restyles the body; a card look keeps it as is.
-                        const look = tasksLookBody(React, data?.__node_look__, data, tasksNodeSubtitle(data, model));
+                        const look = tasksLookBody(React, data?.__node_look__, { dashed: tasksIsDashed(data), kind: data?.__look_kind__ }, tasksNodeSubtitle(data, model));
                         return React.createElement('div', {
                             ...reviewAttrs,
                             className: 'vyasa-task-node-body',
@@ -606,91 +605,6 @@ export function createTasksNodeRenderer(getState) {
                             ...renderHandles('source')
                         );
     };
-}
-
-const TASKS_HAND_FONT = '"Comic Neue", "Chalkboard SE", "Marker Felt", "Comic Sans MS", cursive';
-const TASKS_SKETCH_FILTER_ID = 'vyasa-kg-sketch';
-
-// One SVG filter per page gives every sketch frame the same hand wobble.
-function ensureTasksSketchFilter() {
-    if (typeof document === 'undefined' || document.getElementById(TASKS_SKETCH_FILTER_ID)) return;
-    const holder = document.createElement('div');
-    holder.setAttribute('aria-hidden', 'true');
-    holder.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
-    holder.innerHTML = `<svg width="0" height="0"><filter id="${TASKS_SKETCH_FILTER_ID}"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="3"/><feDisplacementMap in="SourceGraphic" scale="3"/></filter></svg>`;
-    document.body.appendChild(holder);
-}
-
-/**
- * The parts of a node body a look owns: body type, a frame drawn behind the
- * label, how the title is wrapped, and what follows it. A card returns no
- * overrides, so the card body is unchanged.
- */
-export function tasksLookBody(React, look, data, subtitle) {
-    const h = React.createElement;
-    const dashed = tasksIsDashed(data);
-    const mono = { fontFamily: TASKS_OUTLINE_FONT, fontSize: `${TASKS_OUTLINE_TITLE_FONT_SIZE}px`, fontWeight: '500' };
-    const subtitleLine = (align = 'center', inset = '0') => (subtitle ? h('span', {
-        key: 'subtitle',
-        style: { display: 'block', marginTop: '3px', padding: `0 ${inset}`, fontSize: `${TASKS_OUTLINE_SUBTITLE_FONT_SIZE}px`, fontWeight: 400, lineHeight: 1.35, textAlign: align, color: 'color-mix(in srgb, var(--vyasa-ink) 64%, transparent)' },
-    }, subtitle) : null);
-    const plain = (title) => title;
-    if (look === 'outline' || look === 'blueprint') return { body: mono, title: plain, after: [subtitleLine()] };
-    if (look === 'point') return { body: { padding: '0' }, title: () => null, after: [] };
-    if (look === 'circle' || look === 'text') {
-        return { body: { ...mono, padding: '0', justifyContent: 'center', textAlign: 'center', lineHeight: 1.3 }, title: plain, after: [] };
-    }
-    if (look === 'sketch') {
-        ensureTasksSketchFilter();
-        return {
-            body: { fontFamily: TASKS_HAND_FONT, fontSize: '15px', fontWeight: '500' },
-            // The frame wobbles; the title sits above it in plain ink.
-            frame: h('div', {
-                'aria-hidden': 'true',
-                style: {
-                    position: 'absolute', inset: '1px', borderRadius: '3px', pointerEvents: 'none',
-                    border: `1.8px ${dashed ? 'dashed' : 'solid'} currentColor`,
-                    background: 'repeating-linear-gradient(-41deg, color-mix(in srgb, currentColor 34%, transparent) 0 1.6px, transparent 1.6px 7px)',
-                    filter: `url(#${TASKS_SKETCH_FILTER_ID})`,
-                },
-            }),
-            title: (title) => h('span', { style: { color: 'var(--vyasa-ink)' } }, title),
-            after: [subtitleLine()],
-        };
-    }
-    if (look === 'tab') {
-        const kind = String(data?.__look_kind__ || '').trim();
-        return {
-            // No side padding: the band spans the whole box, and each line
-            // under it carries its own inset.
-            body: { ...mono, fontSize: '12px', flexDirection: 'column', alignItems: 'stretch', justifyContent: 'flex-start', textAlign: 'left', padding: '0 0 8px' },
-            // C4: the name on a band in the role colour, then [kind], then the subtitle.
-            title: (title) => h('span', {
-                style: { display: 'block', marginBottom: '6px', padding: '4px 10px', background: 'currentColor', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
-            }, h('span', { style: { color: 'var(--vyasa-paper)', fontWeight: 650 } }, title)),
-            after: [
-                kind ? h('span', { key: 'kind', style: { display: 'block', padding: '0 10px', fontSize: '10.5px', fontWeight: 500 } }, `[${kind}]`) : null,
-                subtitleLine('left', '10px'),
-            ],
-        };
-    }
-    if (look === 'station') {
-        return {
-            body: { fontSize: '12px', fontWeight: '650', padding: '0', justifyContent: 'flex-start', flexDirection: 'column', alignItems: 'center', overflow: 'visible' },
-            // The dot sits at the centre, where routes end; the name sits above it.
-            frame: h('div', {
-                'aria-hidden': 'true',
-                style: {
-                    position: 'absolute', left: '50%', top: '50%', width: '16px', height: '16px', transform: 'translate(-50%, -50%)',
-                    boxSizing: 'border-box', borderRadius: '50%', background: 'var(--vyasa-paper)',
-                    border: `3px ${dashed ? 'dashed' : 'solid'} var(--vyasa-ink)`, pointerEvents: 'none', zIndex: 2,
-                },
-            }),
-            title: (title) => h('span', { style: { display: 'block', lineHeight: '14px', whiteSpace: 'nowrap' } }, title),
-            after: [],
-        };
-    }
-    return { body: {}, title: plain, after: [] };
 }
 
 export const renderTasksSequenceLaneCap = (React, accent, stage, label) => React.createElement('div', {
