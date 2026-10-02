@@ -123,26 +123,6 @@ export function createTasksNodeRenderer(getState) {
                                 }, 'Fix the view in the pack schema. Every other view still works.')
                             );
                         }
-                        if (data?.__kind__ === 'gridFrame') {
-                            const tint = data.__frame_color__ || 'var(--vyasa-ink)';
-                            return React.createElement('div', {
-                                style: {
-                                    width: '100%',
-                                    height: '100%',
-                                    boxSizing: 'border-box',
-                                    background: tasksIsDashed(data) ? 'transparent' : `color-mix(in srgb, ${tint} 9%, transparent)`,
-                                    border: `1.5px ${tasksIsDashed(data) ? 'dashed' : 'solid'} color-mix(in srgb, ${tint} 70%, transparent)`,
-                                    borderRadius: '3px',
-                                    color: `color-mix(in srgb, ${tint} 78%, var(--vyasa-ink))`,
-                                    fontFamily: TASKS_OUTLINE_FONT,
-                                    fontSize: '12px',
-                                    fontWeight: 600,
-                                    letterSpacing: '.06em',
-                                    textTransform: 'uppercase',
-                                    padding: '8px 0 0 12px',
-                                },
-                            }, data?.label || '');
-                        }
                         if (data?.__kind__ === 'layeredBand') {
                             const palette = model?.node_color_palettes?.[data.__layered_attr__ || ''] || {};
                             const tint = palette[data.__layered_value__] || 'currentColor';
@@ -448,7 +428,8 @@ export function createTasksNodeRenderer(getState) {
                                         wordBreak: 'break-word',
                                     }
                                 }, renderNodeImage(20, { marginTop: '1px' }), React.createElement('span', { style: { minWidth: 0 } }, renderTasksInlineLinks(data?.label || data.sourceGroupId || id, { interactive: linksInteractive, onInactiveClick: handleInactiveLinkClick, currentPath: sourceModel?.document_path || '', nodeLabels: edgeNodeLabels }))),
-                                egoMode ? null : React.createElement('button', {
+                                // A layout that holds the group open offers no collapse.
+                                egoMode || data?.__layout_open__ ? null : React.createElement('button', {
                                     onClick: handleCollapse,
                                     style: { flex: '0 0 auto', border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px', opacity: '0.55', padding: '0' }
                                 }, '−')
@@ -456,7 +437,7 @@ export function createTasksNodeRenderer(getState) {
                         }
                         const isGroup = data?.__kind__ === 'group';
                         const canExpand = tasksNodeHasChildren(id, model);
-                        const isExpanded = expanded.has(id);
+                        const isExpanded = Boolean(data?.__layout_open__) || expanded.has(id);
                         const labelContent = renderTasksInlineLinks(data?.label || id, { interactive: linksInteractive, onInactiveClick: handleInactiveLinkClick, currentPath: sourceModel?.document_path || '', nodeLabels: edgeNodeLabels });
                         if (data?.__gantt) {
                             return React.createElement('div', {

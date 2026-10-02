@@ -118,6 +118,61 @@ const tasksCaptionElement = (holder, style, attr = 'caption') => {
         : window.React.createElement('div', props, plain);
 };
 
+// The frame of a group, open or closed, in the free graph and in a fixed layout.
+// A group's border is one pixel heavier than a card's look, and a look with no
+// border gets a ring instead.
+function tasksGroupFrameStyle(group, { groupColor, isExpanded, nodeLook, transparent = false, fillExpanded = 0, fillCollapsed = 14, borderMix = 70 }) {
+    const background = isExpanded
+        ? tasksGroupBackground(groupColor, '', TASKS_GROUP_EXPANDED_BG, { mode: 'transparent', intensity: fillExpanded })
+        : tasksGroupBackground(groupColor, '', TASKS_GROUP_BG, { intensity: fillCollapsed });
+    const border = groupColor
+        ? `1px solid color-mix(in srgb, var(--vyasa-paper) ${100 - borderMix}%, ${groupColor} ${borderMix}%)`
+        : TASKS_NODE_BORDER;
+    const lookStyle = tasksNodeLookStyle({ background: transparent ? 'transparent' : background, border }, nodeLook, groupColor, tasksIsDashed(group));
+    if (typeof lookStyle.border === 'string') {
+        lookStyle.border = lookStyle.border.replace(/^(\d+(?:\.\d+)?)px\b/, (_, width) => `${Number(width) + 1}px`);
+    }
+    const ring = !lookStyle.border || lookStyle.border === 'none'
+        ? `0 0 0 1px color-mix(in srgb, ${groupColor || 'var(--vyasa-ink)'} 42%, transparent)`
+        : 'none';
+    return { lookStyle, ring };
+}
+
+// The title bar of an open group: its own node, laid over the frame's top-left.
+function tasksGroupTitleFlowNode(group, { position, depth, look, color, opacity = 1, model, nodeLabels }) {
+    const titleWidth = Math.max(80, group.width - 16);
+    const titleImage = resolveTasksNodeImage(group, model);
+    const titleHeight = sizeTaskNode(group.label || group.id, 'groupTitle', titleWidth, { hasImage: Boolean(titleImage), nodeLabels }).height;
+    const titleLookStyle = tasksNodeLookStyle({ background: TASKS_GROUP_TITLE_BG, border: 'none' }, look, color, tasksIsDashed(group));
+    if (typeof titleLookStyle.border === 'string') {
+        titleLookStyle.border = titleLookStyle.border.replace(/^(\d+(?:\.\d+)?)px\b/, (_, width) => `${Number(width) + 1}px`);
+    }
+    const titleZ = TASKS_TITLE_Z + depth;
+    return {
+        id: `${group.id}__title`,
+        type: 'vyasaTask',
+        position: { x: position.x + 8, y: position.y + 8 },
+        data: { ...group, id: `${group.id}__title`, sourceGroupId: group.id, __kind__: 'groupTitle', __node_image__: titleImage, __node_look__: look, __group_color__: color, __projection_branch_opacity__: opacity },
+        style: {
+            width: titleWidth,
+            height: titleHeight,
+            zIndex: titleZ,
+            ...titleLookStyle,
+            borderRadius: titleLookStyle.borderRadius ?? 6,
+            boxShadow: !titleLookStyle.border || titleLookStyle.border === 'none'
+                ? `0 0 0 1px color-mix(in srgb, ${color} 42%, transparent)`
+                : 'none',
+            overflow: 'hidden',
+            opacity,
+            pointerEvents: 'auto',
+        },
+        zIndex: titleZ,
+        className: `vyasa-tasks-node--${tasksGraphNodeHitArea('groupTitle')}`,
+        draggable: false,
+        selectable: isTasksGraphNodeSelectable('groupTitle'),
+    };
+}
+
 const TASKS_SPACING_PRESETS = {
     compact: { nodeSpacing: 24, layerSpacing: 64, collisionGap: 56, groupPadding: 28, edgeLabelWidth: 220 },
     normal: { nodeSpacing: 44, layerSpacing: 96, collisionGap: 96, groupPadding: 40, edgeLabelWidth: 240 },
@@ -2660,15 +2715,11 @@ async function renderTasksGraphs(rootElement = document) {
                             const laneColor = lane
                                 ? (resolveTasksNodeColor(lane, model, activeColorBy, activeColorPalette) || defaultNodeColor)
                                 : '';
-                            // A grid frame takes the colour its group would have as a node.
-                            const frameColor = node.__kind__ === 'gridFrame'
-                                ? (resolveTasksNodeColor(node, model, activeColorBy, activeColorPalette) || defaultNodeColor)
-                                : '';
                             return {
                                 id: node.id,
                                 type: 'vyasaTask',
                                 position: node.position,
-                                data: laneColor ? { ...node, __sequence_color__: laneColor } : (frameColor ? { ...node, __frame_color__: frameColor } : node),
+                                data: laneColor ? { ...node, __sequence_color__: laneColor } : node,
                                 // The wrapper stays transparent to the pointer even when
                                 // the node is selectable: only the small part the
                                 // renderer marks as interactive takes a click.
@@ -2689,6 +2740,31 @@ async function renderTasksGraphs(rootElement = document) {
                         const useOverlay = tasksUseColorOverlay(colorLevels);
                         const cardState = tasksCardStateForNode(sourceModel, nodeStates, logicalNodeId, cardStates);
                         const stateAccent = cardState.color || TASKS_DONE_ACCENT;
+                        if (node.__kind__ === 'group') {
+                            // A layout that frames a group holds it open: the frame is the group node.
+                            const groupLook = tasksNodeLook(node, model, tasksFixedLayout(mode)?.nodeLook);
+                            const { lookStyle, ring } = tasksGroupFrameStyle(node, { groupColor: nodeColor, isExpanded: true, nodeLook: groupLook });
+                            const groupZ = TASKS_GROUP_BG_Z + (Number(node.__depth__) || 0);
+                            return {
+                                id: node.id,
+                                type: 'vyasaTask',
+                                position: node.position,
+                                data: { ...node, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color, __has_note__: hasNote, __node_look__: groupLook, __group_color__: nodeColor, __layout_open__: true },
+                                style: {
+                                    width: node.width,
+                                    height: node.height,
+                                    zIndex: groupZ,
+                                    borderRadius: 12,
+                                    boxShadow: isChecked ? `0 0 0 2px color-mix(in srgb, ${stateAccent} 34%, transparent)` : ring,
+                                    overflow: 'hidden',
+                                    ...lookStyle,
+                                },
+                                zIndex: groupZ,
+                                className: `vyasa-tasks-node--${tasksGraphNodeHitArea('group', true)} vyasa-tasks-node--expanded-group`,
+                                draggable: false,
+                                selectable: isTasksGraphNodeSelectable('group', true),
+                            };
+                        }
                         if (node.__sequence_lifeline__) {
                             return {
                                 id: node.id,
@@ -2731,6 +2807,14 @@ async function renderTasksGraphs(rootElement = document) {
                             selectable: true,
                         };
                     });
+                    nodesWithStyle.push(...nodesWithStyle.filter((node) => node.data?.__layout_open__).map((node) => tasksGroupTitleFlowNode(node.data, {
+                        position: node.position,
+                        depth: Number(node.data.__depth__) || 0,
+                        look: node.data.__node_look__,
+                        color: node.data.__group_color__,
+                        model,
+                        nodeLabels: edgeNodeLabels,
+                    })));
                     const authoredRawEdges = (rawGraph.edges || []).filter((edge) => !edge.__reference__);
                     // A layout that declares authoredHandles has already pinned every
                     // handle itself -- a sequence row puts both ends at the row height --
@@ -2916,30 +3000,21 @@ async function renderTasksGraphs(rootElement = document) {
                     const groupBorderMix = isProjectionGroup ? 28 : 70;
                     const cardState = tasksCardStateForNode(sourceModel, nodeStates, logicalNodeId, cardStates);
                     const stateAccent = cardState.color || TASKS_DONE_ACCENT;
-                    const background = n.__kind__ === 'group'
-                        ? (isExpanded
-                            ? tasksGroupBackground(groupColor, '', TASKS_GROUP_EXPANDED_BG, { mode: 'transparent', intensity: groupFillExpanded })
-                            : tasksGroupBackground(groupColor, '', TASKS_GROUP_BG, { intensity: groupFillCollapsed }))
-                        : tasksNodeBackground(nodeColor, '', colorMix, TASKS_NODE_BG, false);
-                    const border = groupColor
-                        ? (n.__kind__ === 'group'
-                            ? `1px solid color-mix(in srgb, var(--vyasa-paper) ${100 - groupBorderMix}%, ${groupColor} ${groupBorderMix}%)`
-                            : `1px solid color-mix(in srgb, var(--vyasa-paper) 30%, ${nodeColor} 70%)`)
-                        : TASKS_NODE_BORDER;
                     const isGroup = n.__kind__ === 'group';
                     const nodeLook = (isGroup || !useOverlay) ? tasksNodeLook(n, model) : 'card';
-                    const lookStyle = tasksNodeLookStyle(
-                        { background: useOverlay ? 'transparent' : background, border },
+                    const groupFrame = isGroup
+                        ? tasksGroupFrameStyle(n, { groupColor, isExpanded, nodeLook, transparent: useOverlay, fillExpanded: groupFillExpanded, fillCollapsed: groupFillCollapsed, borderMix: groupBorderMix })
+                        : null;
+                    const lookStyle = groupFrame?.lookStyle || tasksNodeLookStyle(
+                        {
+                            background: useOverlay ? 'transparent' : tasksNodeBackground(nodeColor, '', colorMix, TASKS_NODE_BG, false),
+                            border: groupColor ? `1px solid color-mix(in srgb, var(--vyasa-paper) 30%, ${nodeColor} 70%)` : TASKS_NODE_BORDER,
+                        },
                         nodeLook,
-                        isGroup ? groupColor : nodeColor,
+                        nodeColor,
                         tasksIsDashed(n),
                     );
-                    if (isGroup && typeof lookStyle.border === 'string') {
-                        lookStyle.border = lookStyle.border.replace(/^(\d+(?:\.\d+)?)px\b/, (_, width) => `${Number(width) + 1}px`);
-                    }
-                    const groupEmphasis = isGroup && (!lookStyle.border || lookStyle.border === 'none')
-                        ? `0 0 0 1px color-mix(in srgb, ${groupColor || 'var(--vyasa-ink)'} 42%, transparent)`
-                        : 'none';
+                    const groupEmphasis = groupFrame?.ring || 'none';
                     const branchOpacity = isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1;
                     const rfNode = {
                         id: n.id,
@@ -2982,46 +3057,15 @@ async function renderTasksGraphs(rootElement = document) {
                 for (const n of derived.nodes) {
                     if (n.__kind__ !== 'group' || !effectiveExpandedSet.has(n.id)) continue;
                     const groupStyle = groupStylesById.get(n.id) || {};
-                    const position = absolutePosition(n);
-                    const titleZ = TASKS_TITLE_Z + depthOf(n);
-                    const titleWidth = Math.max(80, n.width - 16);
-                    const titleImage = resolveTasksNodeImage(n, model);
-                    const titleHeight = sizeTaskNode(n.label || n.id, 'groupTitle', titleWidth, { hasImage: Boolean(titleImage), nodeLabels: edgeNodeLabels }).height;
-                    const titleOpacity = isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1;
-                    const titleLook = groupStyle.__node_look__ || 'card';
-                    const titleColor = groupStyle.__group_color__ || defaultNodeColor;
-                    const titleLookStyle = tasksNodeLookStyle(
-                        { background: TASKS_GROUP_TITLE_BG, border: 'none' },
-                        titleLook,
-                        titleColor,
-                        tasksIsDashed(n),
-                    );
-                    if (typeof titleLookStyle.border === 'string') {
-                        titleLookStyle.border = titleLookStyle.border.replace(/^(\d+(?:\.\d+)?)px\b/, (_, width) => `${Number(width) + 1}px`);
-                    }
-                    baseNodes.push({
-                        id: `${n.id}__title`,
-                        type: 'vyasaTask',
-                        position: { x: position.x + 8, y: position.y + 8 },
-                        data: { ...n, id: `${n.id}__title`, sourceGroupId: n.id, __kind__: 'groupTitle', __node_image__: titleImage, __node_look__: titleLook, __group_color__: titleColor, __projection_branch_opacity__: titleOpacity },
-                        style: {
-                            width: titleWidth,
-                            height: titleHeight,
-                            zIndex: titleZ,
-                            ...titleLookStyle,
-                            borderRadius: titleLookStyle.borderRadius ?? 6,
-                            boxShadow: !titleLookStyle.border || titleLookStyle.border === 'none'
-                                ? `0 0 0 1px color-mix(in srgb, ${titleColor} 42%, transparent)`
-                                : 'none',
-                            overflow: 'hidden',
-                            opacity: titleOpacity,
-                            pointerEvents: 'auto',
-                        },
-                        zIndex: titleZ,
-                        className: `vyasa-tasks-node--${tasksGraphNodeHitArea('groupTitle')}`,
-                        draggable: false,
-                        selectable: isTasksGraphNodeSelectable('groupTitle'),
-                    });
+                    baseNodes.push(tasksGroupTitleFlowNode(n, {
+                        position: absolutePosition(n),
+                        depth: depthOf(n),
+                        look: groupStyle.__node_look__ || 'card',
+                        color: groupStyle.__group_color__ || defaultNodeColor,
+                        opacity: isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1,
+                        model,
+                        nodeLabels: edgeNodeLabels,
+                    }));
                 }
                 const authoredDerivedEdges = (derived.edges || []).filter((edge) => !edge.__reference__);
                 const solvedAnchors = buildTaskEdgeAnchors(baseNodes, authoredDerivedEdges);

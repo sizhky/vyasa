@@ -321,7 +321,7 @@ test('grid centres a glyph in its column, and a glyph-only column is narrow', ()
     assert.equal(nodes.wave.position.x - (nodes.box.position.x + nodes.box.width), 56 + 40 + 56);
 });
 
-test('grid draws a frame around each group, an outer frame around the inner one', () => {
+test('grid draws each group as its own group node, the outer one around the inner one', () => {
     const { nodes } = buildGridTasksGraph({
         groups: [{ id: 'model', label: 'Model', dashed: 'true' }, { id: 'enc', label: 'Encoder', parent_group_id: 'model' }],
         tasks: [
@@ -330,15 +330,17 @@ test('grid draws a frame around each group, an outer frame around the inner one'
         ],
     }, view);
     const byId = Object.fromEntries(nodes.map((node) => [node.id, node]));
-    const inner = byId.__frame_enc;
-    const outer = byId.__frame_model;
+    const inner = byId.enc;
+    const outer = byId.model;
     const contains = (frame, rect) => frame.position.x < rect.position.x && frame.position.y < rect.position.y
         && frame.position.x + frame.width > rect.position.x + rect.width && frame.position.y + frame.height > rect.position.y + rect.height;
-    assert.equal(inner.__kind__, 'gridFrame');
+    // The frame is the group itself, so a click or hover on it reaches the group's id.
+    assert.equal(inner.__kind__, 'group');
+    assert.equal(inner.label, 'Encoder');
     assert.ok(contains(inner, byId.mha) && !contains(inner, byId.in));
     assert.ok(contains(outer, inner) && contains(outer, byId.in));
-    assert.ok(inner.__z__ > outer.__z__);
-    assert.ok(TASKS_LAYOUTS.grid.chromeKinds.includes('gridFrame'));
+    assert.ok(inner.__depth__ > outer.__depth__);
+    assert.deepEqual(TASKS_LAYOUTS.grid.chromeKinds, []);
 });
 
 // Two sibling stacks inside one outer frame, the shape of an encoder-decoder figure.
@@ -363,7 +365,7 @@ const overlaps = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b
 
 test('no frame covers a node outside its group, whatever the title and ports need', () => {
     const { nodes } = buildGridTasksGraph(stacks, stackView);
-    const frames = nodes.filter((node) => node.__kind__ === 'gridFrame');
+    const frames = nodes.filter((node) => node.__kind__ === 'group');
     const members = (groupId) => {
         const groups = new Set([groupId]);
         stacks.groups.forEach(() => stacks.groups.forEach((group) => groups.has(group.parent_group_id) && groups.add(group.id)));
@@ -371,7 +373,7 @@ test('no frame covers a node outside its group, whatever the title and ports nee
     };
     assert.equal(frames.length, 3);
     for (const frame of frames) {
-        const own = members(frame.id.replace('__frame_', ''));
+        const own = members(frame.id);
         for (const node of nodes.filter((item) => item.__kind__ === 'task' && !own.has(item.id))) {
             assert.ok(!overlaps(rectOf(frame), rectOf(node)), `${frame.id} covers ${node.id}`);
         }
@@ -380,9 +382,10 @@ test('no frame covers a node outside its group, whatever the title and ports nee
 
 test('a residual route into a left port stays inside its frame', () => {
     const { nodes, edges } = buildGridTasksGraph(stacks, stackView);
-    const rf = nodes.map((node) => ({ id: node.id, position: node.position, width: node.width, height: node.height, data: { __kind__: node.__kind__, __node_look__: node.node_look || 'outline' } }));
+    // The renderer marks a layout-held group open, so routes run inside it.
+    const rf = nodes.map((node) => ({ id: node.id, position: node.position, width: node.width, height: node.height, className: node.__kind__ === 'group' ? 'vyasa-tasks-node--expanded-group' : '', data: { __kind__: node.__kind__, __node_look__: node.node_look || 'outline' } }));
     const [edge] = tasksRouteEdges(rf, edges.map((item) => ({ ...item, data: { __edge_path__: 'orthogonal' } })));
-    const frame = rectOf(nodes.find((node) => node.id === '__frame_enc'));
+    const frame = rectOf(nodes.find((node) => node.id === 'enc'));
     assert.ok(edge.data.__route__.every((point) => point.x > frame.x && point.x < frame.x + frame.width));
 });
 
@@ -397,4 +400,11 @@ test('detail cards skip style attrs, which say how an item is drawn, not what it
     const edge = { id: 'e', source: 'a', target: 'b', target_port: 'left', edge_path: 'line', edge_corner: 'round', shape: 'Q' };
     assert.deepEqual(tasksNodeMetaEntries(node).map((entry) => entry.key), ['op']);
     assert.deepEqual(tasksEdgeMetaEntries(edge).map((entry) => entry.key), ['shape']);
+});
+
+test('a group title fits above its members, sized as the renderer sizes it', () => {
+    const { nodes } = buildGridTasksGraph(stacks, stackView);
+    const byId = Object.fromEntries(nodes.map((node) => [node.id, node]));
+    const titleHeight = sizeTaskNode('Encoder', 'groupTitle', byId.enc.width - 16).height;
+    assert.ok(byId.enc.position.y + 8 + titleHeight < byId.norm.position.y, 'title clears the first member');
 });
