@@ -847,9 +847,14 @@ export function tasksNodeLook(node, model, layoutDefault = 'card') {
 /**
  * >>> tasksEdgeCornerOf({}, { edge_corner: 'round' })
  * 'round'
+ * >>> tasksEdgeCornerOf({}, {}, 'orthogonal')
+ * 'round'
+ * >>> tasksEdgeCornerOf({ edge_corner: 'sharp' }, {}, 'orthogonal')
+ * 'sharp'
  */
-export function tasksEdgeCornerOf(edge, model) {
-    return tasksCascade(TASKS_EDGE_CORNERS, edge?.edge_corner, model?.edge_corner) || 'sharp';
+export function tasksEdgeCornerOf(edge, model, edgePath = '') {
+    return tasksCascade(TASKS_EDGE_CORNERS, edge?.edge_corner, model?.edge_corner)
+        || (edgePath === 'orthogonal' ? 'round' : 'sharp');
 }
 
 // The canvas is view-wide: a view, then @graph, then the site default.
@@ -924,13 +929,31 @@ export function tasksIsDashed(item) {
  * >>> tasksOrthogonalRoute({ x: 0, y: 0, width: 100, height: 40 }, { x: 0, y: 100, width: 100, height: 40 }, [], 40)
  * [{ x: 50, y: 40 }, { x: 50, y: 97 }]
  */
-export function tasksOrthogonalRoute(source, target, obstacles = [], gap = 40, targetGap = 3) {
+export function tasksOrthogonalRoute(source, target, obstacles = [], gap = 40, targetGap = 3, reservedRoutes = []) {
     const gapX = Number(gap?.x ?? gap);
     const gapY = Number(gap?.y ?? gap);
     const cx = (r) => r.x + r.width / 2;
     const cy = (r) => r.y + r.height / 2;
     const right = (r) => r.x + r.width;
     const bottom = (r) => r.y + r.height;
+    const corridor = {
+        left: Math.min(source.x, target.x) - gapX * 2 - 48,
+        right: Math.max(right(source), right(target)) + gapX * 2 + 48,
+        top: Math.min(source.y, target.y) - gapY * 2 - 48,
+        bottom: Math.max(bottom(source), bottom(target)) + gapY * 2 + 48,
+    };
+    const priorRoutes = reservedRoutes.map((route, index) => {
+        const points = route.points || route;
+        const bounds = points.reduce((rect, point) => ({
+            left: Math.min(rect.left, point.x), right: Math.max(rect.right, point.x),
+            top: Math.min(rect.top, point.y), bottom: Math.max(rect.bottom, point.y),
+        }), { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity });
+        const distanceX = Math.max(0, corridor.left - bounds.right, bounds.left - corridor.right);
+        const distanceY = Math.max(0, corridor.top - bounds.bottom, bounds.top - corridor.bottom);
+        return { points, index, distance: distanceX + distanceY };
+    }).filter((route) => route.distance === 0)
+        .sort((a, b) => a.index - b.index)
+        .slice(-16);
     const candidates = [];
     const push = (points) => candidates.push(points);
     // Straight: the rects overlap on one axis, so one run joins facing sides.
@@ -958,21 +981,68 @@ export function tasksOrthogonalRoute(source, target, obstacles = [], gap = 40, t
     if (outsideY(source, cy(target)) && outsideX(target, cx(source))) {
         push([{ x: cx(source), y: sideY(source, cy(target)) }, { x: cx(source), y: cy(target) }, { x: sideX(target, cx(source), targetGap), y: cy(target) }]);
     }
-    // Z or U: the middle run sits in a gutter beside either end.
-    for (const x of [source.x - gapX / 2, right(source) + gapX / 2, target.x - gapX / 2, right(target) + gapX / 2]) {
+    // Z or U: the middle run sits in a gutter beside either end or a reserved lane.
+    const verticalTracks = [source.x - gapX / 2, right(source) + gapX / 2, target.x - gapX / 2, right(target) + gapX / 2];
+    const horizontalTracks = [source.y - gapY / 2, bottom(source) + gapY / 2, target.y - gapY / 2, bottom(target) + gapY / 2];
+    const laneSpacing = 14;
+    for (const reserved of priorRoutes) {
+        const points = reserved.points;
+        for (let index = 1; index < points.length; index++) {
+            const prev = points[index - 1];
+            const point = points[index];
+            if (Math.abs(point.x - prev.x) < 1) {
+                for (let lane = 1; lane <= 2; lane++) verticalTracks.push(point.x - lane * laneSpacing, point.x + lane * laneSpacing);
+            } else if (Math.abs(point.y - prev.y) < 1) {
+                for (let lane = 1; lane <= 2; lane++) horizontalTracks.push(point.y - lane * laneSpacing, point.y + lane * laneSpacing);
+            }
+        }
+    }
+    for (const x of new Set(verticalTracks)) {
         if (!outsideX(source, x) || !outsideX(target, x)) continue;
         push([{ x: sideX(source, x), y: cy(source) }, { x, y: cy(source) }, { x, y: cy(target) }, { x: sideX(target, x, targetGap), y: cy(target) }]);
     }
-    for (const y of [source.y - gapY / 2, bottom(source) + gapY / 2, target.y - gapY / 2, bottom(target) + gapY / 2]) {
+    for (const y of new Set(horizontalTracks)) {
         if (!outsideY(source, y) || !outsideY(target, y)) continue;
         push([{ x: cx(source), y: sideY(source, y) }, { x: cx(source), y }, { x: cx(target), y }, { x: cx(target), y: sideY(target, y, targetGap) }]);
     }
     const others = obstacles.filter((r) => r !== source && r !== target);
     const hits = (a, b) => others.filter((r) => Math.min(a.x, b.x) < right(r) - 1 && Math.max(a.x, b.x) > r.x + 1
         && Math.min(a.y, b.y) < bottom(r) - 1 && Math.max(a.y, b.y) > r.y + 1).length;
+    const edgeConflicts = (a, b) => priorRoutes.reduce((total, reserved) => {
+        const points = reserved.points;
+        return total + points.slice(1).reduce((score, point, index) => {
+            const prev = points[index];
+            const candidateVertical = Math.abs(a.x - b.x) < 1;
+            const candidateHorizontal = Math.abs(a.y - b.y) < 1;
+            const reservedVertical = Math.abs(prev.x - point.x) < 1;
+            const reservedHorizontal = Math.abs(prev.y - point.y) < 1;
+            if (candidateVertical && reservedVertical && Math.abs(a.x - prev.x) < 1) {
+                const overlap = Math.min(Math.max(a.y, b.y), Math.max(prev.y, point.y))
+                    - Math.max(Math.min(a.y, b.y), Math.min(prev.y, point.y));
+                return score + (overlap > 18 ? 10000 + overlap * 20 : 0);
+            }
+            if (candidateHorizontal && reservedHorizontal && Math.abs(a.y - prev.y) < 1) {
+                const overlap = Math.min(Math.max(a.x, b.x), Math.max(prev.x, point.x))
+                    - Math.max(Math.min(a.x, b.x), Math.min(prev.x, point.x));
+                return score + (overlap > 18 ? 10000 + overlap * 20 : 0);
+            }
+            const crosses = (candidateVertical && reservedHorizontal) || (candidateHorizontal && reservedVertical);
+            if (!crosses) return score;
+            const verticalSegment = candidateVertical ? [a, b] : [prev, point];
+            const horizontalSegment = candidateHorizontal ? [a, b] : [prev, point];
+            const crossX = verticalSegment[0].x;
+            const crossY = horizontalSegment[0].y;
+            const interior = crossY > Math.min(verticalSegment[0].y, verticalSegment[1].y) + 6
+                && crossY < Math.max(verticalSegment[0].y, verticalSegment[1].y) - 6
+                && crossX > Math.min(horizontalSegment[0].x, horizontalSegment[1].x) + 6
+                && crossX < Math.max(horizontalSegment[0].x, horizontalSegment[1].x) - 6;
+            return score + (interior ? 180 : 0);
+        }, 0);
+    }, 0);
     const cost = (points) => points.slice(1).reduce((sum, point, index) => {
         const prev = points[index];
-        return sum + hits(prev, point) * 1e5 + Math.abs(point.x - prev.x) + Math.abs(point.y - prev.y);
+        return sum + hits(prev, point) * 1e5 + edgeConflicts(prev, point)
+            + Math.abs(point.x - prev.x) + Math.abs(point.y - prev.y);
     }, (points.length - 2) * 60);
     return candidates.reduce((best, points) => (!best || cost(points) < cost(best) ? points : best), null)
         || [{ x: cx(source), y: cy(source) }, { x: cx(target), y: cy(target) }];
@@ -1060,10 +1130,24 @@ export function tasksRouteEdges(nodes, edges, gutter = 44) {
         })
         .map((node) => rects[node.id])
         .filter(Boolean);
-    return (edges || []).map((edge) => {
+    const sourceEdges = edges || [];
+    const orthogonalRoutes = new Map();
+    const routed = [];
+    sourceEdges.map((edge, index) => ({ edge, index }))
+        .filter(({ edge }) => edge.data?.__edge_path__ === 'orthogonal' && rects[edge.source] && rects[edge.target])
+        .sort((a, b) => String(a.edge.id || '').localeCompare(String(b.edge.id || '')) || a.index - b.index)
+        .forEach(({ edge, index }) => {
+            const route = tasksOrthogonalRoute(rects[edge.source], rects[edge.target], obstacles, gutter, 3, routed);
+            orthogonalRoutes.set(index, route);
+            routed.push(route);
+        });
+    return sourceEdges.map((edge, index) => {
         const edgePath = edge.data?.__edge_path__;
         if (!edgePath || edgePath === 'ribbon') return edge;
-        return { ...edge, data: { ...edge.data, __route__: tasksEdgeRoute(edgePath, rects[edge.source], rects[edge.target], obstacles, gutter) } };
+        const route = edgePath === 'orthogonal' && orthogonalRoutes.has(index)
+            ? orthogonalRoutes.get(index)
+            : tasksEdgeRoute(edgePath, rects[edge.source], rects[edge.target], obstacles, gutter);
+        return { ...edge, data: { ...edge.data, __route__: route } };
     });
 }
 
@@ -1106,6 +1190,16 @@ function tasksHandlePoint(rect, handle) {
     return null;
 }
 
+function tasksPointToSegmentDistance(point, start, end) {
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const lengthSquared = dx * dx + dy * dy;
+    const projection = lengthSquared
+        ? Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared))
+        : 0;
+    return Math.hypot(point.x - (start.x + projection * dx), point.y - (start.y + projection * dy));
+}
+
 export function nearestTasksIncidentEdge(pointer, nodeId, nodes, edges) {
     const activeId = String(nodeId || '');
     const node = (nodes || []).find((item) => String(item.id || '') === activeId);
@@ -1118,11 +1212,19 @@ export function nearestTasksIncidentEdge(pointer, nodeId, nodes, edges) {
             ? 'source'
             : (String(edge.target || '') === activeId ? 'target' : '');
         if (!role) continue;
-        const handleId = edge[`${role}Handle`];
-        const handle = (node.data?.handleLayout?.[role] || []).find((item) => item.id === handleId);
-        const point = tasksHandlePoint(rect, handle);
-        if (!point) continue;
-        const distance = Math.hypot(Number(pointer?.x) - point.x, Number(pointer?.y) - point.y);
+        const route = edge.data?.__route__;
+        let distance = Infinity;
+        if (Array.isArray(route) && route.length > 1) {
+            for (let index = 1; index < route.length; index++) {
+                distance = Math.min(distance, tasksPointToSegmentDistance(pointer, route[index - 1], route[index]));
+            }
+        } else {
+            const handleId = edge[`${role}Handle`];
+            const handle = (node.data?.handleLayout?.[role] || []).find((item) => item.id === handleId);
+            const point = tasksHandlePoint(rect, handle);
+            if (!point) continue;
+            distance = Math.hypot(Number(pointer?.x) - point.x, Number(pointer?.y) - point.y);
+        }
         if (distance < nearestDistance) {
             nearest = edge;
             nearestDistance = distance;

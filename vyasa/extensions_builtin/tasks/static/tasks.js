@@ -2788,7 +2788,7 @@ async function renderTasksGraphs(rootElement = document) {
                                 __labels_off__: !edgeLabelsVisible,
                                 __line_off__: Boolean(edge.__sequence_line_off__),
                                 __edge_path__: edgePath,
-                                __edge_corner__: tasksEdgeCornerOf(edge, model),
+                                __edge_corner__: tasksEdgeCornerOf(edge, model, edgePath),
                                 // The prominent label is an HTML overlay. A layout that draws its
                                 // edges over the cards pins the label just above them; every
                                 // other layout lets the label follow the edge's highlight z, or a
@@ -2922,15 +2922,26 @@ async function renderTasksGraphs(rootElement = document) {
                             ? `1px solid color-mix(in srgb, var(--vyasa-paper) ${100 - groupBorderMix}%, ${groupColor} ${groupBorderMix}%)`
                             : `1px solid color-mix(in srgb, var(--vyasa-paper) 30%, ${nodeColor} 70%)`)
                         : TASKS_NODE_BORDER;
-                    // Only a task node takes a look; a group keeps its container frame.
-                    const nodeLook = n.__kind__ === 'task' && !useOverlay ? tasksNodeLook(n, model) : 'card';
-                    const lookStyle = tasksNodeLookStyle({ background: useOverlay ? 'transparent' : background, border }, nodeLook, nodeColor, tasksIsDashed(n));
+                    const isGroup = n.__kind__ === 'group';
+                    const nodeLook = (isGroup || !useOverlay) ? tasksNodeLook(n, model) : 'card';
+                    const lookStyle = tasksNodeLookStyle(
+                        { background: useOverlay ? 'transparent' : background, border },
+                        nodeLook,
+                        isGroup ? groupColor : nodeColor,
+                        tasksIsDashed(n),
+                    );
+                    if (isGroup && typeof lookStyle.border === 'string') {
+                        lookStyle.border = lookStyle.border.replace(/^(\d+(?:\.\d+)?)px\b/, (_, width) => `${Number(width) + 1}px`);
+                    }
+                    const groupEmphasis = isGroup && (!lookStyle.border || lookStyle.border === 'none')
+                        ? `0 0 0 1px color-mix(in srgb, ${groupColor || 'var(--vyasa-ink)'} 42%, transparent)`
+                        : 'none';
                     const branchOpacity = isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1;
                     const rfNode = {
                         id: n.id,
                         type: 'vyasaTask',
                         position: n.position,
-                        data: { ...n, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color, __has_note__: hasNote, __node_image__: nodeImage, __default_color__: ownNodeColor ? '' : defaultNodeColor, __projection_branch_opacity__: branchOpacity, __color_levels__: useOverlay ? colorLevels : null, __node_look__: nodeLook, __look_kind__: String(n?.[activeColorBy] ?? '') },
+                        data: { ...n, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color, __has_note__: hasNote, __node_image__: nodeImage, __default_color__: ownNodeColor ? '' : defaultNodeColor, __projection_branch_opacity__: branchOpacity, __color_levels__: useOverlay ? colorLevels : null, __node_look__: nodeLook, __group_color__: isGroup ? groupColor : undefined, __look_kind__: String(n?.[activeColorBy] ?? '') },
                         style: {
                             width: n.width,
                             height: n.height,
@@ -2938,7 +2949,7 @@ async function renderTasksGraphs(rootElement = document) {
                             borderRadius: isExpanded ? 12 : 6,
                             boxShadow: isChecked
                                 ? `inset 0 0 0 2px color-mix(in srgb, ${stateAccent} 24%, transparent), 0 0 0 2px color-mix(in srgb, ${stateAccent} 34%, transparent)`
-                                : 'none',
+                                : groupEmphasis,
                             opacity: branchOpacity,
                             overflow: 'hidden',
                             // A look may restate the radius and the overflow it needs.
@@ -2961,27 +2972,43 @@ async function renderTasksGraphs(rootElement = document) {
                     }
                     return rfNode;
                 });
+                const groupStylesById = new Map(baseNodes
+                    .filter((node) => node.data?.__kind__ === 'group')
+                    .map((node) => [node.id, node.data]));
                 for (const n of derived.nodes) {
                     if (n.__kind__ !== 'group' || !effectiveExpandedSet.has(n.id)) continue;
+                    const groupStyle = groupStylesById.get(n.id) || {};
                     const position = absolutePosition(n);
                     const titleZ = TASKS_TITLE_Z + depthOf(n);
                     const titleWidth = Math.max(80, n.width - 16);
                     const titleImage = resolveTasksNodeImage(n, model);
                     const titleHeight = sizeTaskNode(n.label || n.id, 'groupTitle', titleWidth, { hasImage: Boolean(titleImage), nodeLabels: edgeNodeLabels }).height;
                     const titleOpacity = isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1;
+                    const titleLook = groupStyle.__node_look__ || 'card';
+                    const titleColor = groupStyle.__group_color__ || defaultNodeColor;
+                    const titleLookStyle = tasksNodeLookStyle(
+                        { background: TASKS_GROUP_TITLE_BG, border: 'none' },
+                        titleLook,
+                        titleColor,
+                        tasksIsDashed(n),
+                    );
+                    if (typeof titleLookStyle.border === 'string') {
+                        titleLookStyle.border = titleLookStyle.border.replace(/^(\d+(?:\.\d+)?)px\b/, (_, width) => `${Number(width) + 1}px`);
+                    }
                     baseNodes.push({
                         id: `${n.id}__title`,
                         type: 'vyasaTask',
                         position: { x: position.x + 8, y: position.y + 8 },
-                        data: { ...n, id: `${n.id}__title`, sourceGroupId: n.id, __kind__: 'groupTitle', __node_image__: titleImage, __projection_branch_opacity__: titleOpacity },
+                        data: { ...n, id: `${n.id}__title`, sourceGroupId: n.id, __kind__: 'groupTitle', __node_image__: titleImage, __node_look__: titleLook, __group_color__: titleColor, __projection_branch_opacity__: titleOpacity },
                         style: {
                             width: titleWidth,
                             height: titleHeight,
                             zIndex: titleZ,
-                            background: TASKS_GROUP_TITLE_BG,
-                            border: 'none',
-                            borderRadius: 6,
-                            boxShadow: 'none',
+                            ...titleLookStyle,
+                            borderRadius: titleLookStyle.borderRadius ?? 6,
+                            boxShadow: !titleLookStyle.border || titleLookStyle.border === 'none'
+                                ? `0 0 0 1px color-mix(in srgb, ${titleColor} 42%, transparent)`
+                                : 'none',
                             overflow: 'hidden',
                             opacity: titleOpacity,
                             pointerEvents: 'auto',
@@ -3029,7 +3056,7 @@ async function renderTasksGraphs(rootElement = document) {
                             __labels_off__: !edgeLabelsVisible,
                             __line_off__: Boolean(edge.__sequence_line_off__),
                             __edge_path__: edgePath,
-                            __edge_corner__: tasksEdgeCornerOf(edge, model),
+                            __edge_corner__: tasksEdgeCornerOf(edge, model, edgePath),
                         },
                         markerEnd: {
                             type: rf.MarkerType.ArrowClosed,

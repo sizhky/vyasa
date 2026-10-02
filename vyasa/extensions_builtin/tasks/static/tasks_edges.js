@@ -8,7 +8,7 @@ import {
 } from './tasks_paint.js';
 
 // Corner radius of a routed edge drawn with edge_corner=round.
-const TASKS_ROUND_CORNER = 12;
+const TASKS_ROUND_CORNER = 8;
 
 export function createTasksEdgeRenderer(React, rf) {
     const TasksProminentEdgeLabel = ({ labelX, labelY, labelZIndex, labelBgPadding, labelBgBorderRadius, labelMaxWidth, labelStyle, labelBgStyle, fullLabel, displayLabel }) => {

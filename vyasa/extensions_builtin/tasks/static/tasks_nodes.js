@@ -384,6 +384,8 @@ export function createTasksNodeRenderer(getState) {
                             }, data?.label || '');
                         }
                         if (data?.__kind__ === 'groupTitle') {
+                            const titleLookBody = tasksLookBody(React, data?.__node_look__, data, '');
+                            const titleFrame = data?.__node_look__ === 'sketch' ? titleLookBody.frame : null;
                             const handleCollapse = (e) => {
                                 e.stopPropagation();
                                 if (egoMode) return;
@@ -401,17 +403,21 @@ export function createTasksNodeRenderer(getState) {
         	                            display: 'flex',
         	                            alignItems: 'center',
         	                            justifyContent: 'space-between',
-        	                            gap: '8px',
-        	                            padding: '6px 10px',
+                                    gap: '8px',
+                                    padding: '6px 10px',
+                                    fontFamily: titleLookBody.body.fontFamily,
                                     fontWeight: '600',
                                     fontSize: '16px',
                                     position: 'relative',
                                 }
                             },
+                                titleFrame,
                                 linkKinds.length ? renderTasksNodeLinkBadge(React, { right: '32px', kinds: linkKinds }) : null,
                                 React.createElement('span', {
                                     style: {
-        	                                minWidth: 0,
+                                        minWidth: 0,
+                                        position: 'relative',
+                                        zIndex: 1,
         	                                overflow: 'hidden',
         	                                display: 'flex',
         	                                alignItems: 'center',
