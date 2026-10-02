@@ -274,17 +274,36 @@ export function tasksOrderedEdges(edges, incidentNodeId = '') {
                 .join('\u0000')));
 }
 
-export function tasksGroupHoverAttrRows(directRows, detailEntries, hoverAttrs) {
-    const directByAttr = new Map((directRows || []).map((row) => [String(row?.attr || ''), row]));
-    const statsByAttr = new Map((detailEntries || [])
-        .filter((entry) => String(entry?.key || '').startsWith('range:'))
-        .map((entry) => [String(entry.key).slice('range:'.length), entry]));
-    return (hoverAttrs || []).map((attr) => {
-        const key = String(attr || '').trim();
-        const stat = statsByAttr.get(key);
-        if (stat) return { attr: key, label: stat.label, value: stat.value, renderedValue: stat.renderedValue || '' };
-        return directByAttr.get(key);
-    }).filter(Boolean);
+/**
+ * The attrs a hover card shows: the view's hover_attrs, else the graph's.
+ * An empty list means the hover card shows every attr, as the pinned card does.
+ *
+ * >>> tasksHoverAttrs({ hover_attrs: ['op'] }, { hover_attrs: ['shape'] })
+ * ['op']
+ * >>> tasksHoverAttrs({}, { hover_attrs: 'op, shape' })
+ * ['op', 'shape']
+ */
+export function tasksHoverAttrs(viewModel, sourceModel) {
+    const listOf = (value) => (Array.isArray(value) ? value : String(value || '').split(','))
+        .map((attr) => String(attr || '').trim())
+        .filter(Boolean);
+    const own = listOf(viewModel?.hover_attrs);
+    return own.length ? own : listOf(sourceModel?.hover_attrs);
+}
+
+/**
+ * A hover card keeps the configured attrs, in configured order. A group's range
+ * statistic stands in for the attr of the same name.
+ *
+ * >>> tasksHoverCardEntries([{ key: 'a' }, { key: 'b' }, { key: 'range:c' }], ['c', 'a'])
+ * [{ key: 'range:c' }, { key: 'a' }]
+ * >>> tasksHoverCardEntries([{ key: 'a' }], [])
+ * [{ key: 'a' }]
+ */
+export function tasksHoverCardEntries(entries, hoverAttrs) {
+    if (!hoverAttrs?.length) return entries || [];
+    const byKey = new Map((entries || []).map((entry) => [String(entry?.key || ''), entry]));
+    return hoverAttrs.map((attr) => byKey.get(`range:${attr}`) || byKey.get(attr)).filter(Boolean);
 }
 
 export function tasksEmptyFilterQuery() {

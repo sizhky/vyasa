@@ -881,9 +881,9 @@ async function renderTasksGraphs(rootElement = document) {
             // the hovered node from this ref rather than the stale closure value.
             const hoveredNodeIdRef = React.useRef(null);
             hoveredNodeIdRef.current = hoveredNodeId;
-            const [groupHoverTooltip, setGroupHoverTooltip] = React.useState(null);
-            const groupHoverTooltipRef = React.useRef(null);
-            groupHoverTooltipRef.current = groupHoverTooltip;
+            const [hoverCardTarget, setHoverCardTarget] = React.useState(null);
+            const hoverCardTargetRef = React.useRef(null);
+            hoverCardTargetRef.current = hoverCardTarget;
             const detailCardRef = React.useRef(null);
             const focusDetailCard = React.useCallback(() => {
                 window.requestAnimationFrame(() => detailCardRef.current?.focus());
@@ -1260,8 +1260,8 @@ async function renderTasksGraphs(rootElement = document) {
                 setEdgeCardOpen(true);
                 setEdgeCardField('');
                 setEdgeCardError('');
-                groupHoverTooltipRef.current = null;
-                setGroupHoverTooltip(null);
+                hoverCardTargetRef.current = null;
+                setHoverCardTarget(null);
                 setEdgeStatus(`${edgeId}. Release W to return to the node.`);
             }, [resolveEdgeRecord]);
             const clearOptionEdgePreview = React.useCallback(() => {
@@ -1995,7 +1995,7 @@ async function renderTasksGraphs(rootElement = document) {
                 // An open hover card names a focus node too, so F frames the hovered
                 // node and its edge neighbours the way a selection does. Selection
                 // wins when both are live.
-                const hoverTooltip = groupHoverTooltipRef.current;
+                const hoverTooltip = hoverCardTargetRef.current;
                 const hoverCardOpen = hoverCardsEnabled
                     && Boolean(hoverTooltip?.nodeId)
                     && (groupHoverCardsEnabled || !hoverTooltip.group);
@@ -3968,8 +3968,8 @@ async function renderTasksGraphs(rootElement = document) {
                             && !optionEdgeFit
                             && !(codeModeEntryRef.current || codeModePinnedRef.current?.entry)
                             && !(key === 't' && groupToggleHoverIdRef.current)
-                            && !(key === 'v' && (groupHoverTooltipRef.current || edgeCardOpen || selectedNodeIdRef.current))
-                            && !(key === 'f' && !event.shiftKey && (groupHoverTooltipRef.current || hoveredNodeIdRef.current))
+                            && !(key === 'v' && (hoverCardTargetRef.current || edgeCardOpen || selectedNodeIdRef.current))
+                            && !(key === 'f' && !event.shiftKey && (hoverCardTargetRef.current || hoveredNodeIdRef.current))
                             && !(key === 'g' && hoveredNodeIdRef.current)
                             && !(isTasksHopCode(event.code) && hoveredNodeIdRef.current)) return;
                         // The document shortcuts in scripts.js bind J/K to scroll, C to
@@ -4273,9 +4273,9 @@ async function renderTasksGraphs(rootElement = document) {
             const toggleFilterValue = React.useCallback((key, value, enabled) => {
                 setActiveSwatchFilters((current) => toggleTasksFilterQueryValue(current, key, value, enabled));
             }, []);
-            const clearGroupHoverTooltip = React.useCallback(() => {
-                groupHoverTooltipRef.current = null;
-                setGroupHoverTooltip(null);
+            const clearHoverCardTarget = React.useCallback(() => {
+                hoverCardTargetRef.current = null;
+                setHoverCardTarget(null);
             }, []);
             React.useEffect(() => {
                 const onKeyDown = (event) => {
@@ -4283,19 +4283,19 @@ async function renderTasksGraphs(rootElement = document) {
                     const wrapper = flowWrapperRef.current;
                     const key = event.key.toLowerCase();
                     const editable = target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(target.tagName));
-                    const current = groupHoverTooltipRef.current;
+                    const current = hoverCardTargetRef.current;
                     if (key !== 'enter' || !current || editable || event.repeat || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
                     event.preventDefault();
                     event.stopImmediatePropagation();
                     selectNodeCard(current.nodeId, current.nodeId, current.group ? 'group' : 'task', true);
-                    clearGroupHoverTooltip();
+                    clearHoverCardTarget();
                     logTasksDebug('hoverCardStickySet', { widgetId, nodeId: current.nodeId || '', reason: 'enter' });
                 };
                 document.addEventListener('keydown', onKeyDown, true);
                 return () => {
                     document.removeEventListener('keydown', onKeyDown, true);
                 };
-            }, [clearGroupHoverTooltip, selectNodeCard, widgetId]);
+            }, [clearHoverCardTarget, selectNodeCard, widgetId]);
             const hoverTraceKeyRef = React.useRef('');
             const logHoverCycle = React.useCallback((label, payload = {}) => {
                 logTasksDebug(label, payload);
@@ -4307,10 +4307,10 @@ async function renderTasksGraphs(rootElement = document) {
                 transientGraphHoverActiveRef.current = false;
                 groupToggleHoverIdRef.current = '';
                 setTasksGroupToggleHover(flowWrapperRef.current, '');
-                clearGroupHoverTooltip();
+                clearHoverCardTarget();
                 setHoveredNodeId(null);
-            }, [clearGroupHoverTooltip, logHoverCycle]);
-            const updateGroupHoverTooltip = React.useCallback((event) => {
+            }, [clearHoverCardTarget, logHoverCycle]);
+            const updateHoverCardTarget = React.useCallback((event) => {
                 if (document.pointerLockElement) return;
                 const reactFlow = reactFlowApiRef.current;
                 const wrapper = flowWrapperRef.current;
@@ -4388,14 +4388,14 @@ async function renderTasksGraphs(rootElement = document) {
                 }
                 const liveNode = nodes.find((node) => node.id === hit.node.id) || hit.node;
                 if (!tasksGraphNodeAllowsHover(liveNode, hoverInactiveNodes)) {
-                    clearGroupHoverTooltip();
+                    clearHoverCardTarget();
                     traceHoverHit('blocked', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx });
                     return;
                 }
                 const label = nodeData.label || hit.node.id;
                 const nodeId = nodeData.__kind__ === 'groupTitle' ? (nodeData.sourceGroupId || hit.node.id) : hit.node.id;
                 if (!label) {
-                    clearGroupHoverTooltip();
+                    clearHoverCardTarget();
                     traceHoverHit('empty', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx });
                     return;
                 }
@@ -4417,7 +4417,7 @@ async function renderTasksGraphs(rootElement = document) {
                     }
                 }
                 if (hoverGroupId && !groupHoverCardsEnabled) {
-                    clearGroupHoverTooltip();
+                    clearHoverCardTarget();
                     traceHoverHit('group-card-disabled', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx });
                     return;
                 }
@@ -4429,10 +4429,10 @@ async function renderTasksGraphs(rootElement = document) {
                     y: event.clientY - bounds.top + 18,
                     placement: 'rightRail',
                 };
-                groupHoverTooltipRef.current = hoverCard;
-                setGroupHoverTooltip(hoverCard);
+                hoverCardTargetRef.current = hoverCard;
+                setHoverCardTarget(hoverCard);
                 traceHoverHit('hit', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx, groupHoverChanged });
-            }, [expanded, clearGroupHoverTooltip, clearGraphHoverState, clearOptionEdgePreview, currentGraphEdges, edgeForOptionPointer, previewOptionEdge, nodes, widgetId, model, egoMode, hoverInactiveNodes, groupHoverCardsEnabled, hoveredNodeId, logHoverCycle, selectedNodeId]);
+            }, [expanded, clearHoverCardTarget, clearGraphHoverState, clearOptionEdgePreview, currentGraphEdges, edgeForOptionPointer, previewOptionEdge, nodes, widgetId, model, egoMode, hoverInactiveNodes, groupHoverCardsEnabled, hoveredNodeId, logHoverCycle, selectedNodeId]);
             const selectGroupDescendants = React.useCallback((node) => {
                 const kind = node?.data?.__kind__;
                 if (kind !== 'group' && kind !== 'groupTitle') return false;
@@ -4970,9 +4970,23 @@ async function renderTasksGraphs(rootElement = document) {
                     zIndex: 1,
                 },
             });
+            // The one card host. A hovered node shows here in hover mode; hovering
+            // the pinned node keeps the pinned card. Each card is keyed by what it
+            // shows, so every card mounts the same way whichever way it opened.
             const RightRail = () => {
-                if (!selectedNodeId && !optionEdgeNodeCardId && !(edgeCardOpen && (selectedEdgeRecord || edgeCardError))) return null;
-                if (hoverCardsEnabled && groupHoverTooltip && (groupHoverCardsEnabled || !groupHoverTooltip.group)) return null;
+                const hovered = hoverCardsEnabled && hoverCardTarget && (groupHoverCardsEnabled || !hoverCardTarget.group)
+                    && hoverCardTarget.nodeId !== selectedNodeId
+                    ? hoverCardTarget
+                    : null;
+                const edgeCardShown = edgeCardOpen && (selectedEdgeRecord || edgeCardError);
+                if (!hovered && !selectedNodeId && !optionEdgeNodeCardId && !edgeCardShown) return null;
+                const [cardKey, card] = hovered
+                    ? [`hover:${hovered.nodeId}`, SelectedNodePanel(hovered.nodeId, true, hovered)]
+                    : optionEdgeNodeCardId
+                        ? [`option:${optionEdgeNodeCardId}`, SelectedNodePanel(optionEdgeNodeCardId, true)]
+                        : edgeCardShown
+                            ? ['edge', SelectedEdgePanel()]
+                            : [`node:${selectedNodeId}`, SelectedNodePanel()];
                 return window.React.createElement('div', {
                     style: {
                         position: 'absolute',
@@ -4989,10 +5003,8 @@ async function renderTasksGraphs(rootElement = document) {
                         minHeight: 0,
                     },
                 },
-                    NodeCardResizeHandle(),
-                    optionEdgeNodeCardId
-                        ? SelectedNodePanel(optionEdgeNodeCardId, true)
-                        : (edgeCardOpen && (selectedEdgeRecord || edgeCardError) ? SelectedEdgePanel() : SelectedNodePanel())
+                    hovered ? null : NodeCardResizeHandle(),
+                    window.React.createElement(window.React.Fragment, { key: cardKey }, card)
                 );
             };
             const EdgeLiveStatus = () => window.React.createElement('div', {
@@ -5025,16 +5037,6 @@ async function renderTasksGraphs(rootElement = document) {
                         cursor: 'pointer',
                     },
                 }, '×');
-            };
-            const GroupHoverTooltip = () => {
-                if (!hoverCardsEnabled) return null;
-                const transientCard = groupHoverTooltip && (groupHoverCardsEnabled || !groupHoverTooltip.group)
-                    ? SelectedNodePanel(groupHoverTooltip.nodeId, true, groupHoverTooltip)
-                    : null;
-                const transientLayer = transientCard ? window.React.createElement('div', {
-                    style: { position: 'absolute', inset: '12px 12px 12px auto', zIndex: 2400, width: nodeCardWidth, maxWidth: 'calc(100% - 24px)', display: 'flex', flexDirection: 'column', pointerEvents: 'none', minHeight: 0 },
-                }, transientCard) : null;
-                return transientLayer;
             };
             const HelpPopup = () => {
                 if (!helpOpen) return null;
@@ -5321,7 +5323,7 @@ async function renderTasksGraphs(rootElement = document) {
                 onPointerDownCapture: startDragSelection,
                 onPointerMove: (event) => {
                     updateLockedPan(event);
-                    updateGroupHoverTooltip(event);
+                    updateHoverCardTarget(event);
                 },
                 onPointerUp: stopLockedPan,
                 onPointerCancel: stopLockedPan,
@@ -5400,7 +5402,6 @@ async function renderTasksGraphs(rootElement = document) {
                     GitReviewBar(),
                     RightRail(),
                     window.React.createElement(HelpPopup),
-                    GroupHoverTooltip(),
                     window.React.createElement(DragSelectionOverlay)
                 ))
             ) : window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', flex: '1 1 auto', minHeight: 0, display: 'flex', alignItems: 'stretch', position: 'relative' } },
@@ -5422,7 +5423,6 @@ async function renderTasksGraphs(rootElement = document) {
                     GitReviewBar(),
                     RightRail(),
                     window.React.createElement(HelpPopup),
-                    GroupHoverTooltip(),
                     window.React.createElement(DragSelectionOverlay)
                 )
             );

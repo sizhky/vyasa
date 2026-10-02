@@ -684,13 +684,13 @@ def test_tasks_hover_card_reuses_selected_node_panel_on_right_side():
     assert "const SelectedNodePanel = (panelGraphNodeId, readOnly = false, hoverCard = null)" in source
     # The panel reads state when called, so the default moved into the body.
     assert "if (panelGraphNodeId === undefined) panelGraphNodeId = selectedNodeId;" in source
-    assert "SelectedNodePanel(groupHoverTooltip.nodeId, true, groupHoverTooltip)" in source
+    assert "SelectedNodePanel(hovered.nodeId, true, hovered)" in source
     assert "scrollRef: hoverCard ? hoverCardScrollRef : detailCardScrollRef" in source
-    assert "tasksActiveHoverAttrs" not in source
-    assert "tasksHoverAttrRows" not in source
-    assert "tasksGroupHoverAttrRows" not in source
+    # A hover card shows the view's hover_attrs; the pinned card shows every attr.
+    assert "hoverCard ? tasksHoverCardEntries(allEntries, tasksHoverAttrs(model, sourceModel)) : allEntries" in source
     assert "hoverAttrs:" in source
-    assert source.count("GroupHoverTooltip(),") == 2
+    # One host draws the card, hovered or pinned.
+    assert "GroupHoverTooltip" not in source
     assert "row('C', 'hover cards: off / right side')" in source
 
 
@@ -722,7 +722,7 @@ def test_enter_selects_hovered_node_and_focuses_the_pinned_card():
     assert "className: readOnly ? undefined : 'vyasa-tasks-pinned-card'" in source
     assert "row('Enter', 'pin hovered node / open selected edge')" in source
     assert "row('Enter on card', 'focus Notes')" in source
-    shortcut = source.split("const clearGroupHoverTooltip", 1)[1].split("const hoverTraceKeyRef", 1)[0]
+    shortcut = source.split("const clearHoverCardTarget", 1)[1].split("const hoverTraceKeyRef", 1)[0]
     assert "event.key === 'Control'" not in shortcut
 
 
@@ -836,7 +836,8 @@ def test_tasks_hover_card_toggle_matches_edge_toggle_contract():
 
     assert "setHoverCardModeGlobal(nextTasksHoverCardMode);" in shortcut
     assert "setHoverCardModeGlobal((current) => (" in actions
-    assert "if (!hoverCardsEnabled) return null;" in source
+    # Hover cards off: the one card host never takes the hovered node.
+    assert "const hovered = hoverCardsEnabled && hoverCardTarget" in source
     assert "refreshHoverCardRef" not in source
     assert "&& key !== 'c'" not in source
 
@@ -1436,7 +1437,7 @@ def test_tasks_group_hover_uses_the_selected_panel_entries():
 
     assert "selectedNode?.__kind__ === 'group'" in source
     assert "tasksGroupDetailEntries(sourceNodeId, model)" in source
-    assert "SelectedNodePanel(groupHoverTooltip.nodeId, true, groupHoverTooltip)" in source
+    assert "SelectedNodePanel(hovered.nodeId, true, hovered)" in source
 
 
 def test_highlighted_edges_and_arrowheads_render_below_node_cards():

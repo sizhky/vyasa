@@ -1178,3 +1178,12 @@ test('tasksHopSeedIds lets hover start a chain without hijacking one', async () 
     assert.equal(titleHover.fromHover, false);
     assert.deepEqual(Array.from(tasksHopSeedIds(new Set(), '').seeds), []);
 });
+
+test('a hover card keeps only the view hover_attrs, in their order, and a group range stands in', async () => {
+    const { tasksHoverAttrs, tasksHoverCardEntries } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_model.js');
+    const entries = [{ key: 'part' }, { key: 'op' }, { key: 'shape' }, { key: 'range:params' }];
+    assert.deepEqual(tasksHoverCardEntries(entries, tasksHoverAttrs({ hover_attrs: ['shape', 'op', 'params', 'missing'] }, {})).map((entry) => entry.key), ['shape', 'op', 'range:params']);
+    // The view's list wins; with none, the graph's applies; with neither, every entry shows.
+    assert.deepEqual(tasksHoverAttrs({}, { hover_attrs: 'op, shape' }), ['op', 'shape']);
+    assert.deepEqual(tasksHoverCardEntries(entries, tasksHoverAttrs({}, {})), entries);
+});

@@ -10,7 +10,7 @@ import {
     clampTasksProjectionDisplayOpacity, isTasksGradientPalette, normalizeTasksFilterQuery, normalizeTasksGroupByDisabledKeys,
     tasksCountFilterRules, tasksEdgeMetaEntries, tasksFilterOptions, tasksFilterQueryHasRules,
     tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksGroupByOptions,
-    tasksLogicalNodeId, tasksNodeMetaEntries, tasksNodeMetaLabel, tasksProjectionLayout,
+    tasksHoverAttrs, tasksHoverCardEntries, tasksLogicalNodeId, tasksNodeMetaEntries, tasksNodeMetaLabel, tasksProjectionLayout,
 } from './tasks_graph_model.js';
 import { tasksIsFixedMode, tasksLayoutById } from './tasks_layouts.js';
 import { tasksGitHistoryRows, tasksGitLaneColor, tasksReviewCountsLabel, tasksReviewFieldText } from './tasks_git_review.js';
@@ -52,9 +52,11 @@ export function createTasksPanels(getState) {
         const sourceNodeId = selectedNode?.__kind__ === 'groupTitle'
             ? selectedNode.sourceGroupId
             : tasksLogicalNodeId(selectedNode, selectedNode?.id);
-        const baseEntries = selectedNode?.__kind__ === 'group'
+        const allEntries = selectedNode?.__kind__ === 'group'
             ? tasksGroupDetailEntries(sourceNodeId, model)
             : tasksNodeMetaEntries(selectedNode, model.node_attr_order, model.node_hidden_attrs);
+        // A hover card shows the view's hover_attrs; a pinned card shows every attr.
+        const baseEntries = hoverCard ? tasksHoverCardEntries(allEntries, tasksHoverAttrs(model, sourceModel)) : allEntries;
         if (!selectedNode) return null;
         const panelNodeId = sourceNodeId || selectedNode.id || '';
         const openDecisionEntry = tasksOpenDecisionEntry(selectedNode);
