@@ -1,6 +1,6 @@
 import { logTasksPerf, traceTasksEdge } from './tasks_diagnostics.js';
 import {
-    applyTasksFilterAttributePolicy, resolveTasksNodeImage, sizeTaskNode, tasksNodeLook, tasksNodeSubtitle, tasksUngroupModelForGrouping,
+    TASKS_STYLE_ATTRS, applyTasksFilterAttributePolicy, resolveTasksNodeImage, sizeTaskNode, tasksNodeLook, tasksNodeSubtitle, tasksUngroupModelForGrouping,
     tasksViewMatchesContext,
 } from './tasks_graph_core.js';
 
@@ -19,7 +19,7 @@ const TASKS_INTERNAL_NODE_META_KEYS = new Set([
     'handlelayout', 'highlightmode', 'sourcegroupid', 'source_group_id',
     'width', 'height', 'position', 'parentid',
     'parent_id', 'color', 'href', 'image', 'image_by', 'collapsed', 'child_group_ids',
-    'child_task_ids', 'projection',
+    'child_task_ids', 'projection', 'inherit',
     'active_projection', 'graph_x', 'graph_y',
 ]);
 const TASKS_DERIVED_METRIC_KEYS = new Set(['rank', 'connectivity']);
@@ -211,6 +211,7 @@ export function tasksIsHiddenNodeMetaKey(key) {
     return tasksIsInternalMetaKey(key)
         || TASKS_INTERNAL_NODE_META_KEYS.has(normalized)
         || TASKS_SPECIAL_NODE_ATTRS.has(String(key))
+        || TASKS_STYLE_ATTRS.has(normalized)
         || TASKS_DERIVED_METRIC_KEYS.has(normalized);
 }
 
@@ -247,7 +248,7 @@ export function tasksEdgeMetaEntries(edge, attrOrder = [], hiddenAttrs = []) {
         ['evidence', 100], ['introduced_context', 101], ['introduced_stage', 102], ['definition', 103],
     ]);
     const entries = Object.entries(edge)
-        .filter(([key, value]) => !hidden.has(key) && !tasksIsInternalMetaKey(key) && !TASKS_INTERNAL_EDGE_META_KEYS.has(String(key).toLowerCase()) && tasksAttrValues(value).length)
+        .filter(([key, value]) => !hidden.has(key) && !tasksIsInternalMetaKey(key) && !TASKS_INTERNAL_EDGE_META_KEYS.has(String(key).toLowerCase()) && !TASKS_STYLE_ATTRS.has(String(key).toLowerCase()) && tasksAttrValues(value).length)
         .map(([key, value], index) => ({
             key,
             label: key.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase()),

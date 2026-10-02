@@ -390,3 +390,11 @@ test('a node inside a frame span but outside its group is reported, not covered'
     const stray = { ...stacks, tasks: [...stacks.tasks, { id: 'nx', label: 'Nx', column: 'a', track: 'top', group_id: 'model' }] };
     assert.throws(() => buildGridTasksGraph(stray, stackView), /grid group enc spans node nx/);
 });
+
+test('detail cards skip style attrs, which say how an item is drawn, not what it is', async () => {
+    const { tasksEdgeMetaEntries, tasksNodeMetaEntries } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_model.js');
+    const node = { id: 'pe', label: '~', node_look: 'circle', dashed: 'true', inherit: 'part', op: '$\\sin$' };
+    const edge = { id: 'e', source: 'a', target: 'b', target_port: 'left', edge_path: 'line', edge_corner: 'round', shape: 'Q' };
+    assert.deepEqual(tasksNodeMetaEntries(node).map((entry) => entry.key), ['op']);
+    assert.deepEqual(tasksEdgeMetaEntries(edge).map((entry) => entry.key), ['shape']);
+});

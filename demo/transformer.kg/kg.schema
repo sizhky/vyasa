@@ -4,6 +4,7 @@ color_by=part
 node_look=outline
 edge_path=orthogonal
 hover_attrs=op,shape,params,description,note
+node_hidden_attrs=column,track,part
 
 @sources
 nodes=kg.nodes
@@ -18,7 +19,7 @@ figure:
 	grid_col=column
 	grid_row=track
 	grid_col_order=enc_note,enc_wave,enc,mid,dec,dec_wave,dec_note
-	grid_row_order=prob,softmax,linear,ff3,fork3,attn2,fork2,attn1,qkv,res,plus,embed,io
+	grid_row_order=prob,softmax,linear,norm3,ff3,fork3,norm2,attn2,fork2,norm1,attn1,qkv,res,plus,embed,io
 	color_by=part
 	edge_label_from=shape
 	caption="Transformer block diagram, after Attention Is All You Need."

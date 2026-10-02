@@ -858,6 +858,9 @@ function edgeAnchorSides(sourceRect, targetRect, sourceNode = null, targetNode =
 // Style cascade. A node or edge attr wins, then the view, then the layout's own
 // default. The same key names both levels, so an override reads like the default.
 export const TASKS_NODE_LOOKS = ['card', 'outline', 'sketch', 'blueprint', 'tab', 'station', 'point', 'circle', 'text'];
+// Attrs that set how an item is drawn, never what it says. Detail cards and
+// filters skip them; layouts.py STYLE_KEYS lists the view-level ones.
+export const TASKS_STYLE_ATTRS = new Set(['node_look', 'edge_path', 'edge_corner', 'canvas', 'subtitle_from', 'dashed', 'source_port', 'target_port']);
 // Looks sized by their label, not by the layout's node width.
 export const TASKS_GLYPH_LOOKS = ['point', 'circle', 'text'];
 export const TASKS_EDGE_PATHS = ['ribbon', 'line', 'orthogonal', 'octilinear', 'arc'];

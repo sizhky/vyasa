@@ -1,3 +1,4 @@
+import { hydrateMarkdown } from '../../../static/page_shell.js';
 import { logTasksDebug } from './tasks_diagnostics.js';
 import { measureTextWidth, normalizeTasksNodeImageUrl, resolveTasksNodeImage, tasksInlineLinkPlainText } from './tasks_graph_core.js';
 import {
@@ -536,6 +537,11 @@ export function renderTasksCardDetailsAndNotes(React, options = {}) {
     );
 }
 
+// Server-rendered attr HTML gets the page's markdown hydration, so $...$ becomes KaTeX.
+const hydrateTasksRenderedValue = (element) => {
+    if (element) hydrateMarkdown(element);
+};
+
 export function renderTasksDetailEntries(React, entries, options = {}) {
     return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', fontSize: options.fontSize || '14px', lineHeight: options.lineHeight || 1.35 } },
         ...(entries || []).map((entry, index) => {
@@ -563,6 +569,7 @@ export function renderTasksDetailEntries(React, entries, options = {}) {
                 ? React.createElement('span', { className: 'vyasa-task-node-card-value', style: { display: 'grid', gap: '4px' } },
                     ...renderedValues.map((renderedValue, renderedIndex) => React.createElement('span', {
                         key: `${renderedIndex}`,
+                        ref: hydrateTasksRenderedValue,
                         dangerouslySetInnerHTML: { __html: renderedValue },
                     })))
                 : React.createElement('span', { className: 'vyasa-task-node-card-value' }, entry.value),

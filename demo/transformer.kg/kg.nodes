@@ -16,7 +16,7 @@ model: Transformer
 		column=enc
 		track=embed
 		part=block
-		op=E[x] · √d_model
+		op=$E[x] \cdot \sqrt{d_{model}}$
 		shape=[B, T] → [B, T, 512]
 		params=V × 512, shared with the output embedding and the pre-softmax linear
 		description=A table lookup. The √d_model scale keeps embeddings comparable in size to the positional encoding.
@@ -24,7 +24,7 @@ model: Transformer
 		column=enc
 		track=plus
 		node_look=circle
-		op=Dropout(x + PE)
+		op=$\mathrm{Dropout}(x + PE)$
 		shape=[B, T, 512]
 		description=Element-wise sum, then dropout 0.1. Order information exists only from here on.
 	enc_pe: ~
@@ -32,8 +32,9 @@ model: Transformer
 		track=plus
 		node_look=circle
 		op=|
-			PE(pos, 2i) = sin(pos / 10000^(2i / d_model))
-			PE(pos, 2i+1) = cos(pos / 10000^(2i / d_model))
+			$PE_{(pos,\,2i)} = \sin\left(pos / 10000^{2i/d_{model}}\right)$
+
+			$PE_{(pos,\,2i+1)} = \cos\left(pos / 10000^{2i/d_{model}}\right)$
 		shape=[T, 512], broadcast over B
 		params=none
 		description=Fixed sinusoids. Each dimension pair is a rotation, so PE(pos + k) is a linear function of PE(pos).
@@ -62,16 +63,17 @@ model: Transformer
 			node_look=point
 			description=Self-attention: one tensor x serves as query, key, and value.
 		enc_an1: ADD & NORM
-			track=attn1
-			op=LayerNorm(x + Dropout(MHA(x)))
+			track=norm1
+			op=$\mathrm{LayerNorm}(x + \mathrm{Dropout}(\mathrm{MHA}(x)))$
 			shape=[B, T, 512]
 			params=γ, β: 2 × 512
 			description=Post-LN, as in the paper. Normalises over the 512 features of each position.
 		enc_mha: MULTI-HEAD ATTENTION
 			track=attn1
 			op=|
-				head_i = softmax(Q W_i^Q (K W_i^K)^T / √d_k + mask) V W_i^V
-				MHA = Concat(head_1 … head_8) W^O
+				$\mathrm{head}_i = \mathrm{softmax}\left(\frac{Q W_i^Q (K W_i^K)^\top}{\sqrt{d_k}} + M\right) V W_i^V$
+
+				$\mathrm{MHA} = \mathrm{Concat}(\mathrm{head}_1, \dots, \mathrm{head}_8)\, W^O$
 			shape=Q, K, V [B, T, 512] → scores [B, 8, T, T] → [B, T, 512]
 			params=4 × 512 × 512 + biases ≈ 1.05M
 			description=h = 8 heads, d_k = d_v = 64. Cost is O(T² · d_model). The padding mask sets scores at pad keys to −∞.
@@ -80,13 +82,13 @@ model: Transformer
 			node_look=point
 			description=Copy of x for the skip connection around the feed-forward network.
 		enc_an2: ADD & NORM
-			track=attn2
-			op=LayerNorm(x + Dropout(FFN(x)))
+			track=norm2
+			op=$\mathrm{LayerNorm}(x + \mathrm{Dropout}(\mathrm{FFN}(x)))$
 			shape=[B, T, 512]
 			params=γ, β: 2 × 512
 		enc_ff: FEED FORWARD
 			track=attn2
-			op=FFN(x) = max(0, x W₁ + b₁) W₂ + b₂
+			op=$\mathrm{FFN}(x) = \max(0,\, x W_1 + b_1)\, W_2 + b_2$
 			shape=[B, T, 512] → [B, T, 2048] → [B, T, 512]
 			params=2 × 512 × 2048 + biases ≈ 2.1M
 			description=Applied to each position separately, with the same weights. Holds about two thirds of a layer's parameters.
@@ -106,14 +108,14 @@ model: Transformer
 		column=dec
 		track=embed
 		part=block
-		op=E[y] · √d_model
+		op=$E[y] \cdot \sqrt{d_{model}}$
 		shape=[B, T'] → [B, T', 512]
 		params=shared with the input embedding
 	dec_add: +
 		column=dec
 		track=plus
 		node_look=circle
-		op=Dropout(y + PE)
+		op=$\mathrm{Dropout}(y + PE)$
 		shape=[B, T', 512]
 	dec_pe: ~
 		column=dec_wave
@@ -147,13 +149,13 @@ model: Transformer
 			node_look=point
 			description=Self-attention: one tensor y serves as query, key, and value.
 		dec_an1: ADD & NORM
-			track=attn1
-			op=LayerNorm(y + Dropout(MaskedMHA(y)))
+			track=norm1
+			op=$\mathrm{LayerNorm}(y + \mathrm{Dropout}(\mathrm{MaskedMHA}(y)))$
 			shape=[B, T', 512]
 			params=γ, β: 2 × 512
 		dec_mmha: MASKED MULTI-HEAD ATTENTION
 			track=attn1
-			op=softmax(Q Kᵀ / √d_k + M) V, with M[i, j] = −∞ where j > i
+			op=$\mathrm{softmax}\left(\frac{Q K^\top}{\sqrt{d_k}} + M\right) V, \quad M_{ij} = -\infty \text{ if } j > i$
 			shape=[B, T', 512] → scores [B, 8, T', T'] → [B, T', 512]
 			params=≈1.05M
 			description=The causal mask keeps position i from reading later positions. Training then predicts all T' tokens in one pass.
@@ -162,13 +164,13 @@ model: Transformer
 			node_look=point
 			description=Copy of y for the skip connection around cross-attention. The same tensor is the query.
 		dec_an2: ADD & NORM
-			track=attn2
-			op=LayerNorm(y + Dropout(CrossMHA(y, memory)))
+			track=norm2
+			op=$\mathrm{LayerNorm}(y + \mathrm{Dropout}(\mathrm{CrossMHA}(y, m)))$
 			shape=[B, T', 512]
 			params=γ, β: 2 × 512
 		dec_mha: MULTI-HEAD ATTENTION
 			track=attn2
-			op=softmax(Q_y K_mᵀ / √d_k + pad mask) V_m
+			op=$\mathrm{softmax}\left(\frac{Q_y K_m^\top}{\sqrt{d_k}} + M_{pad}\right) V_m$
 			shape=Q [B, T', 512], K and V [B, T, 512] → scores [B, 8, T', T] → [B, T', 512]
 			params=≈1.05M
 			description=Cross-attention. Each target position looks over the whole source sentence.
@@ -177,20 +179,20 @@ model: Transformer
 			node_look=point
 			description=Copy of y for the skip connection around the feed-forward network.
 		dec_an3: ADD & NORM
-			track=ff3
-			op=LayerNorm(y + Dropout(FFN(y)))
+			track=norm3
+			op=$\mathrm{LayerNorm}(y + \mathrm{Dropout}(\mathrm{FFN}(y)))$
 			shape=[B, T', 512]
 			params=γ, β: 2 × 512
 		dec_ff: FEED FORWARD
 			track=ff3
-			op=FFN(y) = max(0, y W₁ + b₁) W₂ + b₂
+			op=$\mathrm{FFN}(y) = \max(0,\, y W_1 + b_1)\, W_2 + b_2$
 			shape=[B, T', 512] → [B, T', 2048] → [B, T', 512]
 			params=≈2.1M
 	linear: LINEAR
 		column=dec
 		track=linear
 		part=block
-		op=logits = y Eᵀ
+		op=$z = y E^\top$
 		shape=[B, T', 512] → [B, T', V]
 		params=tied to the embedding matrix E
 		description=Projects each position onto the vocabulary. This is the widest tensor in the model.
@@ -198,7 +200,7 @@ model: Transformer
 		column=dec
 		track=softmax
 		part=block
-		op=p_v = exp(z_v) / Σ_u exp(z_u)
+		op=$p_v = \dfrac{e^{z_v}}{\sum_u e^{z_u}}$
 		shape=[B, T', V]
 		description=Normalises over the vocabulary axis. Training uses cross-entropy with label smoothing ε = 0.1.
 	prob: OUTPUT PROBABILITIES
