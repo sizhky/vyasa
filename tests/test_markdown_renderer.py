@@ -644,3 +644,11 @@ def test_invalid_code_reference_attributes_leave_the_link_and_record_an_error():
     assert "data-vyasa-code-reference" not in rendered
     assert [record.diagnostic.code for record in REPORT.errors] == ["missing_attribute"]
     REPORT.clear()
+
+
+def test_inline_math_skips_markdown_escapes_and_emphasis():
+    html_out = _render_markdown_fragment(r"$PE_{(pos,\,2i)}$ and $x_*y*$ cost $5 and *em* for $10")
+
+    assert r"$PE_{(pos,\,2i)}$" in html_out
+    assert "$x_*y*$" in html_out
+    assert "<em>em</em>" in html_out

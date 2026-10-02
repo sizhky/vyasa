@@ -41,6 +41,13 @@ def _strip_one_blockquote_level(text):
     )
 
 
+# One definition of a math span for every step that must leave math alone.
+# KaTeX auto-render reads these delimiters on the client, where a `$` before a
+# digit is currency (renderMathSafely), so it neither opens nor closes a span.
+DISPLAY_MATH_PATTERN = r"\$\$[\s\S]*?\$\$"
+INLINE_MATH_PATTERN = r"\$(?![\d$])(?:\\.|[^$\n])+?\$(?!\d)"
+
+
 def preprocess_super_sub(content):
     protected = []
     def protect(pattern, text, flags=0):
@@ -48,8 +55,8 @@ def preprocess_super_sub(content):
         return regex.sub(lambda m: protected.append(m.group(0)) or f"@@VYASA_PROTECT_{len(protected)-1}@@", text)
     content = protect(r"(```+|~~~+)[\s\S]*?\1", content, re.MULTILINE)
     content = protect(r"(`+)([^`]*?)\1", content)
-    content = protect(r"\$\$[\s\S]*?\$\$", content, re.MULTILINE)
-    content = protect(r"\$(?:\\.|[^$\n])+\$", content)
+    content = protect(DISPLAY_MATH_PATTERN, content, re.MULTILINE)
+    content = protect(INLINE_MATH_PATTERN, content)
     content = protect(r"\\\[[\s\S]*?\\\]", content, re.MULTILINE)
     content = protect(r"\\\((?:\\.|[^\\)])*\\\)", content)
     content = re.sub(r"(?<![\\\w$])\^([A-Za-z0-9.+\-]{1,32})\^(?![\w$])", r"<sup>\1</sup>", content)
