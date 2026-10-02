@@ -414,3 +414,46 @@ export function tasksCanvasBackgroundProps(canvas, props) {
     const background = (TASKS_CANVAS_STYLES[canvas] || TASKS_CANVAS_STYLES.plain).background;
     return background ? { ...props, ...background } : props;
 }
+
+// Highlight state paint: design.md (State order). Every look lights and dims
+// with the same rings, glows and inks. Ring: [width, colour %]; glow: [blur,
+// spread, colour %]. Each branch of a highlight pass names the state it paints.
+const TASKS_STATE_RINGS = {
+    // An endpoint of the edge whose card is open.
+    endpoint: { ring: [2, 70] },
+    // A member of a multi-selection.
+    picked: { ring: [2, 70], glow: [18, 4, 34] },
+    selected: { ring: [2, 70], glow: [18, 4, 40] },
+    neighbor: { ring: [2, 66], glow: [28, 7, 40] },
+    neighborFocus: { ring: [3, 72], glow: [30, 8, 46] },
+    hover: { ring: [3, 76], glow: [24, 6, 48] },
+    hoverNeighbor: { ring: [2, 68], glow: [32, 8, 46] },
+};
+
+/**
+ * The box shadow of a lit node: its checked shadow first, then the state's
+ * ring and glow in the node's colour.
+ *
+ * >>> tasksStateShadow('endpoint', '#f00')
+ * '0 0 0 2px color-mix(in srgb, #f00 70%, transparent)'
+ */
+export function tasksStateShadow(state, color, checkedShadow = 'none') {
+    const { ring, glow } = TASKS_STATE_RINGS[state];
+    return [
+        checkedShadow !== 'none' ? checkedShadow : '',
+        `0 0 0 ${ring[0]}px color-mix(in srgb, ${color} ${ring[1]}%, transparent)`,
+        glow ? `0 0 ${glow[0]}px ${glow[1]}px color-mix(in srgb, ${color} ${glow[2]}%, transparent)` : '',
+    ].filter(Boolean).join(', ');
+}
+
+// The inset and outer ring a checked node shows in its card-state colour.
+export function tasksCheckedShadow(accent) {
+    return `inset 0 0 0 2px color-mix(in srgb, ${accent} 24%, transparent), 0 0 0 2px color-mix(in srgb, ${accent} 34%, transparent)`;
+}
+
+// Opacity of a dimmed node: under a node selection, and under every other pass.
+export const TASKS_SELECTION_DIM_OPACITY = 0.22;
+export const TASKS_DIM_OPACITY = 0.18;
+// Ink of a dimmed edge and of its label.
+export const TASKS_DIM_EDGE_INK = 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)';
+export const TASKS_DIM_LABEL_INK = 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)';

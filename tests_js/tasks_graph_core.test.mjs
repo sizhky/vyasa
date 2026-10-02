@@ -6,7 +6,7 @@ import { tasksModelBooleanSetting, tasksProjectionSchemaPrefs } from '../vyasa/e
 import { averageTasksHexColors, resolveTasksCollapsedGroupColor, tasksCompositeSweep, tasksEdgeStrokeWidthForMode, tasksGroupBackground, tasksNodeBackground, tasksProminentEdgeLabelScale, tasksTaperedArrowHeadPath, tasksTaperedBezierPath } from '../vyasa/extensions_builtin/tasks/static/tasks_paint.js';
 
 // Older wiring checks inspect all owners; value checks call the real exports.
-const taskSources = ['tasks', 'tasks_cards', 'tasks_edges', 'tasks_nodes', 'tasks_panels', 'tasks_paint', 'tasks_layouts', 'tasks_graph_model']
+const taskSources = ['tasks', 'tasks_cards', 'tasks_edges', 'tasks_nodes', 'tasks_panels', 'tasks_paint', 'tasks_layouts', 'tasks_graph_model', 'tasks_highlight', 'tasks_theme']
     .map(name => fs.readFileSync(new URL(`../vyasa/extensions_builtin/tasks/static/${name}.js`, import.meta.url), 'utf8')).join('\n');
 
 globalThis.window = { innerWidth: 1000, innerHeight: 800 };

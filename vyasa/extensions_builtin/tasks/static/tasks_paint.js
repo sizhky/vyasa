@@ -1,5 +1,6 @@
 import { logTasksDebug, logTasksDebugVerbose } from './tasks_diagnostics.js';
-import { tasksEdgeBaseWidth, tasksLookLitFill } from './tasks_theme.js';
+import { tasksIsDashed } from './tasks_graph_core.js';
+import { tasksCheckedShadow, tasksEdgeBaseWidth, tasksGroupLook, tasksGroupRingTokens, tasksLookLitFill, tasksNodeLookStyle, tasksStateShadow } from './tasks_theme.js';
 import {
     TASKS_CARD_STATE_ATTR, TASKS_DEFAULT_CARD_STATES, TASKS_HAS_NOTE_ATTR, TASKS_SPECIAL_NODE_ATTRS,
     clampTasksEdgeOpacity, clampTasksProjectionDisplayOpacity, collectTasksGroupDescendantIds, collectTasksGroupDescendants,
@@ -1116,19 +1117,70 @@ export function tasksNodeIsOverlaid(node) {
     return Boolean(levels && levels.length);
 }
 
-export function tasksHoverFocusNodeStyle(node, nodeColor, displayColor, activeBorderColor, checkedShadow, colorMix, primary) {
-    const baseZIndex = Number.isFinite(Number(node.zIndex)) ? Number(node.zIndex) : Number(node.style?.zIndex || 0);
-    const zIndex = baseZIndex + (primary ? TASKS_SELECTED_Z_BOOST : TASKS_NEIGHBOR_Z_BOOST);
+// The wrapper style of a task node at rest: its look over the card fill and
+// border, then the checked state's border and shadow. Free and fixed views both
+// build task wrappers here.
+export function tasksTaskWrapperStyle({ nodeColor, colorMix, useOverlay, look, dashed, isChecked, stateAccent, width, height, zIndex }) {
+    const lookStyle = tasksNodeLookStyle({
+        background: useOverlay ? 'transparent' : tasksNodeBackground(nodeColor, '', colorMix, TASKS_NODE_BG, false),
+        border: nodeColor ? `1px solid color-mix(in srgb, var(--vyasa-paper) 30%, ${nodeColor} 70%)` : TASKS_NODE_BORDER,
+    }, useOverlay ? 'card' : look, nodeColor, dashed);
     return {
+        width,
+        height,
         zIndex,
+        borderRadius: 6,
+        boxShadow: isChecked ? tasksCheckedShadow(stateAccent) : 'none',
+        overflow: 'hidden',
+        // A look may restate the radius and the overflow it needs.
+        ...lookStyle,
+        border: isChecked ? `2px solid color-mix(in srgb, ${stateAccent} 78%, white 22%)` : lookStyle.border,
+    };
+}
+
+// The frame of a group, open or closed, in the free graph and in a fixed layout.
+// The frame takes the group look of the node look. A group's border is one pixel
+// heavier than a card's look, and a look with no border gets a ring instead.
+// `tokens` set the CSS ring an open group draws.
+export function tasksGroupFrameStyle(group, { groupColor, isExpanded, nodeLook, transparent = false, fillExpanded = 0, fillCollapsed = 14, borderMix = 70 }) {
+    const background = isExpanded
+        ? tasksGroupBackground(groupColor, '', TASKS_GROUP_EXPANDED_BG, { mode: 'transparent', intensity: fillExpanded })
+        : tasksGroupBackground(groupColor, '', TASKS_GROUP_BG, { intensity: fillCollapsed });
+    const border = groupColor
+        ? `1px solid color-mix(in srgb, var(--vyasa-paper) ${100 - borderMix}%, ${groupColor} ${borderMix}%)`
+        : TASKS_NODE_BORDER;
+    const lookStyle = tasksNodeLookStyle({ background: transparent ? 'transparent' : background, border }, tasksGroupLook(nodeLook), groupColor, tasksIsDashed(group));
+    if (typeof lookStyle.border === 'string') {
+        lookStyle.border = lookStyle.border.replace(/^(\d+(?:\.\d+)?)px\b/, (_, width) => `${Number(width) + 1}px`);
+    }
+    const ring = !lookStyle.border || lookStyle.border === 'none'
+        ? `0 0 0 1px color-mix(in srgb, ${groupColor || 'var(--vyasa-ink)'} 42%, transparent)`
+        : 'none';
+    return { lookStyle, ring, tokens: tasksGroupRingTokens(nodeLook) };
+}
+
+// The z-index of a lit node: its own z plus the boost its state earns.
+export function tasksStateZIndex(node, boost) {
+    const baseZIndex = Number.isFinite(Number(node.zIndex)) ? Number(node.zIndex) : Number(node.style?.zIndex || 0);
+    return baseZIndex + boost;
+}
+
+// The fill of a lit node. An overlaid node keeps its overlay; a group takes a
+// faint wash of its colour; a task takes its look's lit fill.
+export function tasksLitNodeFill(node, nodeColor, groupColor, colorMix, groupIntensity) {
+    if (tasksNodeIsOverlaid(node)) return node.style.background;
+    return node.data?.__kind__ === 'group'
+        ? tasksGroupBackground(groupColor, '', TASKS_GROUP_BG_ACTIVE, { mode: 'transparent', intensity: groupIntensity })
+        : tasksActiveNodeFill(node, nodeColor, colorMix);
+}
+
+export function tasksHoverFocusNodeStyle(node, nodeColor, displayColor, activeBorderColor, checkedShadow, colorMix, primary) {
+    return {
+        zIndex: tasksStateZIndex(node, primary ? TASKS_SELECTED_Z_BOOST : TASKS_NEIGHBOR_Z_BOOST),
         opacity: 1,
         '--vyasa-tasks-active-border': activeBorderColor,
-        background: tasksNodeIsOverlaid(node)
-            ? node.style.background
-            : (node.data?.__kind__ === 'group'
-                ? tasksGroupBackground(displayColor, '', TASKS_GROUP_BG_ACTIVE, { mode: 'transparent', intensity: primary ? 12 : 8 })
-                : tasksActiveNodeFill(node, nodeColor, colorMix)),
-        boxShadow: `${checkedShadow !== 'none' ? `${checkedShadow}, ` : ''}0 0 0 ${primary ? 3 : 2}px color-mix(in srgb, ${displayColor} ${primary ? 76 : 68}%, transparent), 0 0 ${primary ? 24 : 32}px ${primary ? 6 : 8}px color-mix(in srgb, ${displayColor} ${primary ? 48 : 46}%, transparent)`,
+        background: tasksLitNodeFill(node, nodeColor, displayColor, colorMix, primary ? 12 : 8),
+        boxShadow: tasksStateShadow(primary ? 'hover' : 'hoverNeighbor', displayColor, checkedShadow),
     };
 }
 

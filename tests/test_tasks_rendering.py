@@ -89,7 +89,7 @@ def test_tasks_groups_remain_selectable_when_expanded():
 
 def test_tasks_expanded_group_title_bar_selects_source_group():
     core_source = Path("vyasa/extensions_builtin/tasks/static/tasks_graph_core.js").read_text()
-    graph_source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    graph_source = tasks_static_source("tasks.js", "tasks_highlight.js")
 
     assert "kind === 'groupTitle'" in core_source
     assert "if (kind === 'groupTitle') return 'control';" in core_source
@@ -858,7 +858,7 @@ def test_w_edge_q_temporarily_shows_other_node_card():
 
 
 def test_w_enter_pin_blooms_from_the_edge():
-    source = tasks_static_source("tasks_panels.js", "tasks.js")
+    source = tasks_static_source("tasks_panels.js", "tasks.js", "tasks_highlight.js")
     css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
 
     assert "setEdgePinBloom({ edgeId: selectedEdgeIdRef.current, key: bloomKey });" in source
@@ -1441,7 +1441,7 @@ def test_tasks_group_hover_uses_the_selected_panel_entries():
 
 
 def test_highlighted_edges_and_arrowheads_render_below_node_cards():
-    source = tasks_static_source("tasks_paint.js", "tasks.js")
+    source = tasks_static_source("tasks_paint.js", "tasks.js", "tasks_highlight.js")
 
     assert "const TASKS_EDGE_FOCUS_Z = TASKS_TASK_Z - 2;" in source
     assert "zIndex: hit ? TASKS_EDGE_FOCUS_Z : TASKS_EDGE_Z" in source
