@@ -88,7 +88,8 @@ const symbolBody = (h, { subtitle }) => {
  * - role: the role a node with this look plays unless its `node_role` names
  *   another (tasks_roles.js).
  * - frame: wrapper fill, border and type colour that replace the card's.
- * - litFill: the fill a lit node keeps; null uses the card's lit fill.
+ * - lit: how a lit node shows its state. `paint` names a TASKS_LIT_PAINTS
+ *   entry; `fill` is the fill it keeps, or null for the card's lit fill.
  * - size: the box a layout gives the node; null uses the card's text sizing.
  * - body: the parts of the node body the look owns: type, a frame behind the
  *   label, how the title is wrapped, and what follows it.
@@ -101,7 +102,7 @@ const TASKS_LOOKS = {
         role: 'item',
         font: '',
         frame: () => ({}),
-        litFill: () => null,
+        lit: { paint: 'rings', fill: () => null },
         size: () => null,
         body: cardBody,
         route: 'box',
@@ -112,7 +113,7 @@ const TASKS_LOOKS = {
         role: 'item',
         font: TASKS_OUTLINE_FONT,
         frame: ({ color, dashed }) => tasksOutlineNodeStyle(color, false, dashed),
-        litFill: (color) => tasksOutlineNodeStyle(color, true).background,
+        lit: { paint: 'rings', fill: (color) => tasksOutlineNodeStyle(color, true).background },
         size: figureSize,
         body: monoBody,
         route: 'box',
@@ -124,7 +125,7 @@ const TASKS_LOOKS = {
         font: TASKS_HAND_FONT,
         // The body draws the wobbling frame, so the text above it stays crisp.
         frame: ({ tint }) => ({ background: 'transparent', border: 'none', color: tint, overflow: 'visible' }),
-        litFill: () => 'transparent',
+        lit: { paint: 'bands', fill: () => 'transparent' },
         size: figureSize,
         body: (h, { subtitle, dashed }) => {
             const { subtitleLine } = figureParts(h, subtitle);
@@ -153,7 +154,7 @@ const TASKS_LOOKS = {
         role: 'item',
         font: TASKS_OUTLINE_FONT,
         frame: ({ line }) => ({ background: 'transparent', border: `1.3px ${line} color-mix(in srgb, var(--vyasa-ink) 85%, transparent)`, color: 'var(--vyasa-ink)', borderRadius: 0 }),
-        litFill: () => 'transparent',
+        lit: { paint: 'rings', fill: () => 'transparent' },
         size: figureSize,
         body: monoBody,
         route: 'box',
@@ -164,7 +165,7 @@ const TASKS_LOOKS = {
         role: 'item',
         font: TASKS_OUTLINE_FONT,
         frame: ({ tint, line }) => ({ background: 'var(--vyasa-paper)', border: `1px ${line} color-mix(in srgb, ${tint} 70%, transparent)`, color: tint, borderRadius: 4 }),
-        litFill: () => 'var(--vyasa-paper)',
+        lit: { paint: 'rings', fill: () => 'var(--vyasa-paper)' },
         // A header tab adds its band and its [kind] line above the subtitle.
         size: (label, subtitle, width) => ({ width, height: figureSize(label, subtitle, width).height + 22 }),
         body: (h, { subtitle, kind }) => {
@@ -191,7 +192,7 @@ const TASKS_LOOKS = {
         role: 'item',
         font: '',
         frame: () => ({ background: 'transparent', border: 'none', color: 'var(--vyasa-ink)', overflow: 'visible' }),
-        litFill: () => 'transparent',
+        lit: { paint: 'ink', fill: () => 'transparent' },
         // A station is a dot with its label above it; the box only holds the label.
         size: (label, subtitle, width) => ({ width, height: 48 }),
         body: (h, { dashed }) => ({
@@ -202,7 +203,7 @@ const TASKS_LOOKS = {
                 style: {
                     position: 'absolute', left: '50%', top: '50%', width: `${TASKS_STATION_DOT}px`, height: `${TASKS_STATION_DOT}px`, transform: 'translate(-50%, -50%)',
                     boxSizing: 'border-box', borderRadius: '50%', background: 'var(--vyasa-paper)',
-                    border: `3px ${dashed ? 'dashed' : 'solid'} var(--vyasa-ink)`, pointerEvents: 'none', zIndex: 2,
+                    border: `3px ${dashed ? 'dashed' : 'solid'} currentColor`, pointerEvents: 'none', zIndex: 2,
                 },
             }),
             title: (title) => h('span', { style: { display: 'block', lineHeight: '14px', whiteSpace: 'nowrap' } }, title),
@@ -217,7 +218,7 @@ const TASKS_LOOKS = {
         role: 'junction',
         font: TASKS_OUTLINE_FONT,
         frame: () => ({ background: 'transparent', border: 'none', borderRadius: '50%', overflow: 'visible' }),
-        litFill: () => 'transparent',
+        lit: { paint: 'none', fill: () => 'transparent' },
         size: () => ({ width: TASKS_POINT_SIZE, height: TASKS_POINT_SIZE }),
         body: () => ({ body: { padding: '0' }, title: () => null, after: [] }),
         route: 'box',
@@ -232,7 +233,7 @@ const TASKS_LOOKS = {
             const ring = tasksOutlineNodeStyle(color, false, dashed);
             return { ...ring, border: ring.border.replace(/^2px/, '1.5px'), borderRadius: '50%' };
         },
-        litFill: () => null,
+        lit: { paint: 'rings', fill: () => null },
         size: (label) => {
             const diameter = Math.max(36, Math.ceil(String(label || '').length * glyphCharWidth) + 18);
             return { width: diameter, height: diameter };
@@ -247,7 +248,7 @@ const TASKS_LOOKS = {
         role: 'mark',
         font: TASKS_OUTLINE_FONT,
         frame: ({ tint }) => ({ background: 'transparent', border: 'none', color: `color-mix(in srgb, ${tint} 82%, var(--vyasa-ink))`, overflow: 'visible' }),
-        litFill: () => 'transparent',
+        lit: { paint: 'ink', fill: () => 'transparent' },
         size: (label) => {
             const length = String(label || '').length;
             const lines = Math.max(1, Math.ceil((length * glyphCharWidth) / (TASKS_TEXT_MAX_WIDTH - 12)));
@@ -279,7 +280,7 @@ export function tasksNodeLookStyle(cardStyle, look, nodeColor, dashed = false) {
 
 // The fill a lit node keeps, or null when the look keeps the card's lit fill.
 export function tasksLookLitFill(look, nodeColor) {
-    return tasksLook(look).litFill(nodeColor);
+    return tasksLook(look).lit.fill(nodeColor);
 }
 
 /**
@@ -435,24 +436,44 @@ export function tasksCanvasBackgroundProps(canvas, props) {
     return background ? { ...props, ...background } : props;
 }
 
-// Highlight state paint: design.md (State order). Every look lights and dims
-// with the same rings, glows and inks. Ring: [width, colour %]; glow: [blur,
-// spread, colour %]. Each branch of a highlight pass names the state it paints.
+// Highlight state paint: design.md (Lit paint). The state table sets how
+// strongly each state rings; the look's lit paint sets what draws it. Ring:
+// [width, colour %]. A lit node paints only rings with no blur, outlines, ink
+// and opacity: a blurred shadow or a filter repaints every lit node on each hover.
 const TASKS_STATE_RINGS = {
     // An endpoint of the edge whose card is open.
-    endpoint: { ring: [2, 70] },
+    endpoint: { ring: [2, 70], central: true },
     // A member of a multi-selection.
-    picked: { ring: [2, 70], glow: [18, 4, 34] },
-    selected: { ring: [2, 70], glow: [18, 4, 40] },
-    neighbor: { ring: [2, 66], glow: [28, 7, 40] },
-    neighborFocus: { ring: [3, 72], glow: [30, 8, 46] },
-    hover: { ring: [3, 76], glow: [24, 6, 48] },
-    hoverNeighbor: { ring: [2, 68], glow: [32, 8, 46] },
+    picked: { ring: [2, 70], central: true },
+    selected: { ring: [2, 70], central: true },
+    neighbor: { ring: [2, 66], central: false },
+    neighborFocus: { ring: [3, 72], central: false },
+    hover: { ring: [3, 76], central: true },
+    hoverNeighbor: { ring: [2, 68], central: false },
 };
 
 /**
+ * Lit paints. Fields:
+ * - ring: a box-shadow ring on the node wrapper.
+ * - bands: outline bands around the node box (TasksNodeHighlightBorders).
+ * - ink: the wrapper's text takes the ring colour and an underline, solid
+ *   for a central state and dotted for a neighbour.
+ */
+const TASKS_LIT_PAINTS = {
+    rings: { ring: true, bands: true, ink: false },
+    bands: { ring: false, bands: true, ink: false },
+    ink: { ring: false, bands: false, ink: true },
+    none: { ring: false, bands: false, ink: false },
+};
+
+// The lit paint record of a look.
+export function tasksLookLitPaint(look) {
+    return TASKS_LIT_PAINTS[tasksLook(look).lit.paint];
+}
+
+/**
  * The box shadow of a lit node: its checked shadow first, then the state's
- * ring and glow in the node's colour, at the strength its role's bands allow.
+ * ring in the node's colour, at the strength its role's bands allow.
  *
  * >>> tasksStateShadow('endpoint', '#f00')
  * '0 0 0 2px color-mix(in srgb, #f00 70%, transparent)'
@@ -460,17 +481,33 @@ const TASKS_STATE_RINGS = {
  * '0 0 0 1px color-mix(in srgb, #f00 76%, transparent)'
  */
 export function tasksStateShadow(state, color, checkedShadow = 'none', bands = 'full') {
-    // A role with thin bands keeps a 1px ring and no glow; one with none keeps
-    // only its checked shadow.
+    // A role with thin bands keeps a 1px ring; one with none keeps only its checked shadow.
     if (bands === 'none') return checkedShadow;
-    const { ring: fullRing, glow: fullGlow } = TASKS_STATE_RINGS[state];
-    const ring = bands === 'thin' ? [1, fullRing[1]] : fullRing;
-    const glow = bands === 'thin' ? null : fullGlow;
+    const [width, percent] = TASKS_STATE_RINGS[state].ring;
     return [
         checkedShadow !== 'none' ? checkedShadow : '',
-        `0 0 0 ${ring[0]}px color-mix(in srgb, ${color} ${ring[1]}%, transparent)`,
-        glow ? `0 0 ${glow[0]}px ${glow[1]}px color-mix(in srgb, ${color} ${glow[2]}%, transparent)` : '',
+        `0 0 0 ${bands === 'thin' ? 1 : width}px color-mix(in srgb, ${color} ${percent}%, transparent)`,
     ].filter(Boolean).join(', ');
+}
+
+/**
+ * The style a lit node takes for a state, by its look's lit paint and its
+ * role's bands. `border` is the colour of its outline bands.
+ *
+ * >>> tasksLitStyle('text', 'hover', '#f00')
+ * { '--vyasa-tasks-active-border': '#f00', boxShadow: 'none', color: '#f00', textDecoration: 'underline solid #f00' }
+ * >>> tasksLitStyle('point', 'hover', '#f00', { bands: 'none' }).boxShadow
+ * 'none'
+ */
+export function tasksLitStyle(look, state, color, { bands = 'full', checkedShadow = 'none', border = color } = {}) {
+    const paint = tasksLookLitPaint(look);
+    const style = {
+        '--vyasa-tasks-active-border': border,
+        boxShadow: paint.ring ? tasksStateShadow(state, color, checkedShadow, bands) : checkedShadow,
+    };
+    if (!paint.ink || bands === 'none') return style;
+    const line = TASKS_STATE_RINGS[state].central ? 'solid' : 'dotted';
+    return { ...style, color, textDecoration: `underline ${line} ${color}` };
 }
 
 // The inset and outer ring a checked node shows in its card-state colour.

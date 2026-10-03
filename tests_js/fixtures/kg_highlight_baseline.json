@@ -258,7 +258,7 @@
     "style": {
      "zIndex": 1000,
      "background": "slate",
-     "boxShadow": "0 0 0 2px color-mix(in srgb, #cc3333 70%, transparent), 0 0 18px 4px color-mix(in srgb, #cc3333 34%, transparent)",
+     "boxShadow": "0 0 0 2px color-mix(in srgb, #cc3333 70%, transparent)",
      "opacity": 1,
      "--vyasa-tasks-active-border": "#cc3333"
     }
@@ -283,7 +283,7 @@
     "style": {
      "zIndex": 1000,
      "background": "slate",
-     "boxShadow": "0 0 0 2px color-mix(in srgb, #cc3333 70%, transparent), 0 0 18px 4px color-mix(in srgb, #cc3333 34%, transparent)",
+     "boxShadow": "0 0 0 2px color-mix(in srgb, #cc3333 70%, transparent)",
      "opacity": 1,
      "--vyasa-tasks-active-border": "#2a2"
     }
@@ -308,7 +308,7 @@
     "style": {
      "zIndex": 1000,
      "background": "slate",
-     "boxShadow": "0 0 0 2px color-mix(in srgb, #cc3333 70%, transparent), 0 0 18px 4px color-mix(in srgb, #cc3333 34%, transparent)",
+     "boxShadow": "0 0 0 2px color-mix(in srgb, #cc3333 70%, transparent)",
      "opacity": 1,
      "--vyasa-tasks-active-border": "#cc3333"
     }
@@ -331,7 +331,7 @@
     "style": {
      "zIndex": 10,
      "background": "slate",
-     "boxShadow": "0 0 0 2px color-mix(in srgb, #cc3333 70%, transparent), 0 0 18px 4px color-mix(in srgb, #cc3333 34%, transparent)",
+     "boxShadow": "0 0 0 2px color-mix(in srgb, #cc3333 70%, transparent)",
      "opacity": 1,
      "--vyasa-tasks-active-border": "#cc3333"
     }
@@ -355,7 +355,7 @@
     "style": {
      "zIndex": 1000,
      "background": "slate",
-     "boxShadow": "0 0 0 2px color-mix(in srgb, #cc3333 70%, transparent), 0 0 18px 4px color-mix(in srgb, #cc3333 34%, transparent)",
+     "boxShadow": "0 0 0 2px color-mix(in srgb, #cc3333 70%, transparent)",
      "opacity": 1,
      "--vyasa-tasks-active-border": "#cc3333"
     }
@@ -535,7 +535,7 @@
     "style": {
      "zIndex": 1520,
      "background": "#cc3333",
-     "boxShadow": "0 0 0 3px color-mix(in srgb, #cc3333 76%, transparent), 0 0 24px 6px color-mix(in srgb, #cc3333 48%, transparent)",
+     "boxShadow": "0 0 0 3px color-mix(in srgb, #cc3333 76%, transparent)",
      "opacity": 1,
      "--vyasa-tasks-active-border": "#cc3333"
     }
@@ -560,7 +560,7 @@
     "style": {
      "zIndex": 1260,
      "background": "#cc3333",
-     "boxShadow": "inset 0 0 0 2px color-mix(in srgb, #2a2 24%, transparent), 0 0 0 2px color-mix(in srgb, #2a2 34%, transparent), 0 0 0 2px color-mix(in srgb, #cc3333 68%, transparent), 0 0 32px 8px color-mix(in srgb, #cc3333 46%, transparent)",
+     "boxShadow": "inset 0 0 0 2px color-mix(in srgb, #2a2 24%, transparent), 0 0 0 2px color-mix(in srgb, #2a2 34%, transparent), 0 0 0 2px color-mix(in srgb, #cc3333 68%, transparent)",
      "opacity": 1,
      "--vyasa-tasks-active-border": "#2a2"
     }
@@ -585,7 +585,7 @@
     "style": {
      "zIndex": 1260,
      "background": "color-mix(in srgb, #cc3333 12%, var(--vyasa-paper))",
-     "boxShadow": "0 0 0 2px color-mix(in srgb, #cc3333 68%, transparent), 0 0 32px 8px color-mix(in srgb, #cc3333 46%, transparent)",
+     "boxShadow": "0 0 0 2px color-mix(in srgb, #cc3333 68%, transparent)",
      "opacity": 1,
      "--vyasa-tasks-active-border": "#cc3333"
     }
@@ -976,7 +976,7 @@
     "style": {
      "zIndex": 1520,
      "background": "#cc3333",
-     "boxShadow": "0 0 0 3px color-mix(in srgb, #cc3333 76%, transparent), 0 0 24px 6px color-mix(in srgb, #cc3333 48%, transparent)",
+     "boxShadow": "0 0 0 3px color-mix(in srgb, #cc3333 76%, transparent)",
      "opacity": 1,
      "--vyasa-tasks-active-border": "#cc3333"
     }
@@ -1001,7 +1001,7 @@
     "style": {
      "zIndex": 1520,
      "background": "#cc3333",
-     "boxShadow": "inset 0 0 0 2px color-mix(in srgb, #2a2 24%, transparent), 0 0 0 2px color-mix(in srgb, #2a2 34%, transparent), 0 0 0 3px color-mix(in srgb, #cc3333 76%, transparent), 0 0 24px 6px color-mix(in srgb, #cc3333 48%, transparent)",
+     "boxShadow": "inset 0 0 0 2px color-mix(in srgb, #2a2 24%, transparent), 0 0 0 2px color-mix(in srgb, #2a2 34%, transparent), 0 0 0 3px color-mix(in srgb, #cc3333 76%, transparent)",
      "opacity": 1,
      "--vyasa-tasks-active-border": "#2a2"
     }
@@ -1210,7 +1210,7 @@
     "style": {
      "zIndex": 1520,
      "background": "#cc3333",
-     "boxShadow": "0 0 0 2px color-mix(in srgb, #cc3333 70%, transparent), 0 0 18px 4px color-mix(in srgb, #cc3333 40%, transparent)",
+     "boxShadow": "0 0 0 2px color-mix(in srgb, #cc3333 70%, transparent)",
      "opacity": 1,
      "--vyasa-tasks-active-border": "#cc3333"
     }
@@ -1234,7 +1234,7 @@
     "style": {
      "zIndex": 1260,
      "background": "#cc3333",
-     "boxShadow": "inset 0 0 0 2px color-mix(in srgb, #2a2 24%, transparent), 0 0 0 2px color-mix(in srgb, #2a2 34%, transparent), 0 0 0 2px color-mix(in srgb, #cc3333 66%, transparent), 0 0 28px 7px color-mix(in srgb, #cc3333 40%, transparent)",
+     "boxShadow": "inset 0 0 0 2px color-mix(in srgb, #2a2 24%, transparent), 0 0 0 2px color-mix(in srgb, #2a2 34%, transparent), 0 0 0 2px color-mix(in srgb, #cc3333 66%, transparent)",
      "opacity": 1,
      "--vyasa-tasks-active-border": "#2a2"
     }
@@ -1258,7 +1258,7 @@
     "style": {
      "zIndex": 1260,
      "background": "color-mix(in srgb, #cc3333 12%, var(--vyasa-paper))",
-     "boxShadow": "0 0 0 2px color-mix(in srgb, #cc3333 66%, transparent), 0 0 28px 7px color-mix(in srgb, #cc3333 40%, transparent)",
+     "boxShadow": "0 0 0 2px color-mix(in srgb, #cc3333 66%, transparent)",
      "opacity": 1,
      "--vyasa-tasks-active-border": "#cc3333"
     }
@@ -1519,7 +1519,7 @@
     "style": {
      "zIndex": 1520,
      "background": "#cc3333",
-     "boxShadow": "0 0 0 2px color-mix(in srgb, #cc3333 70%, transparent), 0 0 18px 4px color-mix(in srgb, #cc3333 40%, transparent)",
+     "boxShadow": "0 0 0 2px color-mix(in srgb, #cc3333 70%, transparent)",
      "opacity": 1,
      "--vyasa-tasks-active-border": "#cc3333"
     }
@@ -1543,7 +1543,7 @@
     "style": {
      "zIndex": 1260,
      "background": "#cc3333",
-     "boxShadow": "inset 0 0 0 2px color-mix(in srgb, #2a2 24%, transparent), 0 0 0 2px color-mix(in srgb, #2a2 34%, transparent), 0 0 0 2px color-mix(in srgb, #cc3333 66%, transparent), 0 0 28px 7px color-mix(in srgb, #cc3333 40%, transparent)",
+     "boxShadow": "inset 0 0 0 2px color-mix(in srgb, #2a2 24%, transparent), 0 0 0 2px color-mix(in srgb, #2a2 34%, transparent), 0 0 0 2px color-mix(in srgb, #cc3333 66%, transparent)",
      "opacity": 1,
      "--vyasa-tasks-active-border": "#2a2"
     }
@@ -1567,7 +1567,7 @@
     "style": {
      "zIndex": 1260,
      "background": "color-mix(in srgb, #cc3333 12%, var(--vyasa-paper))",
-     "boxShadow": "0 0 0 2px color-mix(in srgb, #cc3333 66%, transparent), 0 0 28px 7px color-mix(in srgb, #cc3333 40%, transparent)",
+     "boxShadow": "0 0 0 2px color-mix(in srgb, #cc3333 66%, transparent)",
      "opacity": 1,
      "--vyasa-tasks-active-border": "#cc3333"
     }
@@ -1833,7 +1833,7 @@
     "style": {
      "zIndex": 1520,
      "background": "#cc3333",
-     "boxShadow": "0 0 0 2px color-mix(in srgb, #cc3333 70%, transparent), 0 0 18px 4px color-mix(in srgb, #cc3333 40%, transparent)",
+     "boxShadow": "0 0 0 2px color-mix(in srgb, #cc3333 70%, transparent)",
      "opacity": 1,
      "--vyasa-tasks-active-border": "#cc3333"
     }
@@ -1857,7 +1857,7 @@
     "style": {
      "zIndex": 1520,
      "background": "#cc3333",
-     "boxShadow": "inset 0 0 0 2px color-mix(in srgb, #2a2 24%, transparent), 0 0 0 2px color-mix(in srgb, #2a2 34%, transparent), 0 0 0 3px color-mix(in srgb, #cc3333 72%, transparent), 0 0 30px 8px color-mix(in srgb, #cc3333 46%, transparent)",
+     "boxShadow": "inset 0 0 0 2px color-mix(in srgb, #2a2 24%, transparent), 0 0 0 2px color-mix(in srgb, #2a2 34%, transparent), 0 0 0 3px color-mix(in srgb, #cc3333 72%, transparent)",
      "opacity": 1,
      "--vyasa-tasks-active-border": "#2a2"
     }
@@ -1881,7 +1881,7 @@
     "style": {
      "zIndex": 1260,
      "background": "color-mix(in srgb, #cc3333 12%, var(--vyasa-paper))",
-     "boxShadow": "0 0 0 2px color-mix(in srgb, #cc3333 66%, transparent), 0 0 28px 7px color-mix(in srgb, #cc3333 40%, transparent)",
+     "boxShadow": "0 0 0 2px color-mix(in srgb, #cc3333 66%, transparent)",
      "opacity": 1,
      "--vyasa-tasks-active-border": "#cc3333"
     }
@@ -2190,7 +2190,7 @@
     "style": {
      "zIndex": 1520,
      "background": "color-mix(in srgb, #cc3333 12%, var(--vyasa-paper))",
-     "boxShadow": "0 0 0 3px color-mix(in srgb, #cc3333 72%, transparent), 0 0 30px 8px color-mix(in srgb, #cc3333 46%, transparent)",
+     "boxShadow": "0 0 0 3px color-mix(in srgb, #cc3333 72%, transparent)",
      "opacity": 1,
      "--vyasa-tasks-active-border": "#cc3333"
     }
@@ -2212,7 +2212,7 @@
     "style": {
      "zIndex": 530,
      "background": "color-mix(in srgb, #cc3333 10%, transparent)",
-     "boxShadow": "0 0 0 2px color-mix(in srgb, #cc3333 70%, transparent), 0 0 18px 4px color-mix(in srgb, #cc3333 40%, transparent)",
+     "boxShadow": "0 0 0 2px color-mix(in srgb, #cc3333 70%, transparent)",
      "opacity": 1,
      "--vyasa-tasks-active-border": "#cc3333"
     }
@@ -2235,7 +2235,7 @@
     "style": {
      "zIndex": 1520,
      "background": "#cc3333",
-     "boxShadow": "0 0 0 2px color-mix(in srgb, #cc3333 70%, transparent), 0 0 18px 4px color-mix(in srgb, #cc3333 40%, transparent)",
+     "boxShadow": "0 0 0 2px color-mix(in srgb, #cc3333 70%, transparent)",
      "opacity": 1,
      "--vyasa-tasks-active-border": "#cc3333"
     }

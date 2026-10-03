@@ -1,7 +1,7 @@
 import { logTasksDebug, logTasksDebugVerbose } from './tasks_diagnostics.js';
 import { tasksIsDashed } from './tasks_graph_core.js';
 import { tasksRoleOf } from './tasks_roles.js';
-import { tasksCheckedShadow, tasksEdgeBaseWidth, tasksGroupLook, tasksGroupRingTokens, tasksLookLitFill, tasksNodeLookStyle, tasksStateShadow } from './tasks_theme.js';
+import { tasksCheckedShadow, tasksEdgeBaseWidth, tasksGroupLook, tasksGroupRingTokens, tasksLitStyle, tasksLookLitFill, tasksNodeLookStyle } from './tasks_theme.js';
 import {
     TASKS_CARD_STATE_ATTR, TASKS_DEFAULT_CARD_STATES, TASKS_HAS_NOTE_ATTR, TASKS_SPECIAL_NODE_ATTRS,
     clampTasksEdgeOpacity, clampTasksProjectionDisplayOpacity, collectTasksGroupDescendantIds, collectTasksGroupDescendants,
@@ -1175,13 +1175,17 @@ export function tasksLitNodeFill(node, nodeColor, groupColor, colorMix, groupInt
         : tasksActiveNodeFill(node, nodeColor, colorMix);
 }
 
+// The lit style of a node in a highlight state: its look's lit paint at its role's bands.
+export function tasksLitNodeStyle(node, state, color, { border = color, checkedShadow = 'none' } = {}) {
+    return tasksLitStyle(node.data?.__node_look__, state, color, { bands: tasksRoleOf(node.data).bands, border, checkedShadow });
+}
+
 export function tasksHoverFocusNodeStyle(node, nodeColor, displayColor, activeBorderColor, checkedShadow, colorMix, primary) {
     return {
         zIndex: tasksStateZIndex(node, primary ? TASKS_SELECTED_Z_BOOST : TASKS_NEIGHBOR_Z_BOOST),
         opacity: 1,
-        '--vyasa-tasks-active-border': activeBorderColor,
         background: tasksLitNodeFill(node, nodeColor, displayColor, colorMix, primary ? 12 : 8),
-        boxShadow: tasksStateShadow(primary ? 'hover' : 'hoverNeighbor', displayColor, checkedShadow, tasksRoleOf(node.data).bands),
+        ...tasksLitNodeStyle(node, primary ? 'hover' : 'hoverNeighbor', displayColor, { border: activeBorderColor, checkedShadow }),
     };
 }
 

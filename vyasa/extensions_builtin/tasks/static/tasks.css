@@ -216,7 +216,7 @@ html:not(.vyasa-tasks-edge-labels-on) .vyasa-tasks-flow .vyasa-tasks-edge-label:
 }
 .react-flow__node.vyasa-tasks-node--expanded-group[data-vyasa-group-toggle-hover="true"],
 .react-flow__node[data-vyasa-group-toggle-hover="true"] {
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--vyasa-ink) 64%, transparent), 0 24px 72px color-mix(in srgb, var(--vyasa-primary) 16%, transparent) !important;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--vyasa-ink) 64%, transparent), 0 0 0 7px color-mix(in srgb, var(--vyasa-primary) 22%, transparent) !important;
 }
 /* Review-tagged nodes keep their bloom while hovered or selected. Without the
    exclusion this !important strips the bloom's box-shadow on interaction. */
