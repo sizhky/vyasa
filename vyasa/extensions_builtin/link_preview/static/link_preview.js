@@ -11,11 +11,11 @@ import {
     rememberLinkPreviewHeight,
     rememberLinkPreviewPosition,
     rememberLinkPreviewWidth,
-    resizeLinkPreviewRect,
 } from './link_preview_geometry.js';
 import { linkPreviewCodeLineHref, linkPreviewHashMatch, linkPreviewLineMatch, linkPreviewLineNumber, linkPreviewSymbolMatch } from './link_preview_target.js';
 import { installCodeReferences, scrollToFirstCodeReferenceFocus } from './code_reference.js';
 import { jumpToTextFragment } from '/static/page_shell.js';
+import { installPanelDrag, installPanelResize, viewportPanelBox } from '/static/floating_panel.js';
 
 const LINK_SELECTOR = 'a[data-vyasa-link-preview="true"]';
 const WORD_WRAP_KEY = 'vyasa:link_preview:word_wrap';
@@ -165,58 +165,6 @@ function positionPopover(popover, point) {
     if (anchor || linkPreviewStoredPosition()) trackPositionAnchor(popover);
 }
 
-function installResizeHandles(popover, raise) {
-    for (const edge of [
-        'top', 'right', 'bottom', 'left',
-        'top-left', 'top-right', 'bottom-right', 'bottom-left',
-    ]) {
-        const handle = document.createElement('div');
-        handle.className = `vyasa-link-preview-resize-handle is-${edge}`;
-        handle.dataset.resizeEdge = edge;
-        let start = null;
-        handle.addEventListener('pointerdown', (event) => {
-            if (event.button !== 0) return;
-            const rect = popover.getBoundingClientRect();
-            start = {
-                id: event.pointerId,
-                x: event.clientX,
-                y: event.clientY,
-                rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
-            };
-            handle.setPointerCapture(event.pointerId);
-            raise();
-            event.preventDefault();
-            event.stopPropagation();
-        });
-        handle.addEventListener('pointermove', (event) => {
-            if (!start || start.id !== event.pointerId) return;
-            const rect = resizeLinkPreviewRect(
-                start.rect,
-                edge,
-                event.clientX - start.x,
-                event.clientY - start.y,
-                { width: window.innerWidth, height: window.innerHeight },
-            );
-            Object.assign(popover.style, {
-                left: `${rect.left}px`,
-                top: `${rect.top}px`,
-                width: `${rect.width}px`,
-                height: `${rect.height}px`,
-            });
-            if (edge.includes('left') || edge.includes('right')) rememberLinkPreviewWidth(rect.width);
-            if (edge.includes('top') || edge.includes('bottom')) rememberLinkPreviewHeight(rect.height);
-            schedulePointerRefresh();
-        });
-        const finish = (event) => {
-            if (!start || start.id !== event.pointerId) return;
-            start = null;
-            if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
-        };
-        handle.addEventListener('pointerup', finish);
-        handle.addEventListener('pointercancel', finish);
-        popover.appendChild(handle);
-    }
-}
 
 // One owner decides which element inside a popover scrolls. The wheel handler
 // below and the graph's code mode both ask here, so a change to the preview
@@ -422,42 +370,27 @@ function createPreviewView({ point, link, onClose }) {
         pointerShape.setAttribute('points', geometry.fill.map(([x, y]) => `${x},${y}`).join(' '));
         pointerOutline.setAttribute('d', `M ${geometry.outline[0]} L ${geometry.outline[1]} M ${geometry.outline[0]} L ${geometry.outline[2]}`);
     };
-    let drag = null;
-    bar.addEventListener('pointerdown', (event) => {
-        if (event.button !== 0 || event.target.closest('button,a')) return;
-        const rect = popover.getBoundingClientRect();
-        drag = { id: event.pointerId, x: event.clientX, y: event.clientY, left: rect.left, top: rect.top };
-        bar.setPointerCapture(event.pointerId);
-        raise();
-        event.preventDefault();
-    });
-    bar.addEventListener('pointermove', (event) => {
-        if (!drag || drag.id !== event.pointerId) return;
-        const rect = popover.getBoundingClientRect();
-        const left = Math.min(window.innerWidth - rect.width - 8, drag.left + event.clientX - drag.x);
-        const top = Math.min(window.innerHeight - rect.height - 8, drag.top + event.clientY - drag.y);
-        popover.style.left = `${Math.max(8, left)}px`;
-        popover.style.top = `${Math.max(8, top)}px`;
-        drag.moved = true;
-        schedulePointerRefresh();
-    });
-    const finishDrag = (event) => {
-        if (!drag || drag.id !== event.pointerId) return;
-        // Only a real drag sets the place for the next popup. A plain click on
-        // the bar must not move later popups away from the pointer.
-        if (drag.moved) {
-            const rect = popover.getBoundingClientRect();
+    // Only a real drag sets the place for the next popup: installPanelDrag.
+    installPanelDrag(bar, popover, {
+        box: viewportPanelBox,
+        raise,
+        onMove: schedulePointerRefresh,
+        onDrop: (rect) => {
             rememberLinkPreviewPosition(rect.left, rect.top);
             trackPositionAnchor(popover);
-        }
-        drag = null;
-        if (bar.hasPointerCapture(event.pointerId)) bar.releasePointerCapture(event.pointerId);
-    };
-    bar.addEventListener('pointerup', finishDrag);
-    bar.addEventListener('pointercancel', finishDrag);
+        },
+    });
     popover.querySelector('.vyasa-link-preview-close').addEventListener('click', onClose);
     popover.addEventListener('pointerdown', raise);
-    installResizeHandles(popover, raise);
+    installPanelResize(popover, {
+        box: viewportPanelBox,
+        raise,
+        onResize: (rect, edge) => {
+            if (edge.includes('left') || edge.includes('right')) rememberLinkPreviewWidth(rect.width);
+            if (edge.includes('top') || edge.includes('bottom')) rememberLinkPreviewHeight(rect.height);
+            schedulePointerRefresh();
+        },
+    });
     document.body.appendChild(pointer);
     document.body.appendChild(popover);
     const initialWidth = popover.getBoundingClientRect().width;

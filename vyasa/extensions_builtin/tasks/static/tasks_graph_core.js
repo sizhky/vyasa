@@ -804,7 +804,7 @@ function edgeAnchorSides(sourceRect, targetRect, sourceNode = null, targetNode =
 // Attrs that set how an item is drawn or which role a node plays, never what
 // it says. Detail cards and filters skip them; layouts.py PRESENTATION_ATTRS
 // is the same set.
-export const TASKS_STYLE_ATTRS = new Set(['node_look', 'edge_path', 'edge_corner', 'canvas', 'subtitle_from', 'dashed', 'source_port', 'target_port', 'node_role']);
+export const TASKS_STYLE_ATTRS = new Set(['node_look', 'edge_path', 'edge_corner', 'canvas', 'subtitle_from', 'dashed', 'source_port', 'target_port', 'node_role', 'internals']);
 export const TASKS_EDGE_CORNERS = ['sharp', 'round'];
 
 const tasksCascade = (allowed, ...values) => values

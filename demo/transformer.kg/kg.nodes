@@ -62,6 +62,7 @@ model: Transformer
 			params=γ, β: 2 × 512
 			description=Post-LN, as in the paper. Normalises over the 512 features of each position.
 		enc_mha: MULTI-HEAD ATTENTION
+			internals=../mha.kg
 			track=attn1
 			op=|
 				$\mathrm{head}_i = \mathrm{softmax}\left(\frac{Q W_i^Q (K W_i^K)^\top}{\sqrt{d_k}} + M\right) V W_i^V$
@@ -138,6 +139,7 @@ model: Transformer
 			shape=[B, T', 512]
 			params=γ, β: 2 × 512
 		dec_mmha: MASKED MULTI-HEAD ATTENTION
+			internals=../mha.kg
 			track=attn1
 			op=$\mathrm{softmax}\left(\frac{Q K^\top}{\sqrt{d_k}} + M\right) V, \quad M_{ij} = -\infty \text{ if } j > i$
 			shape=[B, T', 512] → scores [B, 8, T', T'] → [B, T', 512]
@@ -152,6 +154,7 @@ model: Transformer
 			shape=[B, T', 512]
 			params=γ, β: 2 × 512
 		dec_mha: MULTI-HEAD ATTENTION
+			internals=../mha.kg
 			track=attn2
 			op=$\mathrm{softmax}\left(\frac{Q_y K_m^\top}{\sqrt{d_k}} + M_{pad}\right) V_m$
 			shape=Q [B, T', 512], K and V [B, T, 512] → scores [B, 8, T', T] → [B, T', 512]

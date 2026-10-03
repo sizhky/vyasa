@@ -1,7 +1,7 @@
 import { logTasksDebug, logTasksDebugVerbose } from './tasks_diagnostics.js';
 import { tasksIsDashed } from './tasks_graph_core.js';
 import { tasksRoleOf } from './tasks_roles.js';
-import { tasksCheckedShadow, tasksEdgeBaseWidth, tasksGroupLook, tasksGroupRingTokens, tasksLitStyle, tasksLookLitFill, tasksNodeLookStyle } from './tasks_theme.js';
+import { tasksCheckedShadow, tasksEdgeBaseWidth, tasksGroupLook, tasksGroupRingTokens, tasksLitStyle, tasksLookLitFill, tasksNodeLookStyle, tasksStackShadow } from './tasks_theme.js';
 import {
     TASKS_CARD_STATE_ATTR, TASKS_DEFAULT_CARD_STATES, TASKS_HAS_NOTE_ATTR, TASKS_SPECIAL_NODE_ATTRS,
     clampTasksEdgeOpacity, clampTasksProjectionDisplayOpacity, collectTasksGroupDescendantIds, collectTasksGroupDescendants,
@@ -1119,9 +1119,9 @@ export function tasksNodeIsOverlaid(node) {
 }
 
 // The wrapper style of a task node at rest: its look over the card fill and
-// border, then the checked state's border and shadow. Free and fixed views both
-// build task wrappers here.
-export function tasksTaskWrapperStyle({ nodeColor, colorMix, useOverlay, look, dashed, isChecked, stateAccent, width, height, zIndex }) {
+// border, then the checked state's border and shadow, then the stacked frame of
+// a node with internals. Free and fixed views both build task wrappers here.
+export function tasksTaskWrapperStyle({ nodeColor, colorMix, useOverlay, look, dashed, isChecked, stateAccent, internals = false, width, height, zIndex }) {
     const lookStyle = tasksNodeLookStyle({
         background: useOverlay ? 'transparent' : tasksNodeBackground(nodeColor, '', colorMix, TASKS_NODE_BG, false),
         border: nodeColor ? `1px solid color-mix(in srgb, var(--vyasa-paper) 30%, ${nodeColor} 70%)` : TASKS_NODE_BORDER,
@@ -1131,7 +1131,8 @@ export function tasksTaskWrapperStyle({ nodeColor, colorMix, useOverlay, look, d
         height,
         zIndex,
         borderRadius: 6,
-        boxShadow: isChecked ? tasksCheckedShadow(stateAccent) : 'none',
+        boxShadow: [isChecked ? tasksCheckedShadow(stateAccent) : '', internals ? tasksStackShadow(look) : ''].filter(Boolean).join(', ') || 'none',
+        ...(internals && nodeColor ? { '--vyasa-tasks-stack-rim': `color-mix(in srgb, ${nodeColor} 60%, transparent)` } : {}),
         overflow: 'hidden',
         // A look may restate the radius and the overflow it needs.
         ...lookStyle,
@@ -1177,7 +1178,14 @@ export function tasksLitNodeFill(node, nodeColor, groupColor, colorMix, groupInt
 
 // The lit style of a node in a highlight state: its look's lit paint at its role's bands.
 export function tasksLitNodeStyle(node, state, color, { border = color, checkedShadow = 'none' } = {}) {
-    return tasksLitStyle(node.data?.__node_look__, state, color, { bands: tasksRoleOf(node.data).bands, border, checkedShadow });
+    const look = node.data?.__node_look__;
+    const stackShadow = tasksNodeHasInternals(node.data) ? tasksStackShadow(look) : '';
+    return tasksLitStyle(look, state, color, { bands: tasksRoleOf(node.data).bands, border, checkedShadow, stackShadow });
+}
+
+// A node whose `internals` attr names a pack: design KG_INTERNALS.
+export function tasksNodeHasInternals(record) {
+    return Boolean(String(record?.internals ?? '').trim());
 }
 
 export function tasksHoverFocusNodeStyle(node, nodeColor, displayColor, activeBorderColor, checkedShadow, colorMix, primary) {

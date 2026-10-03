@@ -14,7 +14,7 @@ from .items_pack import _tmp_view_sidecar_dir
 from .items_pack import read_schema
 from .model import parse_tasks_text
 from .query import KnowledgeGraphQuery
-from .render import _attach_rendered_node_attrs, _attach_rendered_prose_attrs
+from .render import _attach_rendered_node_attrs, _attach_rendered_prose_attrs, _kg_block, render_tasks_block
 from .review import build_git_review, build_git_state
 
 ALNUM = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
@@ -64,6 +64,24 @@ def _safe_schema_path(runtime, raw_path: str) -> Path:
     if not any(schema_path == root or root in schema_path.parents for root in _allowed_roots(runtime)):
         raise ValueError("KG schema outside configured roots")
     return schema_path
+
+
+def _internals_schema_path(parent_schema: Path, ref: str) -> Path:
+    """The schema of the pack a node's `internals` attr names.
+
+    The ref is relative to the parent's pack folder, as @sources paths are. It
+    names a pack folder (`../mha.kg`) or a schema file.
+
+    >>> _internals_schema_path(Path('/k/transformer.kg/kg.schema'), '../mha.kg')
+    Path('/k/mha.kg/kg.schema')
+    >>> _internals_schema_path(Path('/k/a.kg/kg.schema'), 'parts/b.kg.schema')
+    Path('/k/a.kg/parts/b.kg.schema')
+    """
+    text = str(ref or "").strip()
+    if not text:
+        raise ValueError("Missing internals")
+    target = (parent_schema.parent / text).resolve()
+    return target if target.name == "kg.schema" or target.name.endswith(".kg.schema") else target / "kg.schema"
 
 
 def _compile_schema_payload(schema_path: Path, current_path: str = "", context_id: str = "") -> tuple[dict, dict]:
@@ -217,6 +235,24 @@ def register_tasks_routes(rt, runtime) -> None:
             return Response(str(exc), status_code=500)
         return Response(
             json.dumps({"ok": True, "context_id": context_id, "model": model, "graph": graph}),
+            media_type="application/json",
+            headers={"Cache-Control": "no-store"},
+        )
+
+    @rt("/api/tasks/internals", methods=["POST"])
+    async def load_internals(request):
+        try:
+            payload = json.loads((await request.body()).decode("utf-8"))
+            parent = _safe_schema_path(runtime, str(payload.get("schema_path") or ""))
+            schema_path = _safe_schema_path(runtime, str(_internals_schema_path(parent, str(payload.get("ref") or ""))))
+            block = render_tasks_block(_kg_block(schema_path), str(schema_path), "items")
+        except ValueError as exc:
+            return Response(str(exc), status_code=400)
+        except Exception as exc:
+            runtime.logger.exception("[tasks] failed to load internals")
+            return Response(str(exc), status_code=500)
+        return Response(
+            json.dumps({"ok": True, "schema_path": str(schema_path), "html": block}),
             media_type="application/json",
             headers={"Cache-Control": "no-store"},
         )

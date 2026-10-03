@@ -88,6 +88,8 @@ const symbolBody = (h, { subtitle }) => {
  * - role: the role a node with this look plays unless its `node_role` names
  *   another (tasks_roles.js).
  * - frame: wrapper fill, border and type colour that replace the card's.
+ * - stacks: a node with internals shows a stacked frame behind its own. A look
+ *   with no frame of its own (text, station, point, sketch) keeps the badge.
  * - lit: how a lit node shows its state. `paint` names a TASKS_LIT_PAINTS
  *   entry; `fill` is the fill it keeps, or null for the card's lit fill.
  * - size: the box a layout gives the node; null uses the card's text sizing.
@@ -100,6 +102,7 @@ const symbolBody = (h, { subtitle }) => {
 const TASKS_LOOKS = {
     card: {
         role: 'item',
+        stacks: true,
         font: '',
         frame: () => ({}),
         lit: { paint: 'rings', fill: () => null },
@@ -111,6 +114,7 @@ const TASKS_LOOKS = {
     },
     outline: {
         role: 'item',
+        stacks: true,
         font: TASKS_OUTLINE_FONT,
         frame: ({ color, dashed }) => tasksOutlineNodeStyle(color, false, dashed),
         lit: { paint: 'rings', fill: (color) => tasksOutlineNodeStyle(color, true).background },
@@ -122,6 +126,7 @@ const TASKS_LOOKS = {
     },
     sketch: {
         role: 'item',
+        stacks: false,
         font: TASKS_HAND_FONT,
         // The body draws the wobbling frame, so the text above it stays crisp.
         frame: ({ tint }) => ({ background: 'transparent', border: 'none', color: tint, overflow: 'visible' }),
@@ -152,6 +157,7 @@ const TASKS_LOOKS = {
     },
     blueprint: {
         role: 'item',
+        stacks: true,
         font: TASKS_OUTLINE_FONT,
         frame: ({ line }) => ({ background: 'transparent', border: `1.3px ${line} color-mix(in srgb, var(--vyasa-ink) 85%, transparent)`, color: 'var(--vyasa-ink)', borderRadius: 0 }),
         lit: { paint: 'rings', fill: () => 'transparent' },
@@ -163,6 +169,7 @@ const TASKS_LOOKS = {
     },
     tab: {
         role: 'item',
+        stacks: true,
         font: TASKS_OUTLINE_FONT,
         frame: ({ tint, line }) => ({ background: 'var(--vyasa-paper)', border: `1px ${line} color-mix(in srgb, ${tint} 70%, transparent)`, color: tint, borderRadius: 4 }),
         lit: { paint: 'rings', fill: () => 'var(--vyasa-paper)' },
@@ -190,6 +197,7 @@ const TASKS_LOOKS = {
     },
     station: {
         role: 'item',
+        stacks: false,
         font: '',
         frame: () => ({ background: 'transparent', border: 'none', color: 'var(--vyasa-ink)', overflow: 'visible' }),
         lit: { paint: 'ink', fill: () => 'transparent' },
@@ -216,6 +224,7 @@ const TASKS_LOOKS = {
     // A point is where routes join; the lines are the mark.
     point: {
         role: 'junction',
+        stacks: false,
         font: TASKS_OUTLINE_FONT,
         frame: () => ({ background: 'transparent', border: 'none', borderRadius: '50%', overflow: 'visible' }),
         lit: { paint: 'none', fill: () => 'transparent' },
@@ -228,6 +237,7 @@ const TASKS_LOOKS = {
     // A circle holds a symbol such as `+`.
     circle: {
         role: 'mark',
+        stacks: true,
         font: TASKS_OUTLINE_FONT,
         frame: ({ color, dashed }) => {
             const ring = tasksOutlineNodeStyle(color, false, dashed);
@@ -246,6 +256,7 @@ const TASKS_LOOKS = {
     // Text is a bare mono label.
     text: {
         role: 'mark',
+        stacks: false,
         font: TASKS_OUTLINE_FONT,
         frame: ({ tint }) => ({ background: 'transparent', border: 'none', color: `color-mix(in srgb, ${tint} 82%, var(--vyasa-ink))`, overflow: 'visible' }),
         lit: { paint: 'ink', fill: () => 'transparent' },
@@ -466,6 +477,19 @@ const TASKS_LIT_PAINTS = {
     none: { ring: false, bands: false, ink: false },
 };
 
+// The stacked frame behind a node with internals: design KG_INTERNALS
+// (Indicator). A second frame 5px down and right, as zero-blur shadows: a paper
+// fill, then a rim. The wrapper sets the rim colour once at rest, so lit states
+// keep it. '' when the look draws no stack.
+export function tasksStackShadow(look) {
+    if (!tasksLookStacks(look)) return '';
+    return '5px 5px 0 -1px var(--vyasa-paper), 5px 5px 0 0 var(--vyasa-tasks-stack-rim, color-mix(in srgb, var(--vyasa-ink) 60%, transparent))';
+}
+
+export function tasksLookStacks(look) {
+    return tasksLook(look).stacks;
+}
+
 // The lit paint record of a look.
 export function tasksLookLitPaint(look) {
     return TASKS_LIT_PAINTS[tasksLook(look).lit.paint];
@@ -492,18 +516,20 @@ export function tasksStateShadow(state, color, checkedShadow = 'none', bands = '
 
 /**
  * The style a lit node takes for a state, by its look's lit paint and its
- * role's bands. `border` is the colour of its outline bands.
+ * role's bands. `border` is the colour of its outline bands. `stackShadow`
+ * stays under the ring, so a node with internals keeps its stack when lit.
  *
  * >>> tasksLitStyle('text', 'hover', '#f00')
  * { '--vyasa-tasks-active-border': '#f00', boxShadow: 'none', color: '#f00', textDecoration: 'underline solid #f00' }
  * >>> tasksLitStyle('point', 'hover', '#f00', { bands: 'none' }).boxShadow
  * 'none'
  */
-export function tasksLitStyle(look, state, color, { bands = 'full', checkedShadow = 'none', border = color } = {}) {
+export function tasksLitStyle(look, state, color, { bands = 'full', checkedShadow = 'none', stackShadow = '', border = color } = {}) {
     const paint = tasksLookLitPaint(look);
+    const shadow = paint.ring ? tasksStateShadow(state, color, checkedShadow, bands) : checkedShadow;
     const style = {
         '--vyasa-tasks-active-border': border,
-        boxShadow: paint.ring ? tasksStateShadow(state, color, checkedShadow, bands) : checkedShadow,
+        boxShadow: [shadow, stackShadow].filter((part) => part && part !== 'none').join(', ') || 'none',
     };
     if (!paint.ink || bands === 'none') return style;
     const line = TASKS_STATE_RINGS[state].central ? 'solid' : 'dotted';

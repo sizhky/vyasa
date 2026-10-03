@@ -1,0 +1,9 @@
+m01: q_in -> proj_q feeds shape=Q dashed=true
+m02: k_in -> proj_k feeds shape=K dashed=true
+m03: v_in -> proj_v feeds shape=V dashed=true
+m04: proj_q -> sdpa feeds target_port=bottom:20 shape="Q per head"
+m05: proj_k -> sdpa feeds target_port=bottom:50 shape="K per head"
+m06: proj_v -> sdpa feeds target_port=bottom:80 shape="V per head"
+m07: sdpa -> concat feeds shape="8 heads"
+m08: concat -> wo feeds shape="[B, T, 512]"
+m09: wo -> out feeds shape="[B, T, 512]" dashed=true
