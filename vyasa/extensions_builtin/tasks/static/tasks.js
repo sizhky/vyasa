@@ -65,7 +65,7 @@ import {
 import { createTasksPanels } from './tasks_panels.js';
 import { tasksHighlightGraph } from './tasks_highlight.js';
 import { tasksRoleOf } from './tasks_roles.js';
-import { createTasksInternals, tasksInternalsWorld } from './tasks_internals.js';
+import { createTasksInternals } from './tasks_internals.js';
 import {
     TASKS_EDGES_VISIBLE_KEY, TASKS_HOVER_CARD_MODES, TASKS_HOVER_CARD_MODE_KEY, buildTasksNodeNotesBackup,
     checkedNodeIdsFromStates, clearTasksGlobalToggle, downloadTasksNodeNotes, readTasksCheckedNodeIds,
@@ -1566,12 +1566,6 @@ async function renderTasksGraphs(rootElement = document) {
                 schemaPath: () => String(internalsSourceRef.current.sourceModel?.kg_schema || ''),
                 hoveredRecord: () => internalsSourceRef.current.edgeNodesById.get(String(hoveredNodeIdRef.current || '')) || null,
                 nodeElement: (id) => flowWrapperRef.current?.querySelector(`.react-flow__node[data-id="${CSS.escape(id)}"]`),
-                worldOf: (id) => {
-                    const { edgeNodesById: records, sourceModel: source } = internalsSourceRef.current;
-                    const labelKey = String(source?.edge_label_from || '').trim();
-                    return tasksInternalsWorld(id, source?.dependency_edges, (nodeId) => records.get(nodeId)?.label,
-                        (edge) => (labelKey && edge[labelKey]) || edge.shape || edge.label);
-                },
                 mount: (root) => renderTasksGraphs(root),
                 setStatus: setEdgeStatus,
                 log: (event, payload) => logTasksDebug(event, { widgetId, ...payload }),

@@ -60,32 +60,6 @@ export function tasksInternalsTrail(outer, hostTitle, hostSchema, label) {
     return { labels: [...labels, label], schemas };
 }
 
-/**
- * The world outside a node: the parent's edges that cross into it and out of
- * it, one chip per neighbour, for the panel's edges. Edge labels on one
- * neighbour join with a dot.
- *
- * >>> const edges = [{ source: 'f', target: 'm', shape: 'Q' }, { source: 'f', target: 'm', shape: 'K' }, { source: 'm', target: 'a', shape: '' }];
- * >>> tasksInternalsWorld('m', edges, (id) => ({ f: 'qkv', a: 'ADD & NORM' })[id], (edge) => edge.shape)
- * { incoming: ['Q · K ← qkv'], outgoing: ['→ ADD & NORM'] }
- */
-export function tasksInternalsWorld(nodeId, edges, labelOf, edgeLabelOf) {
-    const sides = { incoming: new Map(), outgoing: new Map() };
-    for (const edge of edges || []) {
-        const side = edge.target === nodeId ? 'incoming' : (edge.source === nodeId ? 'outgoing' : '');
-        if (!side) continue;
-        const neighbour = String(labelOf(side === 'incoming' ? edge.source : edge.target) || (side === 'incoming' ? edge.source : edge.target));
-        if (!sides[side].has(neighbour)) sides[side].set(neighbour, []);
-        const label = String(edgeLabelOf(edge) || '').trim();
-        if (label && !sides[side].get(neighbour).includes(label)) sides[side].get(neighbour).push(label);
-    }
-    const chip = (labels, arrow, neighbour) => [labels.join(' · '), arrow, neighbour].filter(Boolean).join(' ');
-    return {
-        incoming: Array.from(sides.incoming, ([neighbour, labels]) => chip(labels, '←', neighbour)),
-        outgoing: Array.from(sides.outgoing, ([neighbour, labels]) => chip(labels, '→', neighbour)),
-    };
-}
-
 async function tasksLoadInternals(schemaPath, ref) {
     const key = `${schemaPath}\n${ref}`;
     if (!htmlCache.has(key)) {
@@ -113,36 +87,17 @@ function tasksUnmountWidgets(element) {
     }
 }
 
-// One row of world chips on a panel edge, or nothing when no edge crosses it.
-function tasksWorldRow(side, chips, title) {
-    if (!chips.length) return '';
-    return `<div class="vyasa-kg-internals-world" data-side="${side}" title="${title}"></div>`;
-}
-
-function tasksPanelElement(trail, world) {
+function tasksPanelElement(trail) {
     const element = document.createElement('div');
     element.className = 'vyasa-kg-internals';
     element.dataset.state = 'peek';
     element.dataset.trail = JSON.stringify(trail.labels);
     element.innerHTML = '<div class="vyasa-kg-internals-bar">'
         + '<span class="vyasa-kg-internals-trail"></span>'
-        + `<button type="button" data-internals-action="dive" title="Dive (${TASKS_INTERNALS_KEY.label}+Enter)" aria-label="Dive into internals">⤢</button>`
+        + `<button type="button" data-internals-action="dive" title="Dive (double-tap ${TASKS_INTERNALS_KEY.label}, or double-click the bar)" aria-label="Dive into internals">⤢</button>`
         + '<button type="button" data-internals-action="close" title="Close (Esc)" aria-label="Close internals">×</button>'
-        + '</div>'
-        + tasksWorldRow('out', world.outgoing, 'Where this node sends its output, outside')
-        + '<div class="vyasa-kg-internals-body"><div class="vyasa-kg-internals-note">Loading internals…</div></div>'
-        + tasksWorldRow('in', world.incoming, 'What feeds this node, from outside');
+        + '</div><div class="vyasa-kg-internals-body"><div class="vyasa-kg-internals-note">Loading internals…</div></div>';
     element.querySelector('.vyasa-kg-internals-trail').textContent = trail.labels.join(' › ');
-    // Chip text is author content, so it goes in as text, never as markup.
-    for (const [side, chips] of [['out', world.outgoing], ['in', world.incoming]]) {
-        const row = element.querySelector(`.vyasa-kg-internals-world[data-side="${side}"]`);
-        for (const text of chips) {
-            const chipElement = document.createElement('span');
-            chipElement.className = 'vyasa-kg-internals-chip';
-            chipElement.textContent = text;
-            row?.appendChild(chipElement);
-        }
-    }
     return element;
 }
 
@@ -179,7 +134,7 @@ function tasksRaisePanel(entry) {
  * the controller lives as long as the widget and never sees stale React state.
  * Returns a function that closes this widget's panels and removes the listeners.
  */
-export function createTasksInternals({ host, flowWrapper, schemaPath, hoveredRecord, nodeElement, worldOf, mount, setStatus, log }) {
+export function createTasksInternals({ host, flowWrapper, schemaPath, hoveredRecord, nodeElement, mount, setStatus, log }) {
     // This widget's open panels, oldest first.
     const panels = [];
     // The panel the held key opened; releasing the key closes it unless pinned.
@@ -358,7 +313,7 @@ export function createTasksInternals({ host, flowWrapper, schemaPath, hoveredRec
         }
         const outer = host.closest('.vyasa-kg-internals');
         const trail = tasksInternalsTrail(outer, host.dataset.tasksTitle, schemaPath(), String(record.label || nodeId));
-        const element = tasksPanelElement(trail, worldOf(nodeId));
+        const element = tasksPanelElement(trail);
         place(element, nodeId);
         host.appendChild(element);
         const entry = { element, nodeId, state: 'peek', scrim: null, floatStyle: null };

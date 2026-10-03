@@ -96,7 +96,7 @@ A strong system story has levels. Each level answers its own question in its own
 
 - **Keep each level at one altitude.** When one node hides a world of its own steps (MULTI-HEAD ATTENTION, TLS handshake, a mitochondrion), do not expand it inline. Give it `internals=<pack>` and write that world as its own pack.
 - **Pick the layout per level.** The parent may be a figure; the inside of a handshake is a sequence; a key schedule or a render pipeline is a flow. A level that looks like its parent should probably be a group, not internals.
-- **Reuse a shared mechanism.** One internals pack, opened from every parent that uses it (`tcp-handshake.kg` from the page load and from DNS fallback). The parent's chips tell the reader which world they came from.
+- **Reuse a shared mechanism.** One internals pack, opened from every parent that uses it (`tcp-handshake.kg` from the page load and from DNS fallback).
 - **Draw the boundary.** The root group is the node's own frame; ports sit outside it as `text` nodes with `dashed=true` edges. The Sentence and Direction laws hold across the boundary: `Q in · feeds · LINEAR` still reads as a sentence and flows downstream.
 - **Keep one palette across levels.** Point every internals pack at the parent palette with an `@sources` path, so a `Message` is the same colour at every depth.
 - **Earn the depth.** A demo is strong when a real question can only be answered by diving ("why does a first visit cost 300 ms more?"). Two or three levels are enough; stop where the next level is textbook detail, not a decision.

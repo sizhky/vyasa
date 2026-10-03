@@ -690,27 +690,6 @@ html:not(.vyasa-tasks-edge-labels-on) .vyasa-tasks-flow .vyasa-tasks-edge-label:
     font-size: 12px;
     color: color-mix(in srgb, var(--vyasa-ink) 60%, transparent);
 }
-/* World chips: the parent's edges that cross into and out of the node, on the
-   panel edge they cross. Dashed, because the world they name is outside. */
-.vyasa-kg-internals-world {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 6px;
-    padding: 4px 8px;
-    font: 600 10.5px/1.4 ui-monospace, monospace;
-    color: color-mix(in srgb, var(--vyasa-ink) 70%, transparent);
-    background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--vyasa-ink) 5%, transparent) 0 4px, transparent 4px 8px);
-}
-.vyasa-kg-internals-world[data-side="out"] { border-bottom: 1px dashed color-mix(in srgb, var(--vyasa-ink) 30%, transparent); }
-.vyasa-kg-internals-world[data-side="in"] { border-top: 1px dashed color-mix(in srgb, var(--vyasa-ink) 30%, transparent); }
-.vyasa-kg-internals-chip {
-    border: 1px dashed color-mix(in srgb, var(--vyasa-ink) 40%, transparent);
-    border-radius: 999px;
-    padding: 0 8px;
-    background: var(--vyasa-paper);
-    white-space: nowrap;
-}
 /* A floating panel moves by its bar and resizes by its edges (floating_panel.js).
    A dive fills the host, so its own handles go; a nested panel keeps its own. */
 .vyasa-kg-internals-bar { cursor: grab; user-select: none; }
