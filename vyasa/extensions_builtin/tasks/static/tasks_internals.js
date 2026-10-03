@@ -358,8 +358,19 @@ export function createTasksInternals({ host, flowWrapper, schemaPath, hoveredRec
             if (entry?.state === 'peek') peek = entry;
             return;
         }
-        // Key+Enter pins the panel the held key opened. Enter alone keeps its
-        // meaning: select the hovered node and open its notes.
+        // Enter over empty canvas inside a floating panel dives that panel. Over
+        // a node, Enter keeps its meaning: select it and open its notes.
+        if (event.key === 'Enter' && !held && !event.repeat && !hoveredRecord() && tasksHeldKeyApplies(event, flowWrapper(), false)) {
+            const outer = host.closest('.vyasa-kg-internals');
+            const outerEntry = openPanels.find((entry) => entry.element === outer);
+            if (outerEntry && outerEntry.state !== 'dive') {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                outerEntry.dive();
+                return;
+            }
+        }
+        // Key+Enter pins the panel the held key opened.
         if (event.key === 'Enter' && held && peek) {
             event.preventDefault();
             event.stopImmediatePropagation();
