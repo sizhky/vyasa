@@ -1,0 +1,4 @@
+# Ports: the edges that enter and leave the MULTI-HEAD ATTENTION node in transformer.kg.
+@node_attrs
+node_look:
+  text: q_in k_in v_in out

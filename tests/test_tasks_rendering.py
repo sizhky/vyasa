@@ -89,7 +89,7 @@ def test_tasks_groups_remain_selectable_when_expanded():
 
 def test_tasks_expanded_group_title_bar_selects_source_group():
     core_source = Path("vyasa/extensions_builtin/tasks/static/tasks_graph_core.js").read_text()
-    graph_source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    graph_source = tasks_static_source("tasks.js", "tasks_highlight.js")
 
     assert "kind === 'groupTitle'" in core_source
     assert "if (kind === 'groupTitle') return 'control';" in core_source
@@ -684,13 +684,13 @@ def test_tasks_hover_card_reuses_selected_node_panel_on_right_side():
     assert "const SelectedNodePanel = (panelGraphNodeId, readOnly = false, hoverCard = null)" in source
     # The panel reads state when called, so the default moved into the body.
     assert "if (panelGraphNodeId === undefined) panelGraphNodeId = selectedNodeId;" in source
-    assert "SelectedNodePanel(groupHoverTooltip.nodeId, true, groupHoverTooltip)" in source
+    assert "SelectedNodePanel(hovered.nodeId, true, hovered)" in source
     assert "scrollRef: hoverCard ? hoverCardScrollRef : detailCardScrollRef" in source
-    assert "tasksActiveHoverAttrs" not in source
-    assert "tasksHoverAttrRows" not in source
-    assert "tasksGroupHoverAttrRows" not in source
+    # A hover card shows the view's hover_attrs; the pinned card shows every attr.
+    assert "hoverCard ? tasksHoverCardEntries(allEntries, tasksHoverAttrs(model, sourceModel)) : allEntries" in source
     assert "hoverAttrs:" in source
-    assert source.count("GroupHoverTooltip(),") == 2
+    # One host draws the card, hovered or pinned.
+    assert "GroupHoverTooltip" not in source
     assert "row('C', 'hover cards: off / right side')" in source
 
 
@@ -722,7 +722,7 @@ def test_enter_selects_hovered_node_and_focuses_the_pinned_card():
     assert "className: readOnly ? undefined : 'vyasa-tasks-pinned-card'" in source
     assert "row('Enter', 'pin hovered node / open selected edge')" in source
     assert "row('Enter on card', 'focus Notes')" in source
-    shortcut = source.split("const clearGroupHoverTooltip", 1)[1].split("const hoverTraceKeyRef", 1)[0]
+    shortcut = source.split("const clearHoverCardTarget", 1)[1].split("const hoverTraceKeyRef", 1)[0]
     assert "event.key === 'Control'" not in shortcut
 
 
@@ -836,7 +836,8 @@ def test_tasks_hover_card_toggle_matches_edge_toggle_contract():
 
     assert "setHoverCardModeGlobal(nextTasksHoverCardMode);" in shortcut
     assert "setHoverCardModeGlobal((current) => (" in actions
-    assert "if (!hoverCardsEnabled) return null;" in source
+    # Hover cards off: the one card host never takes the hovered node.
+    assert "const hovered = hoverCardsEnabled && hoverCardTarget" in source
     assert "refreshHoverCardRef" not in source
     assert "&& key !== 'c'" not in source
 
@@ -857,7 +858,7 @@ def test_w_edge_q_temporarily_shows_other_node_card():
 
 
 def test_w_enter_pin_blooms_from_the_edge():
-    source = tasks_static_source("tasks_panels.js", "tasks.js")
+    source = tasks_static_source("tasks_panels.js", "tasks.js", "tasks_highlight.js")
     css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
 
     assert "setEdgePinBloom({ edgeId: selectedEdgeIdRef.current, key: bloomKey });" in source
@@ -1364,7 +1365,7 @@ def test_tasks_edge_type_filter_is_searchable_persisted_and_applied():
     assert "edgeTypes: activeEdgeTypes" in source
     assert "tasksEdgeFilterNodeIds(graphBaseRef.current.edges || [], effectiveEdgeTypes)" in source
     assert "tasksEdgesMatchingTypes(graphBaseRef.current.edges || [], effectiveEdgeTypes)" in source
-    assert "const filterHoverFocus = tasksFilterHoverFocus(matchingIds, baseEdges, hoveredNodeId);" in source
+    assert "const filterHoverFocus = tasksFilterHoverFocus(matchingIds, baseEdges, hoveredNodeId, passesThrough);" in source
     assert "'neighbor-focus'" in source
     assert "tasksHoverFocusNodeStyle(node, nodeColor, displayColor, activeBorderColor, checkedShadow, colorMix, true)" in source
     assert "const matchingIds = filteredSelectionIds();" in source
@@ -1436,11 +1437,11 @@ def test_tasks_group_hover_uses_the_selected_panel_entries():
 
     assert "selectedNode?.__kind__ === 'group'" in source
     assert "tasksGroupDetailEntries(sourceNodeId, model)" in source
-    assert "SelectedNodePanel(groupHoverTooltip.nodeId, true, groupHoverTooltip)" in source
+    assert "SelectedNodePanel(hovered.nodeId, true, hovered)" in source
 
 
 def test_highlighted_edges_and_arrowheads_render_below_node_cards():
-    source = tasks_static_source("tasks_paint.js", "tasks.js")
+    source = tasks_static_source("tasks_paint.js", "tasks.js", "tasks_highlight.js")
 
     assert "const TASKS_EDGE_FOCUS_Z = TASKS_TASK_Z - 2;" in source
     assert "zIndex: hit ? TASKS_EDGE_FOCUS_Z : TASKS_EDGE_Z" in source
@@ -2154,7 +2155,7 @@ def test_react_flow_component_fills_flow_wrapper():
     render_source = source.split("return rf.ReactFlowProvider ?", 1)[1].split("if (window.ReactDOM.createRoot)", 1)[0]
 
     assert "function applyTasksStandaloneHeight(wrapper)" in source
-    assert "wrapper.closest('.vyasa-main-shell')" in source
+    assert "wrapper.closest('.vyasa-kg-internals-body, .vyasa-main-shell')" in source
     assert "applyTasksStandaloneHeight(wrapper);" in source
     assert "width: '100%'" in render_source
     assert "height: '100%'" in render_source
@@ -2458,3 +2459,17 @@ def test_trimmed_edge_end_stays_on_the_drawn_curve():
         }
     """
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
+def test_kg_attrs_assigns_presentation_keys_without_making_them_filters(tmp_path):
+    from vyasa.extensions_builtin.tasks.items_pack import apply_attrs
+
+    attrs = tmp_path / "kg.attrs"
+    attrs.write_text("@node_attrs\nnode_look:\n  point: a b\nnode_role:\n  mark: b\nrole:\n  context: a\n", encoding="utf-8")
+    nodes = {"a": {"id": "a"}, "b": {"id": "b"}}
+
+    indexed = apply_attrs(attrs, nodes, {})
+
+    assert nodes["a"]["node_look"] == "point" and nodes["b"]["node_role"] == "mark"
+    # An authored `role` is content, so it stays a filter dimension.
+    assert indexed["node"] == ["role"]

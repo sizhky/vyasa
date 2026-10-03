@@ -1,0 +1,26 @@
+@graph id=mha title="Multi-Head Attention"
+default_view=figure
+color_by=part
+node_look=outline
+edge_path=orthogonal
+hover_attrs=op,shape,params,description
+node_hidden_attrs=column,track,part
+
+@sources
+nodes=kg.nodes
+attrs=kg.attrs
+base:
+	edges=kg.edges
+palette=../transformer.kg/kg.palette
+
+@views
+figure:
+	source=base
+	layout=grid
+	grid_col=column
+	grid_row=track
+	grid_col_order=q,k,v
+	grid_row_order=out,wo,concat,sdpa,proj,in
+	color_by=part
+	edge_label_from=shape
+	caption="Multi-head attention: h = 8 heads of scaled dot-product attention, side by side."

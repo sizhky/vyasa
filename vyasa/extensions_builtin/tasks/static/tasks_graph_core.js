@@ -1,6 +1,10 @@
 
 // The shared viewport owns the gesture binder; KG re-exports only what it uses.
 export { clampScale, nextWheelState } from '../../../static/viewport_core.js';
+import {
+    TASKS_CANVASES, TASKS_EDGE_PATHS, TASKS_NODE_LOOKS, tasksGroupTitleMode, tasksLabelTitleSize, tasksLookRouteRect, tasksLookSize,
+} from './tasks_theme.js';
+import { tasksRoleOf } from './tasks_roles.js';
 
 export function tasksReviewTarget(data, id, widgetId) {
     const sourceNodeId = data?.__kind__ === 'groupTitle' ? data?.sourceGroupId : id;
@@ -77,6 +81,9 @@ export function tasksInlineLinkPlainText(value, nodeLabels = {}) {
 export function sizeTaskNode(label, kind = 'task', widthOverride = null, options = {}) {
     const spec = TASK_NODE_SPECS[kind] || TASK_NODE_SPECS.task;
     const width = Math.max(32, Number(widthOverride || spec.width));
+    // A look other than card sizes a task with the metrics it is drawn with.
+    const looked = kind === 'task' ? tasksLookSize(options?.look, label, options?.subtitle, width) : null;
+    if (looked) return looked;
     const imageSpec = options?.hasImage ? (TASK_NODE_IMAGE_SPECS[kind] || TASK_NODE_IMAGE_SPECS.task) : null;
     const imageReserve = imageSpec ? imageSpec.size + imageSpec.gap : 0;
     const maxTextWidth = Math.max(32, width - spec.padX - spec.reserveX - imageReserve - 8);
@@ -90,6 +97,14 @@ export function sizeTaskNode(label, kind = 'task', widthOverride = null, options
         width,
         height: Math.max(spec.minHeight, Math.ceil(contentHeight + spec.padY + 8)),
     };
+}
+
+// The height of an open group's title: a card group's title bar, or a figure
+// group's label. Layout and the title node both size it here.
+export function tasksGroupTitleSize(look, label, width, options = {}) {
+    return tasksGroupTitleMode(look) === 'label'
+        ? tasksLabelTitleSize(label, width)
+        : sizeTaskNode(label, 'groupTitle', width, options);
 }
 
 export function isTasksGraphNodeSelectable(kind, isExpanded = false) {
@@ -784,7 +799,486 @@ function edgeAnchorSides(sourceRect, targetRect, sourceNode = null, targetNode =
         : { sourceSide: verticalSide.sourceSide, targetSide: horizontalSide.targetSide, sortAxis: 'y' };
 }
 
-function absoluteNodeRects(nodes) {
+// Style cascade. A node or edge attr wins, then the view, then the layout's own
+// default. The same key names both levels, so an override reads like the default.
+// Attrs that set how an item is drawn or which role a node plays, never what
+// it says. Detail cards and filters skip them; layouts.py PRESENTATION_ATTRS
+// is the same set.
+export const TASKS_STYLE_ATTRS = new Set(['node_look', 'edge_path', 'edge_corner', 'canvas', 'subtitle_from', 'dashed', 'source_port', 'target_port', 'node_role', 'internals']);
+export const TASKS_EDGE_CORNERS = ['sharp', 'round'];
+
+const tasksCascade = (allowed, ...values) => values
+    .map((value) => String(value ?? '').trim().toLowerCase())
+    .find((value) => allowed.includes(value));
+
+/**
+ * >>> tasksNodeLook({ node_look: 'card' }, { node_look: 'outline' }, 'outline')
+ * 'card'
+ * >>> tasksNodeLook({}, { node_look: 'outline' })
+ * 'outline'
+ * >>> tasksNodeLook({}, {}, 'outline')
+ * 'outline'
+ */
+export function tasksNodeLook(node, model, layoutDefault = 'card') {
+    return tasksCascade(TASKS_NODE_LOOKS, node?.node_look, model?.node_look, layoutDefault) || 'card';
+}
+
+/**
+ * >>> tasksEdgeCornerOf({}, { edge_corner: 'round' })
+ * 'round'
+ * >>> tasksEdgeCornerOf({}, {}, 'orthogonal')
+ * 'round'
+ * >>> tasksEdgeCornerOf({ edge_corner: 'sharp' }, {}, 'orthogonal')
+ * 'sharp'
+ */
+export function tasksEdgeCornerOf(edge, model, edgePath = '') {
+    return tasksCascade(TASKS_EDGE_CORNERS, edge?.edge_corner, model?.edge_corner)
+        || (edgePath === 'orthogonal' ? 'round' : 'sharp');
+}
+
+// The canvas is view-wide: a view, then @graph, then the site default.
+export function tasksCanvasOf(model) {
+    return tasksCascade(TASKS_CANVASES, model?.canvas) || 'plain';
+}
+
+/**
+ * The second line of an outline node: its own `subtitle`, else the attr the
+ * view names in `subtitle_from`, else nothing.
+ *
+ * >>> tasksNodeSubtitle({ subtitle: 'Own', description: 'Long' }, { subtitle_from: 'description' })
+ * 'Own'
+ * >>> tasksNodeSubtitle({ description: 'Long' }, { subtitle_from: 'description' })
+ * 'Long'
+ * >>> tasksNodeSubtitle({ description: 'Long' }, {})
+ * ''
+ */
+export function tasksNodeSubtitle(node, view) {
+    const from = String(view?.subtitle_from || '').trim();
+    return String(node?.subtitle || (from ? node?.[from] : '') || '').trim();
+}
+
+/**
+ * >>> tasksEdgePathOf({ edge_path: 'line' }, { edge_path: 'orthogonal' })
+ * 'line'
+ * >>> tasksEdgePathOf({}, {}, 'line')
+ * 'line'
+ */
+export function tasksEdgePathOf(edge, model, layoutDefault = 'ribbon') {
+    return tasksCascade(TASKS_EDGE_PATHS, edge?.edge_path, model?.edge_path, layoutDefault) || 'ribbon';
+}
+
+/**
+ * Where the ray from a rect's centre toward a point crosses the rect border,
+ * pushed out by `gap`. A straight edge runs centre to centre and is cut here.
+ *
+ * >>> tasksRectExitPoint({ x: 0, y: 0, width: 100, height: 40 }, { x: 300, y: 20 })
+ * { x: 100, y: 20 }
+ * >>> tasksRectExitPoint({ x: 0, y: 0, width: 100, height: 40 }, { x: 50, y: -200 }, 4)
+ * { x: 50, y: -4 }
+ */
+export function tasksRectExitPoint(rect, toward, gap = 0) {
+    const cx = rect.x + rect.width / 2;
+    const cy = rect.y + rect.height / 2;
+    const dx = toward.x - cx;
+    const dy = toward.y - cy;
+    if (!dx && !dy) return { x: cx, y: cy };
+    const scale = 1 / Math.max(Math.abs(dx) / (rect.width / 2 + gap), Math.abs(dy) / (rect.height / 2 + gap));
+    const px = (value) => Math.round(value * 100) / 100;
+    return { x: px(cx + dx * scale), y: px(cy + dy * scale) };
+}
+
+// A straight route between two node rects: centre to centre, cut at each
+// border. The target end stops short so the arrow tip clears the box.
+export function tasksStraightRoute(sourceRect, targetRect, targetGap = 3) {
+    const centre = (rect) => ({ x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 });
+    return [tasksRectExitPoint(sourceRect, centre(targetRect)), tasksRectExitPoint(targetRect, centre(sourceRect), targetGap)];
+}
+
+// A node or edge the author marked `dashed` is drawn with a dashed stroke.
+export function tasksIsDashed(item) {
+    return ['true', 'yes', '1'].includes(String(item?.dashed ?? '').trim().toLowerCase());
+}
+
+/**
+ * Orthogonal route between two rects, as points. Candidates are the straight
+ * run, both L shapes, and Z or U shapes whose middle run sits in the gutter
+ * beside either end. The route crossing the fewest other rects wins, then the
+ * one with fewest bends, then the shortest.
+ *
+ * >>> tasksOrthogonalRoute({ x: 0, y: 0, width: 100, height: 40 }, { x: 0, y: 100, width: 100, height: 40 }, [], 40)
+ * [{ x: 50, y: 40 }, { x: 50, y: 97 }]
+ */
+export function tasksOrthogonalRoute(source, target, obstacles = [], gap = 40, targetGap = 3, reservedRoutes = [], trackRects = []) {
+    const gapX = Number(gap?.x ?? gap);
+    const gapY = Number(gap?.y ?? gap);
+    const cx = (r) => r.x + r.width / 2;
+    const cy = (r) => r.y + r.height / 2;
+    const right = (r) => r.x + r.width;
+    const bottom = (r) => r.y + r.height;
+    const corridor = {
+        left: Math.min(source.x, target.x) - gapX * 2 - 48,
+        right: Math.max(right(source), right(target)) + gapX * 2 + 48,
+        top: Math.min(source.y, target.y) - gapY * 2 - 48,
+        bottom: Math.max(bottom(source), bottom(target)) + gapY * 2 + 48,
+    };
+    const priorRoutes = reservedRoutes.map((route, index) => {
+        const points = route.points || route;
+        const bounds = points.reduce((rect, point) => ({
+            left: Math.min(rect.left, point.x), right: Math.max(rect.right, point.x),
+            top: Math.min(rect.top, point.y), bottom: Math.max(rect.bottom, point.y),
+        }), { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity });
+        const distanceX = Math.max(0, corridor.left - bounds.right, bounds.left - corridor.right);
+        const distanceY = Math.max(0, corridor.top - bounds.bottom, bounds.top - corridor.bottom);
+        return { points, index, distance: distanceX + distanceY };
+    }).filter((route) => route.distance === 0)
+        .sort((a, b) => a.index - b.index)
+        .slice(-16);
+    const candidates = [];
+    const push = (points) => candidates.push(points);
+    // Straight: the rects overlap on one axis, so one run joins facing sides.
+    const overlapX = [Math.max(source.x, target.x), Math.min(right(source), right(target))];
+    const overlapY = [Math.max(source.y, target.y), Math.min(bottom(source), bottom(target))];
+    // A point end has no width, so any shared coordinate is a straight run.
+    const minOverlap = Math.min(source.width, source.height, target.width, target.height) < 1 ? -0.5 : 8;
+    if (overlapX[1] - overlapX[0] > minOverlap) {
+        const x = (overlapX[0] + overlapX[1]) / 2;
+        const down = cy(target) > cy(source);
+        push([{ x, y: down ? bottom(source) : source.y }, { x, y: down ? target.y - targetGap : bottom(target) + targetGap }]);
+    }
+    if (overlapY[1] - overlapY[0] > minOverlap) {
+        const y = (overlapY[0] + overlapY[1]) / 2;
+        const east = cx(target) > cx(source);
+        push([{ x: east ? right(source) : source.x, y }, { x: east ? target.x - targetGap : right(target) + targetGap, y }]);
+    }
+    // Where a run at `x` leaves or enters a rect horizontally, and at `y` vertically.
+    const sideX = (r, x, gapOut = 0) => (x < cx(r) ? r.x - gapOut : right(r) + gapOut);
+    const sideY = (r, y, gapOut = 0) => (y < cy(r) ? r.y - gapOut : bottom(r) + gapOut);
+    const outsideX = (r, x) => x < r.x || x > right(r);
+    const outsideY = (r, y) => y < r.y || y > bottom(r);
+    // L: leave one axis, enter on the other.
+    if (outsideX(source, cx(target)) && outsideY(target, cy(source))) {
+        push([{ x: sideX(source, cx(target)), y: cy(source) }, { x: cx(target), y: cy(source) }, { x: cx(target), y: sideY(target, cy(source), targetGap) }]);
+    }
+    if (outsideY(source, cy(target)) && outsideX(target, cx(source))) {
+        push([{ x: cx(source), y: sideY(source, cy(target)) }, { x: cx(source), y: cy(target) }, { x: sideX(target, cx(source), targetGap), y: cy(target) }]);
+    }
+    // Z or U: the middle run sits in a lane beside either end or a reserved lane.
+    // A lane sits halfway to the nearest box on that side, so it keeps off both
+    // boxes; with no box near, it sits half a gutter out.
+    const others = obstacles.filter((r) => r !== source && r !== target);
+    const laneOffset = (r, side) => {
+        const across = side === 'left' || side === 'right';
+        const gapOut = across ? gapX : gapY;
+        const facing = others.filter((o) => (across
+            ? o.y < bottom(r) + gapY && bottom(o) > r.y - gapY
+            : o.x < right(r) + gapX && right(o) > r.x - gapX));
+        const distances = facing.map((o) => ({
+            left: r.x - right(o), right: o.x - right(r), top: r.y - bottom(o), bottom: o.y - bottom(r),
+        }[side])).filter((distance) => distance > 0 && distance < gapOut * 3);
+        return distances.length ? Math.min(...distances) / 2 : gapOut / 2;
+    };
+    const lanesBeside = (r) => {
+        verticalTracks.push(r.x - laneOffset(r, 'left'), right(r) + laneOffset(r, 'right'));
+        horizontalTracks.push(r.y - laneOffset(r, 'top'), bottom(r) + laneOffset(r, 'bottom'));
+    };
+    const verticalTracks = [];
+    const horizontalTracks = [];
+    lanesBeside(source);
+    lanesBeside(target);
+    // A port end is a point, so the boxes it belongs to still lend their lanes.
+    trackRects.forEach(lanesBeside);
+    const laneSpacing = 14;
+    for (const reserved of priorRoutes) {
+        const points = reserved.points;
+        for (let index = 1; index < points.length; index++) {
+            const prev = points[index - 1];
+            const point = points[index];
+            if (Math.abs(point.x - prev.x) < 1) {
+                for (let lane = 1; lane <= 2; lane++) verticalTracks.push(point.x - lane * laneSpacing, point.x + lane * laneSpacing);
+            } else if (Math.abs(point.y - prev.y) < 1) {
+                for (let lane = 1; lane <= 2; lane++) horizontalTracks.push(point.y - lane * laneSpacing, point.y + lane * laneSpacing);
+            }
+        }
+    }
+    for (const x of new Set(verticalTracks)) {
+        if (!outsideX(source, x) || !outsideX(target, x)) continue;
+        push([{ x: sideX(source, x), y: cy(source) }, { x, y: cy(source) }, { x, y: cy(target) }, { x: sideX(target, x, targetGap), y: cy(target) }]);
+    }
+    for (const y of new Set(horizontalTracks)) {
+        if (!outsideY(source, y) || !outsideY(target, y)) continue;
+        push([{ x: cx(source), y: sideY(source, y) }, { x: cx(source), y }, { x: cx(target), y }, { x: cx(target), y: sideY(target, y, targetGap) }]);
+    }
+    // A box counts as hit when a run enters its clearance: the space its
+    // highlight bands draw into (`buffer`, set from the node's role).
+    const hits = (a, b) => others.filter((r) => {
+        const pad = Number(r.buffer) || 0;
+        return Math.min(a.x, b.x) < right(r) + pad - 1 && Math.max(a.x, b.x) > r.x - pad + 1
+            && Math.min(a.y, b.y) < bottom(r) + pad - 1 && Math.max(a.y, b.y) > r.y - pad + 1;
+    }).length;
+    const edgeConflicts = (a, b) => priorRoutes.reduce((total, reserved) => {
+        const points = reserved.points;
+        return total + points.slice(1).reduce((score, point, index) => {
+            const prev = points[index];
+            const candidateVertical = Math.abs(a.x - b.x) < 1;
+            const candidateHorizontal = Math.abs(a.y - b.y) < 1;
+            const reservedVertical = Math.abs(prev.x - point.x) < 1;
+            const reservedHorizontal = Math.abs(prev.y - point.y) < 1;
+            if (candidateVertical && reservedVertical && Math.abs(a.x - prev.x) < 1) {
+                const overlap = Math.min(Math.max(a.y, b.y), Math.max(prev.y, point.y))
+                    - Math.max(Math.min(a.y, b.y), Math.min(prev.y, point.y));
+                return score + (overlap > 18 ? 10000 + overlap * 20 : 0);
+            }
+            if (candidateHorizontal && reservedHorizontal && Math.abs(a.y - prev.y) < 1) {
+                const overlap = Math.min(Math.max(a.x, b.x), Math.max(prev.x, point.x))
+                    - Math.max(Math.min(a.x, b.x), Math.min(prev.x, point.x));
+                return score + (overlap > 18 ? 10000 + overlap * 20 : 0);
+            }
+            const crosses = (candidateVertical && reservedHorizontal) || (candidateHorizontal && reservedVertical);
+            if (!crosses) return score;
+            const verticalSegment = candidateVertical ? [a, b] : [prev, point];
+            const horizontalSegment = candidateHorizontal ? [a, b] : [prev, point];
+            const crossX = verticalSegment[0].x;
+            const crossY = horizontalSegment[0].y;
+            const interior = crossY > Math.min(verticalSegment[0].y, verticalSegment[1].y) + 6
+                && crossY < Math.max(verticalSegment[0].y, verticalSegment[1].y) - 6
+                && crossX > Math.min(horizontalSegment[0].x, horizontalSegment[1].x) + 6
+                && crossX < Math.max(horizontalSegment[0].x, horizontalSegment[1].x) - 6;
+            return score + (interior ? 180 : 0);
+        }, 0);
+    }, 0);
+    const cost = (points) => points.slice(1).reduce((sum, point, index) => {
+        const prev = points[index];
+        return sum + hits(prev, point) * 1e5 + edgeConflicts(prev, point)
+            + Math.abs(point.x - prev.x) + Math.abs(point.y - prev.y);
+    }, (points.length - 2) * 60);
+    return candidates.reduce((best, points) => (!best || cost(points) < cost(best) ? points : best), null)
+        || [{ x: cx(source), y: cy(source) }, { x: cx(target), y: cy(target) }];
+}
+
+/**
+ * Octilinear route between rect centres: one 45 degree run and one straight
+ * run, the order that crosses fewer other rects. Ends are cut at each border.
+ *
+ * >>> tasksOctilinearRoute({ x: 0, y: 0, width: 20, height: 20 }, { x: 200, y: 100, width: 20, height: 20 }).length
+ * 3
+ */
+export function tasksOctilinearRoute(source, target, obstacles = [], targetGap = 3) {
+    const centre = (r) => ({ x: r.x + r.width / 2, y: r.y + r.height / 2 });
+    const p = centre(source);
+    const q = centre(target);
+    const dx = q.x - p.x;
+    const dy = q.y - p.y;
+    const d = Math.min(Math.abs(dx), Math.abs(dy));
+    const diagonalFirst = { x: p.x + Math.sign(dx) * d, y: p.y + Math.sign(dy) * d };
+    const straightFirst = { x: q.x - Math.sign(dx) * d, y: q.y - Math.sign(dy) * d };
+    const others = obstacles.filter((r) => r !== source && r !== target);
+    const hits = (a, b) => others.filter((r) => Math.min(a.x, b.x) < r.x + r.width - 1 && Math.max(a.x, b.x) > r.x + 1
+        && Math.min(a.y, b.y) < r.y + r.height - 1 && Math.max(a.y, b.y) > r.y + 1).length;
+    const cost = (bend) => hits(p, bend) + hits(bend, q);
+    const bend = cost(diagonalFirst) <= cost(straightFirst) ? diagonalFirst : straightFirst;
+    const points = Math.hypot(bend.x - p.x, bend.y - p.y) < 1 || Math.hypot(q.x - bend.x, q.y - bend.y) < 1 ? [p, q] : [p, bend, q];
+    points[0] = tasksRectExitPoint(source, points[1]);
+    points[points.length - 1] = tasksRectExitPoint(target, points[points.length - 2], targetGap);
+    return points;
+}
+
+/**
+ * Arc route: a curve that bulges to the left of the direction of travel, so on
+ * one baseline a forward edge arcs above and a back edge arcs below.
+ *
+ * >>> const arc = tasksArcRoute({ x: 0, y: 0, width: 20, height: 20 }, { x: 200, y: 0, width: 20, height: 20 })
+ * >>> arc.length > 8 && arc[4].y < 0
+ * true
+ */
+export function tasksArcRoute(source, target, bulge = 0.35, targetGap = 3) {
+    const centre = (r) => ({ x: r.x + r.width / 2, y: r.y + r.height / 2 });
+    const p = centre(source);
+    const q = centre(target);
+    const chord = Math.hypot(q.x - p.x, q.y - p.y) || 1;
+    // Left of travel: rotate the chord direction a quarter turn anticlockwise.
+    const nx = (q.y - p.y) / chord;
+    const ny = -(q.x - p.x) / chord;
+    const control = { x: (p.x + q.x) / 2 + nx * chord * bulge * 2, y: (p.y + q.y) / 2 + ny * chord * bulge * 2 };
+    const start = tasksRectExitPoint(source, control);
+    const end = tasksRectExitPoint(target, control, targetGap);
+    const at = (t) => ({
+        x: (1 - t) ** 2 * start.x + 2 * (1 - t) * t * control.x + t * t * end.x,
+        y: (1 - t) ** 2 * start.y + 2 * (1 - t) * t * control.y + t * t * end.y,
+    });
+    return Array.from({ length: 25 }, (_, index) => at(index / 24));
+}
+
+/**
+ * A port names where an edge meets a box: a side, then optionally the percent
+ * along it from the top or the left.
+ *
+ * >>> tasksParsePort('bottom:25')
+ * { side: 'bottom', offsetPct: 25 }
+ * >>> tasksParsePort('left')
+ * { side: 'left', offsetPct: 50 }
+ * >>> tasksParsePort('middle')
+ * null
+ */
+export function tasksParsePort(value) {
+    const match = /^(top|right|bottom|left)(?::(\d+(?:\.\d+)?))?$/.exec(String(value ?? '').trim().toLowerCase());
+    return match ? { side: match[1], offsetPct: Math.min(100, Number(match[2] ?? 50)) } : null;
+}
+
+const TASKS_PORT_NORMAL = { top: [0, -1], right: [1, 0], bottom: [0, 1], left: [-1, 0] };
+// The straight run out of a port before a route may turn. It holds a round
+// corner (8) plus a full arrowhead (10), so the head never sits on the bend.
+export const TASKS_PORT_STUB = 24;
+
+function tasksPortPoint(rect, port, out = 0) {
+    const point = tasksHandlePoint(rect, port);
+    const [nx, ny] = TASKS_PORT_NORMAL[port.side];
+    return { x: point.x + nx * out, y: point.y + ny * out };
+}
+
+/**
+ * Drop zero-length runs and join runs that continue on one line.
+ *
+ * >>> tasksSimplifyRoute([{ x: 0, y: 0 }, { x: 0, y: 10 }, { x: 0, y: 10 }, { x: 0, y: 20 }, { x: 5, y: 20 }])
+ * [{ x: 0, y: 0 }, { x: 0, y: 20 }, { x: 5, y: 20 }]
+ */
+export function tasksSimplifyRoute(points) {
+    const same = (a, b) => Math.abs(a - b) < 0.5;
+    return points.reduce((out, point) => {
+        const last = out[out.length - 1];
+        if (last && same(last.x, point.x) && same(last.y, point.y)) return out;
+        const prev = out[out.length - 2];
+        if (prev && ((same(prev.x, last.x) && same(last.x, point.x)) || (same(prev.y, last.y) && same(last.y, point.y)))) out.pop();
+        out.push(point);
+        return out;
+    }, []);
+}
+
+/**
+ * A route whose ends name ports. A line runs port to port. An orthogonal route
+ * leaves each port square to its side for a short stub, and the run between
+ * the stubs is solved as any other orthogonal route.
+ *
+ * >>> tasksPortRoute('orthogonal', { x: 0, y: 0, width: 100, height: 40 }, { x: 0, y: 100, width: 100, height: 40 }, null, { side: 'top', offsetPct: 20 })
+ * [{ x: 20, y: 40 }, { x: 20, y: 97 }]
+ */
+export function tasksPortRoute(edgePath, source, target, sourcePort, targetPort, obstacles = [], gutter = 44, reserved = [], targetGap = 3) {
+    const startAt = sourcePort ? tasksPortPoint(source, sourcePort) : null;
+    const endAt = targetPort ? tasksPortPoint(target, targetPort, targetGap) : null;
+    if (edgePath !== 'orthogonal') {
+        const centre = (r) => ({ x: r.x + r.width / 2, y: r.y + r.height / 2 });
+        const from = startAt || tasksRectExitPoint(source, endAt || centre(target));
+        return [from, endAt || tasksRectExitPoint(target, from, targetGap)];
+    }
+    const stub = (rect, port) => ({ ...tasksPortPoint(rect, port, TASKS_PORT_STUB), width: 0, height: 0 });
+    const from = sourcePort ? stub(source, sourcePort) : source;
+    const to = targetPort ? stub(target, targetPort) : target;
+    const middle = tasksOrthogonalRoute(from, to, obstacles, gutter, targetPort ? 0 : targetGap, reserved, [source, target]);
+    return tasksSimplifyRoute([...(startAt ? [startAt] : []), ...middle, ...(endAt ? [endAt] : [])]);
+}
+
+/**
+ * Where a routed edge's label goes: the first point, on its runs from longest
+ * to shortest, whose label box clears every node box by `margin`. Each run is
+ * tried at its middle, then at 30% and 70%. Null means no point is clear, and
+ * the renderer keeps its own placement.
+ *
+ * >>> tasksRouteLabelPoint([{ x: 0, y: 0 }, { x: 0, y: 200 }], 'produces', [{ x: -40, y: 80, width: 80, height: 40 }])
+ * { x: 0, y: 60 }
+ */
+export function tasksRouteLabelPoint(route, label, rects, fontSize = 12, margin = 4) {
+    const text = String(label || '');
+    if (!text || !Array.isArray(route) || route.length < 2) return null;
+    const halfWidth = (text.length * fontSize * 0.6 + 12) / 2 + margin;
+    const halfHeight = (fontSize * 1.4 + 6) / 2 + margin;
+    const clear = (x, y) => (rects || []).every((r) => x + halfWidth <= r.x || x - halfWidth >= r.x + r.width
+        || y + halfHeight <= r.y || y - halfHeight >= r.y + r.height);
+    const runs = route.slice(1)
+        .map((point, index) => ({ a: route[index], b: point, length: Math.hypot(point.x - route[index].x, point.y - route[index].y) }))
+        .filter((run) => run.length > 0)
+        .sort((x, y) => y.length - x.length);
+    for (const run of runs) {
+        for (const t of [0.5, 0.3, 0.7]) {
+            const x = Math.round(run.a.x + (run.b.x - run.a.x) * t);
+            const y = Math.round(run.a.y + (run.b.y - run.a.y) * t);
+            if (clear(x, y)) return { x, y };
+        }
+    }
+    return null;
+}
+
+// The points a routed edge is drawn through, or null for a ribbon, which
+// curves between the handles instead.
+export function tasksEdgeRoute(edgePath, from, to, obstacles = [], gutter = 44, targetGap = 3) {
+    if (!from || !to || edgePath === 'ribbon') return null;
+    if (edgePath === 'orthogonal') return tasksOrthogonalRoute(from, to, obstacles, gutter, targetGap);
+    if (edgePath === 'octilinear') return tasksOctilinearRoute(from, to, obstacles, targetGap);
+    if (edgePath === 'arc') return tasksArcRoute(from, to, 0.35, targetGap);
+    return tasksStraightRoute(from, to, targetGap);
+}
+
+// Routes meet a junction at its centre, so edges join into one line; any other
+// node at the rect its look gives.
+function tasksRouteRect(node, rect) {
+    const data = node.data || node;
+    if (rect && tasksRoleOf(data).joinsRoutes) return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, width: 0, height: 0 };
+    return tasksLookRouteRect(data.__node_look__, rect);
+}
+
+// Solve every routed edge against the current node rects. A box a route must
+// go around is a task or a collapsed group; an open group contains its routes.
+export function tasksRouteEdges(nodes, edges, gutter = 44) {
+    const boxes = absoluteNodeRects(nodes);
+    const rects = Object.fromEntries((nodes || []).map((node) => [node.id, tasksRouteRect(node, boxes[node.id])]));
+    const obstacles = (nodes || [])
+        .filter((node) => {
+            const kind = node.data?.__kind__ || node.__kind__;
+            return kind === 'task' || (kind === 'group' && !String(node.className || '').includes('expanded-group'));
+        })
+        .map((node) => {
+            const rect = rects[node.id];
+            if (rect) rect.buffer = tasksRoleOf(node.data || node).clearance;
+            return rect;
+        })
+        .filter(Boolean);
+    const sourceEdges = edges || [];
+    const portsOf = (edge) => [tasksParsePort(edge.source_port), tasksParsePort(edge.target_port)];
+    const joins = new Map((nodes || []).map((node) => [node.id, tasksRoleOf(node.data || node).joinsRoutes]));
+    // An arrow stops short of a box; a line into a junction meets it exactly.
+    const targetGapOf = (edge) => (joins.get(edge.target) ? 0 : 3);
+    const orthogonalRoutes = new Map();
+    const routed = [];
+    sourceEdges.map((edge, index) => ({ edge, index }))
+        .filter(({ edge }) => edge.data?.__edge_path__ === 'orthogonal' && rects[edge.source] && rects[edge.target])
+        .sort((a, b) => String(a.edge.id || '').localeCompare(String(b.edge.id || '')) || a.index - b.index)
+        .forEach(({ edge, index }) => {
+            const [sourcePort, targetPort] = portsOf(edge);
+            // Edges out of one node may share a run, so a fan-out reads as one trunk.
+            const reserved = routed.filter((prior) => prior.source !== edge.source);
+            const route = sourcePort || targetPort
+                ? tasksPortRoute('orthogonal', rects[edge.source], rects[edge.target], sourcePort, targetPort, obstacles, gutter, reserved, targetGapOf(edge))
+                : tasksSimplifyRoute(tasksOrthogonalRoute(rects[edge.source], rects[edge.target], obstacles, gutter, targetGapOf(edge), reserved));
+            orthogonalRoutes.set(index, route);
+            routed.push({ points: route, source: edge.source });
+        });
+    return sourceEdges.map((edge, index) => {
+        const edgePath = edge.data?.__edge_path__;
+        // A point is a junction, so an edge into one draws no arrowhead.
+        const headOff = targetGapOf(edge) === 0 ? { __head_off__: true } : {};
+        if (!edgePath || edgePath === 'ribbon') return headOff.__head_off__ ? { ...edge, data: { ...edge.data, ...headOff } } : edge;
+        const [sourcePort, targetPort] = portsOf(edge);
+        const route = edgePath === 'orthogonal' && orthogonalRoutes.has(index)
+            ? orthogonalRoutes.get(index)
+            : edgePath === 'line' && (sourcePort || targetPort) && rects[edge.source] && rects[edge.target]
+                ? tasksPortRoute('line', rects[edge.source], rects[edge.target], sourcePort, targetPort, [], gutter, [], targetGapOf(edge))
+                : tasksEdgeRoute(edgePath, rects[edge.source], rects[edge.target], obstacles, gutter, targetGapOf(edge));
+        // An arc's words belong on its apex; any other route places its label clear of the boxes.
+        const fontSize = Number.parseFloat(edge.labelStyle?.fontSize) || 12;
+        const labelPoint = edgePath === 'arc' ? null : tasksRouteLabelPoint(route, edge.label, obstacles, fontSize);
+        return { ...edge, data: { ...edge.data, ...headOff, __route__: route, __route_label__: labelPoint } };
+    });
+}
+
+export function absoluteNodeRects(nodes) {
     const byId = Object.fromEntries((nodes || []).map((node) => [node.id, node]));
     const cache = {};
     const resolve = (id) => {
@@ -823,6 +1317,16 @@ function tasksHandlePoint(rect, handle) {
     return null;
 }
 
+function tasksPointToSegmentDistance(point, start, end) {
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const lengthSquared = dx * dx + dy * dy;
+    const projection = lengthSquared
+        ? Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared))
+        : 0;
+    return Math.hypot(point.x - (start.x + projection * dx), point.y - (start.y + projection * dy));
+}
+
 export function nearestTasksIncidentEdge(pointer, nodeId, nodes, edges) {
     const activeId = String(nodeId || '');
     const node = (nodes || []).find((item) => String(item.id || '') === activeId);
@@ -835,11 +1339,19 @@ export function nearestTasksIncidentEdge(pointer, nodeId, nodes, edges) {
             ? 'source'
             : (String(edge.target || '') === activeId ? 'target' : '');
         if (!role) continue;
-        const handleId = edge[`${role}Handle`];
-        const handle = (node.data?.handleLayout?.[role] || []).find((item) => item.id === handleId);
-        const point = tasksHandlePoint(rect, handle);
-        if (!point) continue;
-        const distance = Math.hypot(Number(pointer?.x) - point.x, Number(pointer?.y) - point.y);
+        const route = edge.data?.__route__;
+        let distance = Infinity;
+        if (Array.isArray(route) && route.length > 1) {
+            for (let index = 1; index < route.length; index++) {
+                distance = Math.min(distance, tasksPointToSegmentDistance(pointer, route[index - 1], route[index]));
+            }
+        } else {
+            const handleId = edge[`${role}Handle`];
+            const handle = (node.data?.handleLayout?.[role] || []).find((item) => item.id === handleId);
+            const point = tasksHandlePoint(rect, handle);
+            if (!point) continue;
+            distance = Math.hypot(Number(pointer?.x) - point.x, Number(pointer?.y) - point.y);
+        }
         if (distance < nearestDistance) {
             nearest = edge;
             nearestDistance = distance;

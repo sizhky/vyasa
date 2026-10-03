@@ -234,7 +234,7 @@ ctx006/release-check:
 
 ## Fixed Layouts
 
-`layout=` replaces the free graph with a layout that places every node itself. Three exist: `sequence`, `layered`, and `matrix`.
+`layout=` replaces the free graph with a layout that places every node itself. Five exist: `sequence`, `layered`, `matrix`, `grid`, and `arc`.
 
 Each layout owns its own keys and validates them. There is no shared grammar of `row=`/`col=` keys, because the same word would mean different things in different layouts. Write the keys of the layout you chose.
 
@@ -313,7 +313,162 @@ matrix:
 - An empty cell is drawn with a dashed edge. Read the empty cells first, because they say what a row never needs.
 - A cell grows to hold its members, and a row to hold its fullest cell.
 
-See `demo/vyasa-architecture.kg` for all three layouts over one pack, and `demo/browser-page-load.kg` for a sequence-only pack.
+### `layout=grid`
+
+A hand-placed figure. Each node names its column and its row, so position carries meaning. Use it for a small diagram of 3 to 20 nodes that should read like a drawn figure.
+
+```text
+@views
+diagram:
+	source=base
+	layout=grid
+	grid_col=column
+	grid_row=track
+	grid_col_order=input,gate,context,select,merge,outcome
+	grid_row_order=reference,deterministic,judgement,learning
+	edge_path=orthogonal
+	color_by=role
+```
+
+- `grid_col` and `grid_row` name node attrs. `grid_col_order` and `grid_row_order` list the tracks. A node whose value is not in the list is an error.
+- Nodes default to `node_look=outline` and edges to `edge_path=line`. See Styling below.
+- Every column is one node wide. A row is as tall as its tallest cell. Two nodes in one cell stack, and each cell is centred in its row, so one node beside a stack of three lines up with the middle one.
+- A track value in the order list with no nodes is a spacer. Use it to separate panels in one figure, for example `grid_row_order=top,space,bottom`.
+- An edge still crosses a box when no gutter route avoids it. Move a node to another column or row, or drop the edge.
+
+### `layout=arc`
+
+An arc diagram: every node on one baseline, edges as arcs. Use it when order matters, such as steps or an outline, and the long jumps and backtracks are the point.
+
+```text
+@views
+checkout:
+	source=checkout
+	layout=arc
+	arc_order=step
+```
+
+- `arc_order` names a node attr; values sort numerically, so `10` comes after `2`. Omit it and nodes keep document order. A node without the value goes last.
+- An arc bulges to the left of travel, so a forward edge arcs above the line and a back edge arcs below. Its label sits on the apex.
+- The layout owns its edge path. A `@graph` or site `edge_path` does not reach it; only the view or an edge can pick another path.
+
+See `demo/vyasa-architecture.kg` for sequence, layered, and matrix over one pack, `demo/browser-page-load.kg` for a sequence-only pack, and `docs/simple-kg/*.kg` for grid figures.
+
+## Styling
+
+Style keys work in every view, fixed layout or free graph. Each is a default, and the nearest level wins:
+
+node or edge attr → view → fence frontmatter or `@graph` line → site `kg_defaults` → layout default.
+
+| Key | Values | Per item | Layout default |
+| --- | --- | --- | --- |
+| `node_look` | `card`, `outline`, `sketch`, `blueprint`, `tab`, `station` | node attr | `outline` in `grid` and `arc`, `card` elsewhere |
+| `edge_path` | `ribbon`, `line`, `orthogonal`, `octilinear`, `arc` | edge attr | `line` in `grid`, `arc` in `arc`, `ribbon` elsewhere |
+| `edge_corner` | `sharp`, `round` | edge attr | `sharp` |
+| `canvas` | `plain`, `blueprint` | none, view-wide | `plain` |
+| `subtitle_from` | a node attr name | a node's own `subtitle=` wins | no subtitle |
+| `dashed` | `true` | node or edge attr only | solid |
+
+```text
+@graph id=flow title="Flow" node_look=outline subtitle_from=summary
+
+@views
+pipeline:
+	source=base
+	layout=layered
+	layered_tier=stage
+	edge_path=orthogonal
+	edge_corner=round
+```
+
+```text
+e7: merge -> fetch names_evidence edge_path=arc dashed=true
+n4: Remediate
+	node_look=card
+```
+
+A fence can set style keys for the figure it embeds, and its `default_projection` picks the view it opens. Both win over the pack, so one pack can back several figures on a page, each restyled without editing the schema:
+
+````text
+```items
+---
+items_schema: flow.kg/kg.schema
+default_projection: pipeline
+node_look: sketch
+---
+```
+````
+
+The site level is the `kg_defaults` setting: `--kg-defaults` beats `.vyasa`, which beats `VYASA_KG_DEFAULTS`. The highest source replaces the whole value; it does not merge key by key. It takes `key=value` pairs, or a `[kg_defaults]` table in `.vyasa`. A site key or value that is not a style is logged and ignored. A launchd agent does not read shell profiles, so put the setting in `.vyasa` there.
+
+```bash
+vyasa docs --kg-defaults "node_look=outline edge_path=orthogonal"
+```
+
+Node looks:
+
+- `card`: the filled card.
+- `outline`: dark box, role colour in the border and the mono title, subtitle as a muted second line. For figures of 5 to 20 nodes.
+- `sketch`: hachure fill and a hand-drawn wobble on the frame; the text stays crisp. For drafts and brainstorms.
+- `blueprint`: thin mono box in ink. Pair it with `canvas=blueprint`.
+- `tab`: C4 box. The name on a band in the role colour, then `[kind]` (the node's value for the view's `color_by`), then the subtitle.
+- `station`: a metro dot with its name above. Routes end at the dot. Pair it with `edge_path=octilinear`.
+- `point`: an 8px junction where routes split or merge. Its default role is `junction`.
+- `circle`: a ring around a short symbol such as `+` or `~`. Its default role is `mark`.
+- `text`: a bare mono label, for annotations and internals ports. Its default role is `mark`.
+
+`node_role` says what a node does, apart from how it is drawn. Each look sets a default; a `node_role=` attr overrides it. The attr is `node_role`, because packs already author `role` as content.
+
+| Role | Card state and notes | Pointer | Highlight | Routes |
+| --- | --- | --- | --- | --- |
+| `item` | yes | yes | full rings and bands | end at the box |
+| `mark` | no | yes | thin ring | end at the box |
+| `junction` | no | no | none; a highlight passes through it to the nodes beyond, in edge direction | meet at the centre |
+
+Assign looks and roles in bulk in `kg.attrs` (`@node_attrs` → `node_look:` → `point: r1 r2`). Style keys and `node_role` there stay assignments; they never become filter dimensions.
+
+A subtitle shows on `outline`, `sketch`, `blueprint`, and `tab`. Name a short attr in `subtitle_from`; a long `description` makes tall boxes.
+
+Edge paths:
+
+- `ribbon`: the tapered curve between handles.
+- `line`: centre to centre, cut at each box border. For a hub with spokes.
+- `orthogonal`: L, Z, and U runs through the gaps between boxes. It picks the route that crosses the fewest boxes, then the fewest bends, then the shortest. For a pipeline.
+- `octilinear`: 0, 45, and 90 degree runs, drawn thick like a metro line. Colour the lines with `edge_color_by`.
+- `arc`: a curve that bulges left of travel, with its label on the apex. Use it on one edge to hop over a node in the way.
+- `edge_corner=round` rounds the bends of `orthogonal` and `octilinear` runs. A straight run has no bend, so place nodes where the route turns.
+
+Rules:
+
+- `canvas=blueprint` restates the page colours for the graph pane and draws a grid, so every node and edge inside turns light on blue.
+- A routed edge with no colour of its own is thin muted ink. Add `edge_color_by` only when colour is the point.
+- `layout=sequence` ignores `edge_path`, because each row's ends are pinned to the lifelines. `layout=arc` ignores graph and site `edge_path`.
+- In a free graph the routes are solved after ELK places the nodes, and again after a drag. An open group does not block a route; a collapsed group does.
+- A bad style value on a view draws the view's error card. A bad value on a node, an edge, `@graph`, or a fence is skipped and the next level decides.
+
+See `demo/folio-books.md`: one pack, six views, one style each.
+
+## Internals
+
+A node can open another Knowledge Graph pack that shows its inside: `internals=<path>`. Use it when a node is an abstraction over a graph one level down that needs its own layout. Use a group when the parts fit the parent's layout.
+
+```text
+enc_mha: MULTI-HEAD ATTENTION
+	internals=../mha.kg
+```
+
+- The path is relative to the node's pack folder, as `@sources` paths are. It names a pack folder or a schema file.
+- `internals` is a presentation attr: never a filter dimension, never rendered as prose, never an attribute link.
+- An internals pack is its own KG with its own schema, views and layout. Share parent data only by explicit `@sources` paths, such as `palette=../browser-page-load.kg/kg.palette`. There is no implicit inheritance, because one pack can serve several parents.
+- Many parent nodes can point to one pack. `tcp-handshake.kg` is opened from the page load's TCP step and from the DNS resolver's TCP fallback.
+- Make the pack's root group the node's own frame. Put ports outside that frame as `text`-look nodes (`q_in`, `out`), and mark port edges `dashed=true`, so every port edge crosses the boundary.
+- The reader sees the parent's own crossing edges as chips on the panel edges. The parent supplies them, so do not author parent neighbour names in the pack.
+- A node with internals draws a stacked frame; `text`, `station`, `point` and `sketch` show a badge instead; a sequence lane stacks its cap.
+- A pack already open above is not opened again. Internals do not open in a static build yet.
+
+Reader gestures: hold `1` on a stacked node to peek, `1`+Enter to pin, double-tap `1` to dive. Enter over empty canvas inside a panel dives it. Drag the bar to move, an edge to resize; the next panel reuses the size. Esc closes the topmost panel.
+
+Demos: `demo/transformer.kg` (MHA → `mha.kg` → `sdpa.kg`), `demo/browser-page-load.kg` (DNS, TCP, TLS 1.3 → key schedule, compositor).
 
 ## Slides
 
@@ -377,6 +532,7 @@ n1: Post matching
 - Keep unique/descriptive attrs inline here: `summary`, `description`, `notes`, `rationale`.
 - Attr inheritance is whitelist-only through `inherit=key1,key2`. The named parent attrs copy to descendants only when the child does not already define that key.
 - Put `inherit=` before child nodes. Default is no attr inheritance.
+- `dashed=true` draws the node with a dashed border. Use it for something optional or not captured.
 
 ## Edges
 
@@ -392,6 +548,7 @@ e2: n2 -> n3 creates
 - Relation has no leading `:`; write `unlocks`, not `:unlocks`.
 - Use another edge for another semantic relation between the same nodes.
 - Keep unique edge attrs inline only when UI/CLI can query or display them; otherwise omit dead text attrs.
+- `dashed=true` draws the edge dashed. Use it for a feedback path or an optional step.
 
 ## Attrs
 

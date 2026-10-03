@@ -21,4 +21,6 @@ updates label=updates
 @views
 flow:
 	source=base
+	node_look=outline
+	edge_path=orthogonal
 	caption="SQLite reads your SQL, turns it into steps, then either reads data through storage or changes data and saves it safely."

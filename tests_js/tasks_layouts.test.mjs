@@ -47,6 +47,8 @@ test('registry: every layout declares the same contract', () => {
         assert.ok(Array.isArray(layout.chromeKinds) && layout.chromeKinds.length);
         assert.equal(typeof layout.authoredHandles, 'boolean');
         assert.equal(typeof layout.edgesOverNodes, 'boolean');
+        assert.ok(['ribbon', 'line'].includes(layout.edgePath));
+        assert.ok(['card', 'outline'].includes(layout.nodeLook));
     }
 });
 

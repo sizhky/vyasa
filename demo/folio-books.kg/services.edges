@@ -1,0 +1,8 @@
+s1: storefront -> catalog-api reads
+s2: storefront -> orders-api writes
+s3: storefront -> search queries
+s4: catalog-api -> catalog-db reads
+s5: orders-api -> orders-db writes
+s6: orders-api -> order-events publishes
+s7: order-events -> mailer consumes dashed=true
+s8: search -> catalog-api indexes

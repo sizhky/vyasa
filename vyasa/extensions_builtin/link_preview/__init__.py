@@ -18,9 +18,22 @@ class LinkPreviewExtension(VyasaExtensionBase):
                 depends_on=("code_tools.runtime",),
             )
         )
+        app.assets.page(_page_bundles)
+        app.navigation.sidebar_row_decorator(_preview_sidebar_row)
         app.markdown.preprocessor(preprocess_code_references)
         app.routes.static_build("cap:static_verify:code_references", verify_code_references)
         app.routes.add("/preview/link", register_link_preview_routes)
+
+
+def _page_bundles(context):
+    return ("link_preview.runtime",) if context.get("show_sidebar") else ()
+
+
+def _preview_sidebar_row(node, *, slug=None, title="", context="tree"):
+    attrs = getattr(node, "attrs", None)
+    if attrs is not None and attrs.get("href"):
+        attrs["data-vyasa-link-preview"] = "true"
+    return node
 
 
 EXTENSION = LinkPreviewExtension(

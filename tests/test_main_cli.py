@@ -6,6 +6,25 @@ import pytest
 from vyasa.config import get_config, reload_config, theme_preset_for_working_directory
 
 
+def test_launchd_socket_passed_to_uvicorn_and_closed_on_failure(tmp_path, monkeypatch):
+    from vyasa import main
+
+    closed = []
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "argv", ["vyasa", "--no-browser", "--launchd-socket", "http"])
+    monkeypatch.setattr(main, "_launchd_socket", lambda name: 123 if name == "http" else None)
+    monkeypatch.setattr(main.os, "close", closed.append)
+
+    def run(*args, **kwargs):
+        assert kwargs["fd"] == 123
+        raise RuntimeError("startup failed")
+
+    monkeypatch.setitem(sys.modules, "uvicorn", SimpleNamespace(run=run))
+    with pytest.raises(RuntimeError, match="startup failed"):
+        main.cli()
+    assert closed == [123]
+
+
 def test_reload_source_flag_configures_uvicorn_reloader(tmp_path, monkeypatch):
     site = tmp_path / "site"
     site.mkdir()

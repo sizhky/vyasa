@@ -1,13 +1,17 @@
 import { renderTasksInlineLinks, renderTasksNodeLinkBadge, tasksIsIconifyImage, tasksNodeLinkKinds } from './tasks_cards.js';
 import { logTasksDebug } from './tasks_diagnostics.js';
-import { normalizeTasksNodeImageUrl, tasksGraphCornerPath, tasksReviewTarget } from './tasks_graph_core.js';
+import {
+    normalizeTasksNodeImageUrl, tasksGraphCornerPath, tasksIsDashed, tasksNodeSubtitle, tasksReviewTarget,
+} from './tasks_graph_core.js';
+import { tasksRoleOf } from './tasks_roles.js';
+import { tasksGroupTitleLook, tasksLookBody, tasksStackShadow } from './tasks_theme.js';
 import { TASKS_DEFAULT_CARD_STATES, tasksLogicalNodeId, tasksNodeHasChildren } from './tasks_graph_model.js';
-import { TASKS_DONE_ACCENT, TASKS_NODE_LABEL_FONT_SIZE, tasksColorOverlay } from './tasks_paint.js';
+import { TASKS_DONE_ACCENT, TASKS_NODE_LABEL_FONT_SIZE, tasksColorOverlay, tasksNodeHasInternals } from './tasks_paint.js';
 
 export function createTasksNodeRenderer(getState) {
     return ({ data, id }) => {
         const { Handle, NodeToolbar, Position, React, cardStates, clearSelection, edgeNodeLabels, egoMode, expanded, focusNodeReferenceFromEvent, model, selectedNodeIdRef, selectedNodeIdsRef, setExpanded, setHoveredNodeId, setSelectedNodeId, sourceModel, suppressNextGraphClickRef, toggleCheckedNode, widgetId } = getState();
-        const tasksSequenceLaneCap = (accent, stage, label) => renderTasksSequenceLaneCap(React, accent, stage, label);
+        const tasksSequenceLaneCap = (accent, stage, label, stacked) => renderTasksSequenceLaneCap(React, accent, stage, label, stacked);
         const handlePosition = (side) => ({
                             top: Position?.Top || 'top',
                             right: Position?.Right || 'right',
@@ -47,7 +51,9 @@ export function createTasksNodeRenderer(getState) {
                         // (see useMemo below) stops React Flow from remounting every node on
                         // each hover, which was destroying the node DOM mid-click and
                         // swallowing clicks (deselect / neighbor-activate never fired).
-                        const showCheckbox = highlightMode === 'selected' || highlightMode === 'selected-focus' || highlightMode === 'neighbor-focus' || data?.__hover_checkbox__ === true;
+                        // Only a role that keeps card state offers the checkbox and a note badge.
+                        const role = tasksRoleOf(data);
+                        const showCheckbox = role.cardState && (highlightMode === 'selected' || highlightMode === 'selected-focus' || highlightMode === 'neighbor-focus' || data?.__hover_checkbox__ === true);
                         const isActiveNode = highlightMode === 'none' || highlightMode === 'selected' || highlightMode === 'selected-focus';
                         const linksInteractive = isActiveNode;
                         const linkKinds = Array.from(tasksNodeLinkKinds(data));
@@ -350,7 +356,7 @@ export function createTasksNodeRenderer(getState) {
                             },
                                 ...renderHandles('target'),
                                 ...renderHandles('source'),
-                                tasksSequenceLaneCap(accent, data.__sequence_stage__, data?.label || ''),
+                                tasksSequenceLaneCap(accent, data.__sequence_stage__, data?.label || '', tasksNodeHasInternals(data)),
                                 // The lifeline body is a tinted column, not a hairline, so it
                                 // still reads when the whole diagram is zoomed to fit.
                                 React.createElement('div', {
@@ -381,6 +387,8 @@ export function createTasksNodeRenderer(getState) {
                             }, data?.label || '');
                         }
                         if (data?.__kind__ === 'groupTitle') {
+                            // A figure group's title is a label on its frame; a card group's is a bar.
+                            const titleLabel = tasksGroupTitleLook(data?.__node_look__, data?.__group_color__);
                             const handleCollapse = (e) => {
                                 e.stopPropagation();
                                 if (egoMode) return;
@@ -398,17 +406,20 @@ export function createTasksNodeRenderer(getState) {
         	                            display: 'flex',
         	                            alignItems: 'center',
         	                            justifyContent: 'space-between',
-        	                            gap: '8px',
-        	                            padding: '6px 10px',
+                                    gap: '8px',
+                                    padding: '6px 10px',
                                     fontWeight: '600',
                                     fontSize: '16px',
                                     position: 'relative',
+                                    ...(titleLabel?.body || {}),
                                 }
                             },
                                 linkKinds.length ? renderTasksNodeLinkBadge(React, { right: '32px', kinds: linkKinds }) : null,
                                 React.createElement('span', {
                                     style: {
-        	                                minWidth: 0,
+                                        minWidth: 0,
+                                        position: 'relative',
+                                        zIndex: 1,
         	                                overflow: 'hidden',
         	                                display: 'flex',
         	                                alignItems: 'center',
@@ -419,7 +430,8 @@ export function createTasksNodeRenderer(getState) {
                                         wordBreak: 'break-word',
                                     }
                                 }, renderNodeImage(20, { marginTop: '1px' }), React.createElement('span', { style: { minWidth: 0 } }, renderTasksInlineLinks(data?.label || data.sourceGroupId || id, { interactive: linksInteractive, onInactiveClick: handleInactiveLinkClick, currentPath: sourceModel?.document_path || '', nodeLabels: edgeNodeLabels }))),
-                                egoMode ? null : React.createElement('button', {
+                                // A layout that holds the group open offers no collapse.
+                                egoMode || data?.__layout_open__ ? null : React.createElement('button', {
                                     onClick: handleCollapse,
                                     style: { flex: '0 0 auto', border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px', opacity: '0.55', padding: '0' }
                                 }, '−')
@@ -427,7 +439,7 @@ export function createTasksNodeRenderer(getState) {
                         }
                         const isGroup = data?.__kind__ === 'group';
                         const canExpand = tasksNodeHasChildren(id, model);
-                        const isExpanded = expanded.has(id);
+                        const isExpanded = Boolean(data?.__layout_open__) || expanded.has(id);
                         const labelContent = renderTasksInlineLinks(data?.label || id, { interactive: linksInteractive, onInactiveClick: handleInactiveLinkClick, currentPath: sourceModel?.document_path || '', nodeLabels: edgeNodeLabels });
                         if (data?.__gantt) {
                             return React.createElement('div', {
@@ -501,7 +513,7 @@ export function createTasksNodeRenderer(getState) {
                             onClick: () => toggleCheckedNode(logicalNodeId),
                             style: { border: 'none', background: 'transparent', padding: 0, width: '10px', height: '10px', cursor: 'pointer' },
                         })) : null;
-                        const noteBadge = data?.__has_note__
+                        const noteBadge = role.notes && data?.__has_note__
                             ? renderTasksNodeLinkBadge(React, { kinds: ['note'], title: 'Has note', top: 'auto', bottom: '8px', right: canExpand ? '34px' : '8px' })
                             : null;
                         const handleExpand = (e) => {
@@ -529,6 +541,8 @@ export function createTasksNodeRenderer(getState) {
                                 ...renderHandles('source')
                             );
                         }
+                        // A figure look restyles the body; a card look keeps it as is.
+                        const look = tasksLookBody(React, data?.__node_look__, { dashed: tasksIsDashed(data), kind: data?.__look_kind__ }, tasksNodeSubtitle(data, model));
                         return React.createElement('div', {
                             ...reviewAttrs,
                             className: 'vyasa-task-node-body',
@@ -549,8 +563,10 @@ export function createTasksNodeRenderer(getState) {
                                 opacity: isDimmed ? 0.22 : 1,
                                 position: 'relative',
                                 background: isChecked ? `linear-gradient(135deg, color-mix(in srgb, ${taskStateColor} 12%, transparent), transparent 55%)` : undefined,
+                                ...look.body,
                             }
                         },
+                            look.frame,
                             tasksColorOverlay(React, data?.__color_levels__, data?.width, data?.height),
                             checkboxControl,
                             noteBadge,
@@ -576,7 +592,7 @@ export function createTasksNodeRenderer(getState) {
                                     textDecorationColor: isChecked ? taskStateColor : undefined,
                                     textDecorationThickness: isChecked ? '2px' : undefined,
                                 }
-                            }, labelNode),
+                            }, look.title(labelNode), ...look.after),
                             canExpand && React.createElement('button', {
                                 onClick: handleExpand,
                                 'data-vyasa-task-control': 'true',
@@ -594,8 +610,11 @@ export function createTasksNodeRenderer(getState) {
     };
 }
 
-export const renderTasksSequenceLaneCap = (React, accent, stage, label) => React.createElement('div', {
+// A lane whose participant has internals stacks its cap, as a node stacks its
+// frame (tasksStackShadow): the lifeline body is a column, not a frame.
+export const renderTasksSequenceLaneCap = (React, accent, stage, label, stacked = false) => React.createElement('div', {
                 style: {
+                    ...(stacked ? { boxShadow: tasksStackShadow('card'), '--vyasa-tasks-stack-rim': `color-mix(in srgb, ${accent} 60%, transparent)` } : {}),
                     boxSizing: 'border-box',
                     padding: '6px 6px 7px',
                     borderRadius: '8px 8px 0 0',

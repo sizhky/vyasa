@@ -1,0 +1,31 @@
+{
+  "node_color_palettes": {
+    "kind": {
+      "web": "#82aaff",
+      "api": "#b794d4",
+      "database": "#dfaa55",
+      "queue": "#55b997",
+      "worker": "#55b997",
+      "search": "#d98baa"
+    },
+    "role": {
+      "input": "#82aaff",
+      "step": "#b794d4",
+      "done": "#55b997",
+      "back": "#d98baa"
+    },
+    "confidence": {
+      "confirmed": "#55b997",
+      "suspected": "#dfaa55",
+      "ruled_out": "#96958b",
+      "symptom": "#d98baa"
+    }
+  },
+  "edge_color_palettes": {
+    "journey": {
+      "browse": "#82aaff",
+      "buy": "#55b997",
+      "return": "#d98baa"
+    }
+  }
+}

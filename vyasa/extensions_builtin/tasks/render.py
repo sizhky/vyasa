@@ -4,6 +4,7 @@ import html
 import json
 import re
 from itertools import count
+from pathlib import Path
 
 from ...markdown_fence import (
     content_url_for_slug,
@@ -14,6 +15,7 @@ from ...markdown_fence import (
     split_fence_frontmatter,
 )
 from .layout import build_collapsed_graph
+from .layouts import PRESENTATION_ATTRS
 from .model import apply_edge_label_fallbacks, parse_tasks_text
 from ..markdown.renderer import _render_markdown_fragment
 
@@ -26,6 +28,8 @@ _RENDERABLE_NODE_KEYS = {
     "width", "height", "position", "parentid", "color", "href", "image", "rank",
     "card_state", "__checked__", "__card_state__", "__card_state_color__", "__has_note__",
     "__rendered_attrs__",
+    # Attrs that say how a node is drawn or what it opens, never what it says.
+    *PRESENTATION_ATTRS,
 }
 _RENDERABLE_EDGE_KEYS = _RENDERABLE_NODE_KEYS | {"source", "target", "relation"}
 
@@ -196,6 +200,10 @@ def _tasks_stats_label(model: dict) -> str:
     if hierarchy_links:
         return f"{node_count} Nodes and {hierarchy_links} Hierarchy Links"
     return f"{node_count} Nodes and 0 Edges"
+
+
+def _kg_block(schema_path: Path) -> str:
+    return f"---\nitems_schema: {schema_path}\nstandalone: true\nwidth: 100%\ndefault_open_depth: -1\n---\n"
 
 
 def render_tasks_block(code: str, current_path: str | None = None, fence_name: str = "tasks") -> str:

@@ -1,0 +1,37 @@
+@graph id=dns-resolution title="DNS resolution"
+hover_attrs=description,example
+default_view=chain
+color_by=kind
+
+@sources
+nodes=kg.nodes
+chain:
+	edges=kg.edges
+referrals:
+	edges=kg.referrals.edges
+palette=../browser-page-load.kg/kg.palette
+
+@relations
+checks label=checks
+carries label=carries
+produces label=produces
+retries label=retries
+
+@views
+chain:
+	source=chain
+	color_by=kind
+	edge_label_from=note
+	edge_path=orthogonal
+	hover_attrs=description,example
+	caption="Who answers a name. A warm resolver cache answers in one round trip from the stub. A cold one walks root, TLD and authoritative servers first. TCP fallback opens the same TCP handshake the page load uses: hold 1 on it."
+referrals:
+	source=referrals
+	layout=sequence
+	sequence_lanes=stub,recursive,root,tld,auth
+	sequence_message=message
+	sequence_fragment=fragment
+	color_by=kind
+	edge_label_from=note
+	hover_attrs=description,example
+	caption="A cold lookup for example.com. Each server that does not know the answer refers the resolver one level down the name."

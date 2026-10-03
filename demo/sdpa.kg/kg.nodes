@@ -1,0 +1,55 @@
+# Ports sit outside the root frame, so each port edge crosses the boundary
+# between this pack and the graph that opens it.
+sdpa: Scaled Dot-Product Attention
+	inherit=part
+	part=block
+	description=One head. Q is [T, 64]; K and V are [S, 64].
+	matmul1: MATMUL
+		column=k
+		track=matmul1
+		op=$Q K^\top$
+		shape=[B, 8, T, S]
+		description=Each score is the dot product of one query with one key.
+	scale: SCALE
+		column=k
+		track=scale
+		op=$\cdot\, 1/\sqrt{d_k}$
+		shape=[B, 8, T, S]
+		description=Dividing by √64 = 8 keeps the scores from saturating the softmax.
+	mask: MASK (OPT.)
+		column=k
+		track=mask
+		dashed=true
+		op=$+\, M$, with $M_{ij} = -\infty$ at masked keys
+		shape=[B, 8, T, S]
+		description=The padding mask hides pad keys. The decoder's masked attention also hides future positions.
+	softmax: SOFTMAX
+		column=k
+		track=softmax
+		op=$\mathrm{softmax}$ over S
+		shape=[B, 8, T, S]
+	matmul2: MATMUL
+		column=v
+		track=matmul2
+		op=$A V$
+		shape=[B, 8, T, 64]
+q_in: Q
+	part=io
+	column=q
+	track=in
+	shape=[B, 8, T, 64]
+k_in: K
+	part=io
+	column=k
+	track=in
+	shape=[B, 8, S, 64]
+v_in: V
+	part=io
+	column=v
+	track=in
+	shape=[B, 8, S, 64]
+out: OUTPUT
+	part=io
+	column=v
+	track=out
+	shape=[B, 8, T, 64]

@@ -1,0 +1,5 @@
+i1: recent-deploy -> slow-checkout coincides
+i2: recent-deploy -> cache-miss changed
+i3: cache-miss -> db-locks more_queries dashed=true
+i4: db-locks -> slow-checkout blocks dashed=true
+i5: payment-latency -> slow-checkout ruled_out dashed=true

@@ -1,0 +1,35 @@
+r1: stub -> recursive carries
+	note=A example.com?
+	message=sync
+	description=One recursive query over UDP port 53. The stub waits for the full answer.
+r2: recursive -> root carries
+	note=A example.com?
+	message=sync
+	description=With nothing cached, the resolver starts at the root. It asks the full question; the root answers only the part it knows.
+r3: root -> recursive produces
+	note=refer: .com NS a.gtld-servers.net
+	message=reply
+	description=A referral, not an answer: the names and addresses of the .com servers.
+r4: recursive -> tld carries
+	note=A example.com?
+	message=sync
+r5: tld -> recursive produces
+	note=refer: example.com NS ns1.example.com
+	message=reply
+	description=Another referral, one level down the name.
+r6: recursive -> auth carries
+	note=A example.com?
+	message=sync
+r7: auth -> recursive produces
+	note=A 93.184.216.34  TTL 3600
+	message=reply
+	description=The authoritative answer. The resolver caches it, and every referral on the way, for its TTL.
+r8: recursive -> auth carries
+	note=same query over TCP
+	message=sync
+	fragment=opt:answer truncated
+	description=Only when the UDP answer set the TC bit. This retry first needs a TCP handshake; open TCP fallback in the chain view to see it.
+r9: recursive -> stub produces
+	note=A 93.184.216.34
+	message=reply
+	description=The cold path cost three extra round trips inside the resolver. The browser only sees the total.

@@ -43,6 +43,8 @@ from .pipeline import (
     preprocess_callouts,
     preprocess_code_includes,
     preprocess_super_sub,
+    DISPLAY_MATH_PATTERN,
+    INLINE_MATH_PATTERN,
     RenderPipeline,
 )
 from .tokens import (
@@ -227,7 +229,15 @@ def _normalized_fence_code(token):
     return html.unescape(token.content)
 
 
-def _protect_display_math(md):
+def _protect_math(md):
+    """Stash display and inline math so markdown escapes and emphasis skip it.
+
+    >>> md, blocks = _protect_math("a $x_*y$ costs $5 and `$c$` $$d$$")
+    >>> md
+    'a VYASAMATH1TOKEN costs $5 and `$c$` VYASAMATH0TOKEN'
+    >>> _restore_math(md, blocks)
+    'a $x_*y$ costs $5 and `$c$` $$d$$'
+    """
     math_blocks = []
     code_blocks = []
 
@@ -237,18 +247,20 @@ def _protect_display_math(md):
 
     def stash_math(match):
         math_blocks.append(match.group(0))
-        return f"VYASADISPLAYMATH{len(math_blocks) - 1}TOKEN"
+        return f"VYASAMATH{len(math_blocks) - 1}TOKEN"
 
     md = re.sub(r"(```+|~~~+)[\s\S]*?\1", stash_code, md)
-    md = re.sub(r"\$\$[\s\S]*?\$\$", stash_math, md)
+    md = re.sub(r"(`+)([^`]*?)\1", stash_code, md)
+    md = re.sub(DISPLAY_MATH_PATTERN, stash_math, md)
+    md = re.sub(INLINE_MATH_PATTERN, stash_math, md)
     for i, block in enumerate(code_blocks):
         md = md.replace(f"__VYASA_CODEBLOCK_{i}__", block)
     return md, math_blocks
 
 
-def _restore_display_math(html_out, math_blocks):
+def _restore_math(html_out, math_blocks):
     for i, block in enumerate(math_blocks):
-        html_out = html_out.replace(f"VYASADISPLAYMATH{i}TOKEN", html.escape(block))
+        html_out = html_out.replace(f"VYASAMATH{i}TOKEN", html.escape(block))
     return html_out
 
 
@@ -991,7 +1003,7 @@ def from_md(content: str, img_dir: str | None = None, current_path: str | None =
         list(runtime.markdown_postprocessors) if runtime else [],
     )
     content = pipeline.preprocess(content, context, extension_state)
-    content, display_math_blocks = _protect_display_math(content)
+    content, math_blocks = _protect_math(content)
     mods = {
         "pre": "my-4", "p": "text-base leading-relaxed mb-6", "li": "text-base leading-relaxed",
         "ul": "uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base", "ol": "uk-list uk-list-decimal space-y-2 mb-6 ml-6 text-base",
@@ -1017,7 +1029,7 @@ def from_md(content: str, img_dir: str | None = None, current_path: str | None =
                 rendered = renderer.render(mst.Document(tab_content))
                 return rendered + "".join(renderer.tooltip_popovers)
         html_out = pipeline.postprocess(html_out, context, extension_state, _render_tab_content)
-        html_out = _restore_display_math(html_out, display_math_blocks)
+        html_out = _restore_math(html_out, math_blocks)
         if callout_data_store:
             def _render_callout_body(callout_body):
                 return _render_markdown_fragment(callout_body, img_dir=img_dir, current_path=current_path)

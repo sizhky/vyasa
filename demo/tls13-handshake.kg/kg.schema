@@ -1,0 +1,22 @@
+@graph id=tls13-handshake title="TLS 1.3 handshake"
+hover_attrs=description,example
+default_view=handshake
+color_by=kind
+
+@sources
+nodes=kg.nodes
+handshake:
+	edges=kg.edges
+palette=../browser-page-load.kg/kg.palette
+
+@views
+handshake:
+	source=handshake
+	layout=sequence
+	sequence_lanes=trust-store,key-schedule,client,server
+	sequence_message=message
+	sequence_fragment=fragment
+	color_by=kind
+	edge_label_from=note
+	hover_attrs=description,example
+	caption="A full TLS 1.3 handshake costs one round trip: the client's key share rides in its first message. Braces mark messages already encrypted with handshake keys. The key schedule lane has its own internals: hold 1 on it."

@@ -12,7 +12,7 @@ import { createTasksEdgeRenderer } from './tasks_edges.js';
 import { createTasksFullscreenController } from './tasks_fullscreen.js';
 import { tasksGitHistoryRows } from './tasks_git_review.js';
 import {
-    buildTaskEdgeAnchors, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable,
+    buildTaskEdgeAnchors, tasksCanvasOf, tasksGroupTitleSize, tasksEdgeCornerOf, tasksEdgePathOf, tasksIsDashed, tasksNodeLook, tasksRouteEdges, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable,
     isTasksUnspecifiedProjectionGroup, nearestTasksIncidentEdge, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon,
     selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksCenteredViewport, tasksEdgeLabelZForMode,
     tasksGraphDynamicMinZoom, tasksGraphNodeAbsoluteRect, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea,
@@ -55,9 +55,17 @@ import {
     tasksDefaultEdgeOpacity, tasksEdgeColorPaletteFor, tasksEdgeRecordId, tasksEdgeStrokeWidthForMode,
     tasksGroupBackground, tasksGroupIdsContainingSelection, tasksHoverFocusEdge, tasksHoverFocusNodeStyle,
     tasksNodeBackground, tasksNodeColorLevels, tasksNodeIsOverlaid, tasksProminentEdgeOpacity,
+    tasksActiveNodeFill, tasksGroupFrameStyle, tasksNodeHasInternals, tasksTaskWrapperStyle,
     tasksReferenceFlowEdge, tasksResolvedThemeColor, tasksUseColorOverlay,
 } from './tasks_paint.js';
+import {
+    tasksCanvasBackgroundProps, tasksCanvasStyle, tasksEdgeStrokeStyle, tasksGroupLook, tasksGroupRingTokens,
+    tasksCheckedShadow, tasksGroupTitleLook, tasksLookLitPaint, tasksNodeLookStyle,
+} from './tasks_theme.js';
 import { createTasksPanels } from './tasks_panels.js';
+import { tasksHighlightGraph } from './tasks_highlight.js';
+import { tasksRoleOf } from './tasks_roles.js';
+import { createTasksInternals, tasksInternalsWorld } from './tasks_internals.js';
 import {
     TASKS_EDGES_VISIBLE_KEY, TASKS_HOVER_CARD_MODES, TASKS_HOVER_CARD_MODE_KEY, buildTasksNodeNotesBackup,
     checkedNodeIdsFromStates, clearTasksGlobalToggle, downloadTasksNodeNotes, readTasksCheckedNodeIds,
@@ -77,7 +85,15 @@ function tasksSetEdgeLabelsVisible(visible) {
 }
 window.tasksSetEdgeLabelsVisible = tasksSetEdgeLabelsVisible;
 
-const TASKS_EDGE_LABEL_FOCUS_FONT_SIZE = 16;
+// ELK keeps free nodes at least this far apart, so a routed edge runs its
+// middle leg through the middle of that gap.
+// The free graph routes in the gaps ELK leaves: node spacing across a layer,
+// layer spacing between layers. A sideways layout swaps the two axes.
+function tasksFreeRouteGutter(layoutConfig) {
+    const across = Number(layoutConfig?.nodeSpacing) || 44;
+    const between = Number(layoutConfig?.layerSpacing) || 96;
+    return /^(RIGHT|LEFT)$/i.test(String(layoutConfig?.elkDirection || '')) ? { x: between, y: across } : { x: across, y: between };
+}
 const TASKS_AUTO_FIT_ON_EXPAND_DEFAULT = false;
 const TASKS_AUTO_FIT_ON_FILTER_DEFAULT = true;
 // A share of the widget, not a pixel count, so the panel keeps its
@@ -113,6 +129,37 @@ const tasksCaptionElement = (holder, style, attr = 'caption') => {
         ? window.React.createElement('div', { ...props, dangerouslySetInnerHTML: { __html: rendered } })
         : window.React.createElement('div', props, plain);
 };
+
+// The title of an open group: its own node, laid over the frame's top-left.
+// A card group's title is a bar with a ring; a figure group's is a label.
+function tasksGroupTitleFlowNode(group, { position, depth, look, color, opacity = 1, model, nodeLabels }) {
+    const titleWidth = Math.max(80, group.width - 16);
+    const titleImage = resolveTasksNodeImage(group, model);
+    const titleHeight = tasksGroupTitleSize(look, group.label || group.id, titleWidth, { hasImage: Boolean(titleImage), nodeLabels }).height;
+    const titleLookStyle = tasksGroupTitleLook(look, color)?.style
+        || { background: TASKS_GROUP_TITLE_BG, border: 'none', boxShadow: `0 0 0 1px color-mix(in srgb, ${color} 42%, transparent)` };
+    const titleZ = TASKS_TITLE_Z + depth;
+    return {
+        id: `${group.id}__title`,
+        type: 'vyasaTask',
+        position: { x: position.x + 8, y: position.y + 8 },
+        data: { ...group, id: `${group.id}__title`, sourceGroupId: group.id, __kind__: 'groupTitle', __node_image__: titleImage, __node_look__: look, __group_color__: color, __projection_branch_opacity__: opacity },
+        style: {
+            width: titleWidth,
+            height: titleHeight,
+            zIndex: titleZ,
+            ...titleLookStyle,
+            borderRadius: 6,
+            overflow: 'hidden',
+            opacity,
+            pointerEvents: 'auto',
+        },
+        zIndex: titleZ,
+        className: `vyasa-tasks-node--${tasksGraphNodeHitArea('groupTitle')}`,
+        draggable: false,
+        selectable: isTasksGraphNodeSelectable('groupTitle'),
+    };
+}
 
 const TASKS_SPACING_PRESETS = {
     compact: { nodeSpacing: 24, layerSpacing: 64, collisionGap: 56, groupPadding: 28, edgeLabelWidth: 220 },
@@ -452,8 +499,10 @@ function tasksGraphNodeAtFlowPoint(nodes, point) {
         // an edge preview, because it has no incident edge and kills the hit.
         // A chrome kind that carries its own card is the exception, and it claims
         // a hit rect small enough not to shadow what it covers.
-        .filter((node) => !TASKS_PASSIVE_NODE_KINDS.has(node.data?.__kind__)
+        .filter((node) => (!TASKS_PASSIVE_NODE_KINDS.has(node.data?.__kind__)
             || isTasksGraphNodeSelectable(node.data?.__kind__))
+            // A junction takes no hover: the pointer reaches what lies under it.
+            && tasksRoleOf(node.data).interactive)
         .map((node) => ({ node, rect: tasksGraphNodeHitRect(node, byId), z: Number(node.zIndex || node.style?.zIndex || 0) }))
         .filter(({ rect }) => point.x >= rect.x && point.x <= rect.x + rect.width && point.y >= rect.y && point.y <= rect.y + rect.height)
         .sort((a, b) => b.z - a.z)[0] || null;
@@ -489,16 +538,34 @@ const { setTasksMaximized } = createTasksFullscreenController({
 
 function applyTasksStandaloneHeight(wrapper) {
     if (String(wrapper?.dataset?.tasksStandalone || '').toLowerCase() !== 'true') return;
-    const box = wrapper.getBoundingClientRect();
-    const boundary = wrapper.closest('.vyasa-main-shell') || wrapper.parentElement;
-    const boundaryBox = boundary?.getBoundingClientRect?.();
-    const viewportBottom = window.visualViewport?.height || window.innerHeight || 0;
-    const bottom = boundaryBox?.height ? Math.min(boundaryBox.bottom, viewportBottom) : viewportBottom;
-    const height = Math.max(420, Math.floor(bottom - box.top));
-    wrapper.style.height = `${height}px`;
+    // The nearest height owner: an internals panel body, else the page shell.
+    const boundary = wrapper.closest('.vyasa-kg-internals-body, .vyasa-main-shell') || wrapper.parentElement;
+    // A panel body sets its own size, so the page's 420px floor does not apply.
+    const inPanel = Boolean(boundary?.classList?.contains('vyasa-kg-internals-body'));
+    if (inPanel) {
+        // A panel body can be mid-animation (a dive plays as a transform), and a
+        // client rect includes the transform. Layout sizes do not, so read those.
+        wrapper.style.height = `${Math.max(0, boundary.clientHeight - wrapper.offsetTop)}px`;
+    } else {
+        const box = wrapper.getBoundingClientRect();
+        const boundaryBox = boundary?.getBoundingClientRect?.();
+        const viewportBottom = window.visualViewport?.height || window.innerHeight || 0;
+        const bottom = boundaryBox?.height ? Math.min(boundaryBox.bottom, viewportBottom) : viewportBottom;
+        wrapper.style.height = `${Math.max(420, Math.floor(bottom - box.top))}px`;
+    }
     if (!wrapper.__tasksStandaloneResize) {
-        wrapper.__tasksStandaloneResize = () => applyTasksStandaloneHeight(wrapper);
-        window.addEventListener('resize', wrapper.__tasksStandaloneResize);
+        const resize = () => {
+            // A closed panel takes its widget with it; stop listening for it.
+            if (!wrapper.isConnected) {
+                window.removeEventListener('resize', resize);
+                return;
+            }
+            applyTasksStandaloneHeight(wrapper);
+        };
+        wrapper.__tasksStandaloneResize = resize;
+        window.addEventListener('resize', resize);
+        // A panel body changes size with no window resize: an edge drag, a dive.
+        if (inPanel && typeof ResizeObserver !== 'undefined') new ResizeObserver(resize).observe(boundary);
     }
 }
 
@@ -822,9 +889,9 @@ async function renderTasksGraphs(rootElement = document) {
             // the hovered node from this ref rather than the stale closure value.
             const hoveredNodeIdRef = React.useRef(null);
             hoveredNodeIdRef.current = hoveredNodeId;
-            const [groupHoverTooltip, setGroupHoverTooltip] = React.useState(null);
-            const groupHoverTooltipRef = React.useRef(null);
-            groupHoverTooltipRef.current = groupHoverTooltip;
+            const [hoverCardTarget, setHoverCardTarget] = React.useState(null);
+            const hoverCardTargetRef = React.useRef(null);
+            hoverCardTargetRef.current = hoverCardTarget;
             const detailCardRef = React.useRef(null);
             const focusDetailCard = React.useCallback(() => {
                 window.requestAnimationFrame(() => detailCardRef.current?.focus());
@@ -1201,8 +1268,8 @@ async function renderTasksGraphs(rootElement = document) {
                 setEdgeCardOpen(true);
                 setEdgeCardField('');
                 setEdgeCardError('');
-                groupHoverTooltipRef.current = null;
-                setGroupHoverTooltip(null);
+                hoverCardTargetRef.current = null;
+                setHoverCardTarget(null);
                 setEdgeStatus(`${edgeId}. Release W to return to the node.`);
             }, [resolveEdgeRecord]);
             const clearOptionEdgePreview = React.useCallback(() => {
@@ -1489,6 +1556,26 @@ async function renderTasksGraphs(rootElement = document) {
                     window.removeEventListener('blur', closeCodePreview);
                 };
             }, [currentGraphEdges, edgeNodesById, resolveEdgeRecord, widgetId]);
+            // Internals: tasks_internals.js. The ref keeps one controller for the
+            // widget's life, so a model change does not close an open panel.
+            const internalsSourceRef = React.useRef({ edgeNodesById, sourceModel });
+            internalsSourceRef.current = { edgeNodesById, sourceModel };
+            React.useEffect(() => createTasksInternals({
+                host: wrapper,
+                flowWrapper: () => flowWrapperRef.current,
+                schemaPath: () => String(internalsSourceRef.current.sourceModel?.kg_schema || ''),
+                hoveredRecord: () => internalsSourceRef.current.edgeNodesById.get(String(hoveredNodeIdRef.current || '')) || null,
+                nodeElement: (id) => flowWrapperRef.current?.querySelector(`.react-flow__node[data-id="${CSS.escape(id)}"]`),
+                worldOf: (id) => {
+                    const { edgeNodesById: records, sourceModel: source } = internalsSourceRef.current;
+                    const labelKey = String(source?.edge_label_from || '').trim();
+                    return tasksInternalsWorld(id, source?.dependency_edges, (nodeId) => records.get(nodeId)?.label,
+                        (edge) => (labelKey && edge[labelKey]) || edge.shape || edge.label);
+                },
+                mount: (root) => renderTasksGraphs(root),
+                setStatus: setEdgeStatus,
+                log: (event, payload) => logTasksDebug(event, { widgetId, ...payload }),
+            }), []);
             const selectGraphEdge = React.useCallback((event, edge) => {
                 event?.preventDefault?.();
                 event?.stopPropagation?.();
@@ -1512,11 +1599,12 @@ async function renderTasksGraphs(rootElement = document) {
                             },
                         },
                     }));
-                    graphBaseRef.current = { nodes: anchoredNodes, edges: anchored.edges };
-                    setEdges(anchored.edges);
+                    const routed = tasksRouteEdges(anchoredNodes, anchored.edges, tasksFreeRouteGutter(layoutConfig));
+                    graphBaseRef.current = { nodes: anchoredNodes, edges: routed };
+                    setEdges(routed);
                     return anchoredNodes;
                 });
-            }, [nodeConnectionExperiment]);
+            }, [nodeConnectionExperiment, layoutConfig]);
             const reviewTargets = React.useMemo(() => [
                 ...nodes
                     .filter((node) => node.data?.highlightMode && !['dim', 'none'].includes(node.data.highlightMode))
@@ -1562,7 +1650,8 @@ async function renderTasksGraphs(rootElement = document) {
                 const statsEl = wrapper.querySelector('[data-tasks-stats]');
                 if (statsEl) statsEl.textContent = graphStatsLabel;
             }, [graphStatsLabel]);
-            const backgroundProps = React.useMemo(() => tasksBackgroundProps(widgetId), []);
+            const graphCanvas = tasksCanvasOf(model);
+            const backgroundProps = React.useMemo(() => tasksCanvasBackgroundProps(graphCanvas, tasksBackgroundProps(widgetId)), [graphCanvas]);
             const lastPersistedPrefsScopeRef = React.useRef(tasksProjectionPrefsKey(activeProjectionId, activeContextId));
             const pendingFitActionRef = React.useRef(null);
             const lastLayoutRevisionKeyRef = React.useRef('');
@@ -1934,7 +2023,7 @@ async function renderTasksGraphs(rootElement = document) {
                 // An open hover card names a focus node too, so F frames the hovered
                 // node and its edge neighbours the way a selection does. Selection
                 // wins when both are live.
-                const hoverTooltip = groupHoverTooltipRef.current;
+                const hoverTooltip = hoverCardTargetRef.current;
                 const hoverCardOpen = hoverCardsEnabled
                     && Boolean(hoverTooltip?.nodeId)
                     && (groupHoverCardsEnabled || !hoverTooltip.group);
@@ -2679,6 +2768,32 @@ async function renderTasksGraphs(rootElement = document) {
                         const useOverlay = tasksUseColorOverlay(colorLevels);
                         const cardState = tasksCardStateForNode(sourceModel, nodeStates, logicalNodeId, cardStates);
                         const stateAccent = cardState.color || TASKS_DONE_ACCENT;
+                        if (node.__kind__ === 'group') {
+                            // A layout that frames a group holds it open: the frame is the group node.
+                            const groupLook = tasksNodeLook(node, model, tasksFixedLayout(mode)?.nodeLook);
+                            const { lookStyle, ring, tokens } = tasksGroupFrameStyle(node, { groupColor: nodeColor, isExpanded: true, nodeLook: groupLook });
+                            const groupZ = TASKS_GROUP_BG_Z + (Number(node.__depth__) || 0);
+                            return {
+                                id: node.id,
+                                type: 'vyasaTask',
+                                position: node.position,
+                                data: { ...node, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color, __has_note__: hasNote, __node_look__: groupLook, __group_color__: nodeColor, __layout_open__: true },
+                                style: {
+                                    width: node.width,
+                                    height: node.height,
+                                    zIndex: groupZ,
+                                    borderRadius: 12,
+                                    boxShadow: isChecked ? `0 0 0 2px color-mix(in srgb, ${stateAccent} 34%, transparent)` : ring,
+                                    overflow: 'hidden',
+                                    ...lookStyle,
+                                    ...tokens,
+                                },
+                                zIndex: groupZ,
+                                className: `vyasa-tasks-node--${tasksGraphNodeHitArea('group', true)} vyasa-tasks-node--expanded-group`,
+                                draggable: false,
+                                selectable: isTasksGraphNodeSelectable('group', true),
+                            };
+                        }
                         if (node.__sequence_lifeline__) {
                             return {
                                 id: node.id,
@@ -2692,31 +2807,35 @@ async function renderTasksGraphs(rootElement = document) {
                                 selectable: true,
                             };
                         }
+                        const nodeLook = tasksNodeLook(node, model, tasksFixedLayout(mode)?.nodeLook);
+                        const interactive = tasksRoleOf(node, nodeLook).interactive;
                         return {
                             id: node.id,
                             type: 'vyasaTask',
                             position: node.position,
-                            data: { ...node, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color, __has_note__: hasNote, __default_color__: ownNodeColor ? '' : defaultNodeColor, __color_levels__: useOverlay ? colorLevels : null },
+                            data: { ...node, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color, __has_note__: hasNote, __default_color__: ownNodeColor ? '' : defaultNodeColor, __color_levels__: useOverlay ? colorLevels : null, __node_look__: nodeLook, __look_kind__: String(node?.[activeColorBy] ?? '') },
                             style: {
-                                width: node.width,
-                                height: node.height,
-                                zIndex: TASKS_TASK_Z,
-                                background: useOverlay ? 'transparent' : tasksNodeBackground(nodeColor, '', colorMix, TASKS_NODE_BG, false),
-                                border: isChecked
-                                    ? `2px solid color-mix(in srgb, ${stateAccent} 78%, white 22%)`
-                                    : (nodeColor ? `1px solid color-mix(in srgb, var(--vyasa-paper) 28%, ${nodeColor} 72%)` : TASKS_NODE_BORDER),
-                                borderRadius: 6,
-                                boxShadow: isChecked
-                                    ? `inset 0 0 0 2px color-mix(in srgb, ${stateAccent} 24%, transparent), 0 0 0 2px color-mix(in srgb, ${stateAccent} 34%, transparent)`
-                                    : 'none',
-                                overflow: 'hidden',
+                                ...tasksTaskWrapperStyle({
+                                    nodeColor, colorMix, useOverlay, look: nodeLook, dashed: tasksIsDashed(node), isChecked, stateAccent,
+                                    internals: tasksNodeHasInternals(node), width: node.width, height: node.height, zIndex: TASKS_TASK_Z,
+                                }),
+                                // A junction takes no pointer: clicks and hovers reach what lies under it.
+                                ...(interactive ? {} : { pointerEvents: 'none' }),
                             },
                             zIndex: TASKS_TASK_Z,
-                            className: 'vyasa-tasks-node--selectable',
+                            className: interactive ? 'vyasa-tasks-node--selectable' : 'vyasa-tasks-node--passive',
                             draggable: false,
-                            selectable: true,
+                            selectable: interactive,
                         };
                     });
+                    nodesWithStyle.push(...nodesWithStyle.filter((node) => node.data?.__layout_open__).map((node) => tasksGroupTitleFlowNode(node.data, {
+                        position: node.position,
+                        depth: Number(node.data.__depth__) || 0,
+                        look: node.data.__node_look__,
+                        color: node.data.__group_color__,
+                        model,
+                        nodeLabels: edgeNodeLabels,
+                    })));
                     const authoredRawEdges = (rawGraph.edges || []).filter((edge) => !edge.__reference__);
                     // A layout that declares authoredHandles has already pinned every
                     // handle itself -- a sequence row puts both ends at the row height --
@@ -2740,7 +2859,8 @@ async function renderTasksGraphs(rootElement = document) {
                     // as well as its own. Resolve every colour up front rather than
                     // reaching back into the map from inside it.
                     const pairMateColors = new Map(anchored.edges.map((item) => [item.id, resolveTasksEdgeColor(item, model, model?.edge_color_by, edgeColorPalette)]));
-                    const baseEdges = anchored.edges.map((edge) => {
+                    const fixedLayout = tasksFixedLayout(mode);
+                    const styledEdges = anchored.edges.map((edge) => {
                         const edgeColor = resolveTasksEdgeColor(edge, model, model?.edge_color_by, edgeColorPalette);
                         const resolvedLabel = resolveTasksEdgeLabel(edge, model, activeProjection);
                         const rowLabel = edge.__sequence_step__
@@ -2749,6 +2869,11 @@ async function renderTasksGraphs(rootElement = document) {
                         // A lifeline is a full-height column, so a row that crosses one
                         // must draw over it, not behind it.
                         const rowZ = tasksFixedLayout(mode)?.edgesOverNodes ? TASKS_TASK_Z + 10 : TASKS_EDGE_Z;
+                        // A layout that pins both ends of an edge itself (a sequence row)
+                        // owns that edge's geometry, so the style cascade stops there.
+                        const edgeDefaults = fixedLayout?.ownsEdgePath ? { edge_path: activeProjection?.edge_path } : model;
+                        const edgePath = fixedLayout?.authoredHandles ? fixedLayout.edgePath : tasksEdgePathOf(edge, edgeDefaults, fixedLayout?.edgePath);
+                        const stroke = tasksEdgeStrokeStyle(edgePath, edgeColor, tasksIsDashed(edge));
                         return {
                             ...edge,
                             label: rowLabel,
@@ -2771,19 +2896,21 @@ async function renderTasksGraphs(rootElement = document) {
                                 __sequence_label_dy__: Number(edge.__sequence_label_dy__) || 0,
                                 __labels_off__: !edgeLabelsVisible,
                                 __line_off__: Boolean(edge.__sequence_line_off__),
-                                // The prominent label is an HTML overlay, so it needs a z of
-                                // its own to clear the ribbon this layout draws over the cards.
-                                __label_z__: rowZ + 1,
-                                ...(tasksFixedLayout(mode)?.edgesOverNodes ? { __z__: rowZ } : {}),
+                                __edge_path__: edgePath,
+                                __edge_corner__: tasksEdgeCornerOf(edge, model, edgePath),
+                                // The prominent label is an HTML overlay. A layout that draws its
+                                // edges over the cards pins the label just above them; every
+                                // other layout lets the label follow the edge's highlight z, or a
+                                // lit edge would paint over its own words.
+                                ...(tasksFixedLayout(mode)?.edgesOverNodes ? { __label_z__: rowZ + 1, __z__: rowZ } : {}),
                             },
-                            markerEnd: { type: rf.MarkerType.ArrowClosed, width: 8, height: 8, color: edgeColor || 'currentColor' },
+                            markerEnd: { type: rf.MarkerType.ArrowClosed, width: 8, height: 8, color: stroke.stroke },
                             zIndex: rowZ,
                             labelStyle: { fontSize: hoverFontSize, fontWeight: 600, fill: edgeColor || TASKS_EDGE_LABEL_TEXT, opacity: edgeOpacity },
                             labelBgStyle: { fill: TASKS_EDGE_LABEL_BG, fillOpacity: 0.82 },
                             style: {
-                                strokeWidth: 2.5,
+                                ...stroke,
                                 opacity: edgeOpacity,
-                                stroke: edgeColor || 'currentColor',
                                 ...(edge.__sequence_standing__ ? { strokeDasharray: '6 5', strokeWidth: 1.8 } : {}),
                                 ...(edge.__pair_half__ ? { strokeWidth: 1.9 } : {}),
                                 ...(edge.__kg_review_change__ === 'removed' ? { strokeDasharray: '6 5' } : {}),
@@ -2791,6 +2918,9 @@ async function renderTasksGraphs(rootElement = document) {
                             },
                         };
                     });
+                    // A fixed layout never moves its nodes, so routed edges are solved
+                    // against the node rects once, here.
+                    const baseEdges = tasksRouteEdges(nodesWithStyle, styledEdges, fixedLayout?.gutter);
                     referenceEdgesRef.current = referenceAnchored.edges.map((edge) => tasksReferenceFlowEdge(edge, rf.MarkerType.ArrowClosed, hoverFontSize, layoutConfig.edgeLabelWidth));
                     const anchoredNodes = nodesWithStyle.map((node) => ({
                         ...node,
@@ -2891,44 +3021,50 @@ async function renderTasksGraphs(rootElement = document) {
                     const groupBorderMix = isProjectionGroup ? 28 : 70;
                     const cardState = tasksCardStateForNode(sourceModel, nodeStates, logicalNodeId, cardStates);
                     const stateAccent = cardState.color || TASKS_DONE_ACCENT;
-                    const background = n.__kind__ === 'group'
-                        ? (isExpanded
-                            ? tasksGroupBackground(groupColor, '', TASKS_GROUP_EXPANDED_BG, { mode: 'transparent', intensity: groupFillExpanded })
-                            : tasksGroupBackground(groupColor, '', TASKS_GROUP_BG, { intensity: groupFillCollapsed }))
-                        : tasksNodeBackground(nodeColor, '', colorMix, TASKS_NODE_BG, false);
-                    const border = groupColor
-                        ? (n.__kind__ === 'group'
-                            ? `1px solid color-mix(in srgb, var(--vyasa-paper) ${100 - groupBorderMix}%, ${groupColor} ${groupBorderMix}%)`
-                            : `1px solid color-mix(in srgb, var(--vyasa-paper) 30%, ${nodeColor} 70%)`)
-                        : TASKS_NODE_BORDER;
+                    const isGroup = n.__kind__ === 'group';
+                    const nodeLook = (isGroup || !useOverlay) ? tasksNodeLook(n, model) : 'card';
+                    const groupFrame = isGroup
+                        ? tasksGroupFrameStyle(n, { groupColor, isExpanded, nodeLook, transparent: useOverlay, fillExpanded: groupFillExpanded, fillCollapsed: groupFillCollapsed, borderMix: groupBorderMix })
+                        : null;
+                    const groupEmphasis = groupFrame?.ring || 'none';
+                    const interactive = tasksRoleOf(n, nodeLook).interactive;
                     const branchOpacity = isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1;
                     const rfNode = {
                         id: n.id,
                         type: 'vyasaTask',
                         position: n.position,
-                        data: { ...n, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color, __has_note__: hasNote, __node_image__: nodeImage, __default_color__: ownNodeColor ? '' : defaultNodeColor, __projection_branch_opacity__: branchOpacity, __color_levels__: useOverlay ? colorLevels : null },
-                        style: {
+                        data: { ...n, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color, __has_note__: hasNote, __node_image__: nodeImage, __default_color__: ownNodeColor ? '' : defaultNodeColor, __projection_branch_opacity__: branchOpacity, __color_levels__: useOverlay ? colorLevels : null, __node_look__: nodeLook, __group_color__: isGroup ? groupColor : undefined, __look_kind__: String(n?.[activeColorBy] ?? '') },
+                        style: groupFrame ? {
                             width: n.width,
                             height: n.height,
                             zIndex: nodeZ,
-                            background: useOverlay ? 'transparent' : background,
-                            border: isChecked
-                                ? `2px solid color-mix(in srgb, ${stateAccent} 78%, white 22%)`
-                                : border,
                             borderRadius: isExpanded ? 12 : 6,
                             boxShadow: isChecked
-                                ? `inset 0 0 0 2px color-mix(in srgb, ${stateAccent} 24%, transparent), 0 0 0 2px color-mix(in srgb, ${stateAccent} 34%, transparent)`
-                                : 'none',
+                                ? tasksCheckedShadow(stateAccent)
+                                : groupEmphasis,
                             opacity: branchOpacity,
                             overflow: 'hidden',
+                            // A look may restate the radius and the overflow it needs.
+                            ...groupFrame.lookStyle,
+                            ...groupFrame.tokens,
+                            border: isChecked
+                                ? `2px solid color-mix(in srgb, ${stateAccent} 78%, white 22%)`
+                                : groupFrame.lookStyle.border,
+                        } : {
+                            ...tasksTaskWrapperStyle({
+                                nodeColor, colorMix, useOverlay, look: nodeLook, dashed: tasksIsDashed(n), isChecked, stateAccent,
+                                internals: tasksNodeHasInternals(n), width: n.width, height: n.height, zIndex: nodeZ,
+                            }),
+                            opacity: branchOpacity,
+                            ...(interactive ? {} : { pointerEvents: 'none' }),
                         },
                         zIndex: nodeZ,
                         className: [
-                            `vyasa-tasks-node--${hitArea}`,
+                            `vyasa-tasks-node--${interactive ? hitArea : 'passive'}`,
                             isExpanded ? 'vyasa-tasks-node--expanded-group' : '',
                         ].filter(Boolean).join(' '),
                         draggable: nodeConnectionExperiment,
-                        selectable: isTasksGraphNodeSelectable(n.__kind__, isExpanded),
+                        selectable: interactive && isTasksGraphNodeSelectable(n.__kind__, isExpanded),
                     };
                     if (n.parentId) {
                         rfNode.parentId = n.parentId;
@@ -2936,36 +3072,21 @@ async function renderTasksGraphs(rootElement = document) {
                     }
                     return rfNode;
                 });
+                const groupStylesById = new Map(baseNodes
+                    .filter((node) => node.data?.__kind__ === 'group')
+                    .map((node) => [node.id, node.data]));
                 for (const n of derived.nodes) {
                     if (n.__kind__ !== 'group' || !effectiveExpandedSet.has(n.id)) continue;
-                    const position = absolutePosition(n);
-                    const titleZ = TASKS_TITLE_Z + depthOf(n);
-                    const titleWidth = Math.max(80, n.width - 16);
-                    const titleImage = resolveTasksNodeImage(n, model);
-                    const titleHeight = sizeTaskNode(n.label || n.id, 'groupTitle', titleWidth, { hasImage: Boolean(titleImage), nodeLabels: edgeNodeLabels }).height;
-                    const titleOpacity = isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1;
-                    baseNodes.push({
-                        id: `${n.id}__title`,
-                        type: 'vyasaTask',
-                        position: { x: position.x + 8, y: position.y + 8 },
-                        data: { ...n, id: `${n.id}__title`, sourceGroupId: n.id, __kind__: 'groupTitle', __node_image__: titleImage, __projection_branch_opacity__: titleOpacity },
-                        style: {
-                            width: titleWidth,
-                            height: titleHeight,
-                            zIndex: titleZ,
-                            background: TASKS_GROUP_TITLE_BG,
-                            border: 'none',
-                            borderRadius: 6,
-                            boxShadow: 'none',
-                            overflow: 'hidden',
-                            opacity: titleOpacity,
-                            pointerEvents: 'auto',
-                        },
-                        zIndex: titleZ,
-                        className: `vyasa-tasks-node--${tasksGraphNodeHitArea('groupTitle')}`,
-                        draggable: false,
-                        selectable: isTasksGraphNodeSelectable('groupTitle'),
-                    });
+                    const groupStyle = groupStylesById.get(n.id) || {};
+                    baseNodes.push(tasksGroupTitleFlowNode(n, {
+                        position: absolutePosition(n),
+                        depth: depthOf(n),
+                        look: groupStyle.__node_look__ || 'card',
+                        color: groupStyle.__group_color__ || defaultNodeColor,
+                        opacity: isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1,
+                        model,
+                        nodeLabels: edgeNodeLabels,
+                    }));
                 }
                 const authoredDerivedEdges = (derived.edges || []).filter((edge) => !edge.__reference__);
                 const solvedAnchors = buildTaskEdgeAnchors(baseNodes, authoredDerivedEdges);
@@ -2977,8 +3098,10 @@ async function renderTasksGraphs(rootElement = document) {
                 // as well as its own. Resolve every colour up front rather than
                 // reaching back into the map from inside it.
                 const pairMateColors = new Map(anchored.edges.map((item) => [item.id, resolveTasksEdgeColor(item, model, model?.edge_color_by, edgeColorPalette)]));
-                const baseEdges = anchored.edges.map((edge) => {
+                const styledEdges = anchored.edges.map((edge) => {
                     const edgeColor = resolveTasksEdgeColor(edge, model, model?.edge_color_by, edgeColorPalette);
+                    const edgePath = tasksEdgePathOf(edge, model);
+                    const stroke = tasksEdgeStrokeStyle(edgePath, edgeColor, tasksIsDashed(edge));
                     const resolvedLabel = resolveTasksEdgeLabel(edge, model, activeProjection);
                     const branchOpacity = (unspecifiedProjectionBranchIds.has(edge.source) || unspecifiedProjectionBranchIds.has(edge.target))
                         ? projectionUnspecifiedContentOpacity
@@ -3001,12 +3124,14 @@ async function renderTasksGraphs(rootElement = document) {
                             __sequence_label_dy__: Number(edge.__sequence_label_dy__) || 0,
                             __labels_off__: !edgeLabelsVisible,
                             __line_off__: Boolean(edge.__sequence_line_off__),
+                            __edge_path__: edgePath,
+                            __edge_corner__: tasksEdgeCornerOf(edge, model, edgePath),
                         },
                         markerEnd: {
                             type: rf.MarkerType.ArrowClosed,
                             width: 8,
                             height: 8,
-                            color: edgeColor || 'currentColor',
+                            color: stroke.stroke,
                         },
                         zIndex: TASKS_EDGE_Z,
                         labelBgPadding: [6, 3],
@@ -3016,13 +3141,15 @@ async function renderTasksGraphs(rootElement = document) {
                         labelStyle: { fontSize: hoverFontSize, fontWeight: 600, fill: edgeColor || TASKS_EDGE_LABEL_TEXT, opacity: edgeOpacity * branchOpacity },
                         labelBgStyle: { fill: TASKS_EDGE_LABEL_BG, fillOpacity: 0.82 },
                         style: {
-                            strokeWidth: 2.5,
+                            ...stroke,
                             opacity: edgeOpacity * branchOpacity * (edge.__kg_review_change__ === 'unchanged' ? 0.28 : 1),
-                            stroke: edgeColor || 'currentColor',
                             ...(edge.__kg_review_change__ === 'removed' ? { strokeDasharray: '6 5' } : {}),
                         },
                     };
                 });
+                // ELK has placed every node, so routed edges are solved against
+                // those rects; a drag solves them again.
+                const baseEdges = tasksRouteEdges(baseNodes, styledEdges, tasksFreeRouteGutter(layoutConfig));
                 const anchoredNodes = baseNodes.map((node) => ({
                     ...node,
                     data: {
@@ -3098,429 +3225,21 @@ async function renderTasksGraphs(rootElement = document) {
                 setEdges((prev) => tasksReuseGraphElements(prev, nextEdges.map(tasksGraphPaint)));
             }, []);
             const applyHighlight = React.useCallback((nodeId, hoveredNodeId = null, selectedIds = new Set(), edgeId = '') => {
-                const baseNodes = graphBaseRef.current.nodes || [];
-                const authoredEdges = tasksEdgesMatchingTypes(graphBaseRef.current.edges || [], effectiveEdgeTypes);
-                const activeReferenceNodeIds = new Set([
-                    nodeId,
-                    hoveredNodeId,
-                    ...(selectedIds instanceof Set ? selectedIds : new Set(selectedIds || [])),
-                ].filter(Boolean));
-                const activeReferenceEdges = tasksEdgesMatchingTypes(referenceEdgesRef.current, effectiveEdgeTypes)
-                    .filter((edge) => (
-                        tasksEdgeRecordId(edge) === edgeId
-                        || activeReferenceNodeIds.has(edge.source)
-                        || activeReferenceNodeIds.has(edge.target)
-                    ));
-                const baseEdges = [...authoredEdges, ...activeReferenceEdges];
-                const displayedEdges = edgesVisible ? baseEdges : activeReferenceEdges;
-                const selectedEdge = edgeId ? baseEdges.find((edge) => tasksEdgeRecordId(edge) === edgeId) : null;
-                if (selectedEdge) {
-                    const endpointIds = new Set([selectedEdge.source, selectedEdge.target]);
-                    // A call and its reply are one exchange. Previewing half of a
-                    // double harpoon and leaving the other half dim would cut the
-                    // exchange in two, so the mate lights with it. Only the half
-                    // under the cursor keeps the bloom, so the open card is still
-                    // traceable to the line it came from.
-                    const mateId = String(selectedEdge.data?.__pair_mate__ || '');
-                    setNodesReusing(baseNodes.map((node) => {
-                        const sourceNodeId = node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id;
-                        const hit = endpointIds.has(sourceNodeId);
-                        const nodeColor = resolveTasksNodeColor(node.data, model, activeColorBy, activeColorPalette) || 'var(--vyasa-primary)';
-                        return {
-                            ...node,
-                            data: { ...node.data, highlightMode: hit ? 'selected' : 'dim', __hover_outline__: hit },
-                            style: {
-                                ...node.style,
-                                opacity: hit ? 1 : (node.data?.__projection_branch_opacity__ ?? 1) * 0.18,
-                                '--vyasa-tasks-active-border': hit ? nodeColor : undefined,
-                                boxShadow: hit ? `0 0 0 2px color-mix(in srgb, ${nodeColor} 70%, transparent)` : node.style.boxShadow,
-                            },
-                        };
-                    }));
-                    setEdgesReusing(displayedEdges.map((edge) => {
-                        const focused = edge === selectedEdge;
-                        const hit = focused || (Boolean(mateId) && tasksEdgeRecordId(edge) === mateId);
-                        const edgeColor = edge.data?.edgeColor || edge.style?.stroke || 'currentColor';
-                        // A focus stroke of 4.5 would close the gap a pair is drawn
-                        // with, turning the two harpoons back into one fat line.
-                        const focusWidth = edge.data?.__pair_half__ ? 2.6 : 4.5;
-                        return {
-                            ...edge,
-                            zIndex: hit ? TASKS_EDGE_FOCUS_Z : TASKS_EDGE_Z,
-                            labelZIndex: hit ? TASKS_EDGE_LABEL_FOCUS_Z : TASKS_EDGE_LABEL_Z,
-                            // A pair is ONE exchange, so its two halves answer together. `hit` already
-                            // lights the mate's stroke, colour and z-order. edgeCardActive is what
-                            // keeps an edge's words while Shift+E has the labels off, so leaving it
-                            // on the clicked half alone showed a call with no reply -- and a paired
-                            // half claims only a 3px hit path, so the reader cannot click the other.
-                            data: { ...edge.data, highlightMode: hit ? 'selected' : 'dim', strokeMode: hit ? 'selected' : 'dim', edgeCardActive: hit, pinBloomKey: focused && edgePinBloom?.edgeId === tasksEdgeRecordId(edge) ? edgePinBloom.key : '' },
-                            labelStyle: { ...(edge.labelStyle || {}), fill: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)', opacity: hit ? 1 : 0.12 },
-                            labelBgStyle: { ...(edge.labelBgStyle || {}), fill: TASKS_EDGE_LABEL_BG, fillOpacity: hit ? 0.86 : 0.04 },
-                            style: { ...edge.style, stroke: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)', opacity: hit ? 1 : 0.08, strokeWidth: hit ? focusWidth : (edge.data?.__pair_half__ ? 1.9 : 2.5) },
-                        };
-                    }));
-                    return;
-                }
-                // When no single node is selected, hovering a node should still reveal
-                // its checkbox. Carry it as a data flag (not the closure) so the
-                // memoized node updates without forcing the per-hover remount.
-                const hoverCheckboxId = !nodeId && hoveredNodeId ? hoveredNodeId : null;
-                // A bar and a fragment box are not edge endpoints, so comparing ids
-                // to them matches nothing and hovering one dimmed the whole view.
-                // Chrome names the edges it stands for; everything else keeps the
-                // endpoint test, so no ordinary node changes behaviour.
-                const hoveredEdgeIds = new Set(
-                    baseNodes.find((node) => node.id === hoveredNodeId)?.data?.__edge_ids__ || []
-                );
-                const touchesHovered = (edge) => (hoveredEdgeIds.size
-                    ? hoveredEdgeIds.has(edge.id)
-                    : (edge.source === hoveredNodeId || edge.target === hoveredNodeId));
-                // Direction still has to be read from a real endpoint: a call
-                // arrives at the lane the bar sits on and its reply leaves it, so
-                // the bar borrows that lane to tell the two apart.
-                const hoverDirectionId = baseNodes.find((node) => node.id === hoveredNodeId)
-                    ?.data?.__sequence_lane__ || hoveredNodeId;
-                const multiSelectedIds = selectedIds instanceof Set ? selectedIds : new Set(selectedIds || []);
-                const multiSelectedHighlightIds = new Set(multiSelectedIds);
-                for (const selectedId of multiSelectedIds) {
-                    for (const descendantId of collectTasksGroupDescendantIds(selectedId, model)) {
-                        multiSelectedHighlightIds.add(descendantId);
-                    }
-                }
-                const hasNodeSelection = nodeId && baseNodes.some((node) => node.id === nodeId);
-                if (!hasNodeSelection && multiSelectedIds.size > 0) {
-                    const multiHoverEndpointIds = new Set(hoveredNodeId ? [hoveredNodeId] : []);
-                    if (hoveredNodeId) {
-                        for (const edge of baseEdges) {
-                            if (touchesHovered(edge)) {
-                                multiHoverEndpointIds.add(edge.source);
-                                multiHoverEndpointIds.add(edge.target);
-                            }
-                        }
-                    }
-                    setNodesReusing(baseNodes.map((node) => {
-                        const sourceGroupId = node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : null;
-                        const logicalId = sourceGroupId || node.id;
-                        const hovered = Boolean(hoveredNodeId) && logicalId === hoveredNodeId;
-                        const hoverNeighbor = !hovered && multiHoverEndpointIds.has(logicalId);
-                        const inSelection = multiSelectedHighlightIds.has(node.id) || (sourceGroupId && multiSelectedHighlightIds.has(sourceGroupId));
-                        const selected = inSelection || hovered || hoverNeighbor;
-                        const nodeColor = resolveTasksNodeColor(node.data, model, activeColorBy, activeColorPalette);
-                        const collapsedGroupColor = node.data?.__kind__ === 'group' && !expanded.has(node.id)
-                            ? resolveTasksCollapsedGroupColor(node.data, model, activeColorBy, activeColorPalette)
-                            : '';
-                        const displayColor = collapsedGroupColor || nodeColor || 'var(--vyasa-primary)';
-                        const activeBorderColor = node.data?.__checked__ ? (node.data?.__card_state_color__ || TASKS_DONE_ACCENT) : displayColor;
-                        return {
-                            ...node,
-                            data: {
-                                ...node.data,
-                                highlightMode: hovered ? 'selected-focus' : (hoverNeighbor ? 'neighbor' : (selected ? 'selected' : 'dim')),
-                                __hover_checkbox__: node.id === hoverCheckboxId,
-                                __hover_outline__: hovered || hoverNeighbor,
-                            },
-                            style: {
-                            ...node.style,
-                                opacity: (node.data?.__projection_branch_opacity__ ?? 1) * (selected ? 1 : 0.18),
-                                '--vyasa-tasks-active-border': selected ? activeBorderColor : undefined,
-                                boxShadow: selected
-                                    ? `0 0 0 2px color-mix(in srgb, ${displayColor} 70%, transparent), 0 0 18px 4px color-mix(in srgb, ${displayColor} 34%, transparent)`
-                                    : node.style.boxShadow,
-                            },
-                        };
-                    }));
-                    setEdgesReusing(displayedEdges.map((edge) => {
-                        const touchesHover = Boolean(hoveredNodeId) && touchesHovered(edge);
-                        const hit = touchesHover
-                            || (multiSelectedHighlightIds.has(edge.source) && multiSelectedHighlightIds.has(edge.target));
-                        const edgeColor = edge.data?.edgeColor || edge.style?.stroke || 'currentColor';
-                        const branchOpacity = edge.data?.__projection_branch_opacity__ ?? 1;
-                        return {
-                            ...edge,
-                            zIndex: hit ? TASKS_EDGE_FOCUS_Z : TASKS_EDGE_Z,
-                            data: {
-                                ...edge.data,
-                                highlightMode: hit ? 'selected' : 'dim',
-                                strokeMode: hit && touchesHover ? (edge.source === hoverDirectionId ? 'selected-out' : 'selected-in') : (hit ? 'selected' : 'dim'),
-                                flareKey: `hover:${hoveredNodeId || ''}`,
-                            },
-                            labelStyle: { ...(edge.labelStyle || {}), fill: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)', opacity: (hit ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.12, edgeOpacity)) * branchOpacity },
-                            labelBgStyle: { ...(edge.labelBgStyle || {}), fill: TASKS_EDGE_LABEL_BG, fillOpacity: hit ? 0.82 : 0.06 },
-                            style: { ...edge.style, stroke: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)', opacity: tasksApplyEdgeOpacity(hit ? 0.98 : 0.08, edgeOpacity) * branchOpacity, strokeWidth: edge.data?.__pair_half__ ? (hit ? 2.6 : 1.9) : (hit ? 4.5 : 2.5), strokeLinecap: hit ? 'round' : undefined, '--vyasa-edge-flow-duration': hit ? '0.7s' : '0.6s' },
-                        };
-                    }));
-                    return;
-                }
-                if (!hasNodeSelection) {
-                    const hasFilters = tasksFilterQueryHasRules(effectiveQueryFilters) || tasksFilterQueryHasRules(effectiveSwatchFilters) || effectiveEdgeTypes.length > 0;
-                    const hasSearch = searchMatches.active && !searchMatches.error;
-                    if (!hasFilters && !hasSearch) {
-                        const hoverEndpointIds = new Set(hoveredNodeId ? [hoveredNodeId] : []);
-                        if (hoveredNodeId) {
-                            for (const edge of baseEdges) {
-                                if (touchesHovered(edge)) {
-                                    hoverEndpointIds.add(edge.source);
-                                    hoverEndpointIds.add(edge.target);
-                                }
-                            }
-                        }
-                        setNodesReusing(hoveredNodeId
-                            ? baseNodes.map((node) => {
-                                const sourceNodeId = node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id;
-                                const highlighted = hoverEndpointIds.has(sourceNodeId);
-                                if (!highlighted && node.id !== hoverCheckboxId) return node;
-                                const nodeColor = resolveTasksNodeColor(node.data, model, activeColorBy, activeColorPalette);
-                                const collapsedGroupColor = node.data?.__kind__ === 'group' && !expanded.has(node.id)
-                                    ? resolveTasksCollapsedGroupColor(node.data, model, activeColorBy, activeColorPalette)
-                                    : '';
-                                const displayColor = collapsedGroupColor || nodeColor || 'var(--vyasa-primary)';
-                                const stateAccent = node.data?.__card_state_color__ || TASKS_DONE_ACCENT;
-                                const activeBorderColor = node.data?.__checked__ ? stateAccent : displayColor;
-                                const checkedShadow = node.data?.__checked__
-                                    ? `inset 0 0 0 2px color-mix(in srgb, ${stateAccent} 24%, transparent), 0 0 0 2px color-mix(in srgb, ${stateAccent} 34%, transparent)`
-                                    : 'none';
-                                const isHoveredNode = sourceNodeId === hoveredNodeId;
-                                const focusStyle = tasksHoverFocusNodeStyle(node, nodeColor, displayColor, activeBorderColor, checkedShadow, colorMix, isHoveredNode);
-                                return {
-                                    ...node,
-                                    data: { ...node.data, highlightMode: isHoveredNode ? 'selected-focus' : 'neighbor', __hover_checkbox__: node.id === hoverCheckboxId, __hover_outline__: highlighted },
-                                    style: { ...node.style, ...focusStyle },
-                                    zIndex: focusStyle.zIndex,
-                                };
-                            })
-                            : baseNodes);
-                        setEdgesReusing(hoveredNodeId
-                            ? displayedEdges.map((edge) => {
-                                if (!touchesHovered(edge)) return edge;
-                                return tasksHoverFocusEdge(edge, hoverDirectionId);
-                            })
-                            : displayedEdges);
-                        return;
-                    }
-                    const matchingIds = filteredSelectionIds();
-                    const containerGroupIds = tasksGroupIdsContainingSelection(model, matchingIds);
-                    const visibleSelectionIds = new Set([...matchingIds, ...containerGroupIds]);
-                    const filterHoverFocus = tasksFilterHoverFocus(matchingIds, baseEdges, hoveredNodeId);
-                    setNodesReusing(baseNodes.map((node) => {
-                        const sourceNodeId = node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id;
-                        const selected = visibleSelectionIds.has(sourceNodeId);
-                        const focused = filterHoverFocus.nodeIds.has(sourceNodeId);
-                        const nodeColor = resolveTasksNodeColor(node.data, model, activeColorBy, activeColorPalette);
-                        const collapsedGroupColor = node.data?.__kind__ === 'group' && !expanded.has(node.id)
-                            ? resolveTasksCollapsedGroupColor(node.data, model, activeColorBy, activeColorPalette)
-                            : '';
-                        const displayColor = collapsedGroupColor || nodeColor || 'var(--vyasa-primary)';
-                        const stateAccent = node.data?.__card_state_color__ || TASKS_DONE_ACCENT;
-                        const activeBorderColor = node.data?.__checked__ ? stateAccent : displayColor;
-                        const checkedShadow = node.data?.__checked__
-                            ? `inset 0 0 0 2px color-mix(in srgb, ${stateAccent} 24%, transparent), 0 0 0 2px color-mix(in srgb, ${stateAccent} 34%, transparent)`
-                            : 'none';
-                        const focusStyle = focused
-                            ? tasksHoverFocusNodeStyle(node, nodeColor, displayColor, activeBorderColor, checkedShadow, colorMix, true)
-                            : {};
-                        const highlightMode = focused
-                            ? (sourceNodeId === hoveredNodeId ? 'selected-focus' : 'neighbor-focus')
-                            : (selected ? 'selected' : 'dim');
-                        return {
-                            ...node,
-                            data: { ...node.data, highlightMode, __hover_checkbox__: node.id === hoverCheckboxId, __hover_outline__: focused },
-                            style: {
-                                ...node.style,
-                                opacity: (node.data?.__projection_branch_opacity__ ?? 1) * (selected ? 1 : 0.18),
-                                '--vyasa-tasks-active-border': selected ? activeBorderColor : undefined,
-                                ...focusStyle,
-                            },
-                            ...(focused ? { zIndex: focusStyle.zIndex } : {}),
-                        };
-                    }));
-                    setEdgesReusing(displayedEdges.map((edge) => {
-                        const hit = (visibleSelectionIds.has(edge.source) && visibleSelectionIds.has(edge.target)) || searchMatches.edgeIds.has(edge.id);
-                        if (filterHoverFocus.edgeIds.has(edge.id)) {
-                            return tasksHoverFocusEdge(edge, hoveredNodeId);
-                        }
-                        const edgeColor = edge.data?.edgeColor || edge.style?.stroke || 'currentColor';
-                        const branchOpacity = edge.data?.__projection_branch_opacity__ ?? 1;
-                        return {
-                            ...edge,
-                            zIndex: hit ? TASKS_EDGE_FOCUS_Z : TASKS_EDGE_Z,
-                            data: { ...edge.data, highlightMode: hit ? 'selected' : 'dim' },
-                            labelStyle: {
-                                ...(edge.labelStyle || {}),
-                                fill: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)',
-                                opacity: (hit ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.12, edgeOpacity)) * branchOpacity,
-                            },
-                            labelBgStyle: { ...(edge.labelBgStyle || {}), fill: TASKS_EDGE_LABEL_BG, fillOpacity: hit ? 0.82 : 0.06 },
-                            style: {
-                                ...edge.style,
-                                stroke: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)',
-                                opacity: tasksApplyEdgeOpacity(hit ? 0.98 : 0.08, edgeOpacity) * branchOpacity,
-                                strokeWidth: hit ? 4.5 : 2.5,
-                                strokeLinecap: hit ? 'round' : undefined,
-                                '--vyasa-edge-flow-duration': hit ? '0.7s' : '0.6s',
-                            },
-                        };
-                    }));
-                    return;
-                }
-                const highlightedEdgeIds = new Set();
-                const descendantIds = collectTasksGroupDescendantIds(nodeId, model);
-                const selectedScopeIds = new Set([nodeId, ...descendantIds]);
-                const directEndpointIds = new Set([nodeId, ...descendantIds]);
-                const isFocusedPrimary = hoveredNodeId === nodeId;
-                const isFocusedNeighbor = hoveredNodeId && hoveredNodeId !== nodeId;
-                const selectedNode = baseNodes.find((node) => node.id === nodeId);
-                const selectedEdgeIds = new Set(selectedNode?.data?.__edge_ids__ || []);
-                const touchesSelected = (edge) => (selectedEdgeIds.size
-                    ? selectedEdgeIds.has(edge.id)
-                    : (edge.source === nodeId || edge.target === nodeId));
-                const selectDirectionId = selectedNode?.data?.__sequence_lane__ || nodeId;
-                for (const edge of baseEdges) {
-                    if (touchesSelected(edge)) {
-                        highlightedEdgeIds.add(edge.id);
-                        directEndpointIds.add(edge.source);
-                        directEndpointIds.add(edge.target);
-                    }
-                    if (isTasksEdgeInternalToSelection(edge, selectedScopeIds)) {
-                        highlightedEdgeIds.add(edge.id);
-                    }
-                }
-                for (const endpointId of Array.from(directEndpointIds)) {
-                    for (const descendantId of collectTasksGroupDescendantIds(endpointId, model)) {
-                        directEndpointIds.add(descendantId);
-                    }
-                }
-                const hoverOutlineIds = tasksFilterHoverFocus(directEndpointIds, baseEdges, hoveredNodeId).nodeIds;
-                if (hoveredNodeId) hoverOutlineIds.add(nodeId);
-                const focusedEdgeModes = new Map();
-                if (isFocusedPrimary) {
-                    for (const edge of baseEdges) {
-                        if (highlightedEdgeIds.has(edge.id) && touchesSelected(edge)) {
-                            focusedEdgeModes.set(edge.id, edge.source === selectDirectionId ? 'focused-out' : 'focused-in');
-                        }
-                    }
-                } else if (isFocusedNeighbor && directEndpointIds.has(hoveredNodeId)) {
-                    for (const edge of baseEdges) {
-                        const linksSelectedAndHovered =
-                            (edge.source === nodeId && edge.target === hoveredNodeId) ||
-                            (edge.source === hoveredNodeId && edge.target === nodeId);
-                        if (linksSelectedAndHovered) focusedEdgeModes.set(edge.id, edge.source === selectDirectionId ? 'focused-out' : 'focused-in');
-                    }
-                }
-                const nextNodes = baseNodes.map((node) => {
-                    const sourceNodeId = node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id;
-                    const mode = directEndpointIds.has(sourceNodeId)
-                        ? (sourceNodeId === nodeId
-                            ? (isFocusedPrimary ? 'selected-focus' : 'selected')
-                            : (sourceNodeId === hoveredNodeId ? 'neighbor-focus' : 'neighbor'))
-                        : 'dim';
-                    const nodeColor = resolveTasksNodeColor(node.data, model, activeColorBy, activeColorPalette);
-                    const collapsedGroupColor = node.data?.__kind__ === 'group' && !expanded.has(node.id)
-                        ? resolveTasksCollapsedGroupColor(node.data, model, activeColorBy, activeColorPalette)
-                        : '';
-                    const displayColor = collapsedGroupColor || nodeColor;
-                    const stateAccent = node.data?.__card_state_color__ || TASKS_DONE_ACCENT;
-                    const activeBorderColor = node.data?.__checked__ ? stateAccent : (displayColor || nodeColor || 'var(--vyasa-primary)');
-                    const checkedShadow = node.data?.__checked__
-                        ? `inset 0 0 0 2px color-mix(in srgb, ${stateAccent} 24%, transparent), 0 0 0 2px color-mix(in srgb, ${stateAccent} 34%, transparent)`
-                        : 'none';
-                    const baseZIndex = Number.isFinite(Number(node.zIndex))
-                        ? Number(node.zIndex)
-                        : Number(node.style?.zIndex || 0);
-                    const branchOpacity = node.data?.__projection_branch_opacity__ ?? 1;
-                    const zIndex = mode === 'selected' || mode === 'selected-focus' || mode === 'neighbor-focus'
-                        ? baseZIndex + TASKS_SELECTED_Z_BOOST
-                        : (mode === 'neighbor' ? baseZIndex + TASKS_NEIGHBOR_Z_BOOST : baseZIndex);
-                    return {
-                        ...node,
-                        data: { ...node.data, highlightMode: mode, __hover_outline__: hoverOutlineIds.has(sourceNodeId) },
-                        style: {
-                            ...node.style,
-                            zIndex,
-                            '--vyasa-tasks-active-border': mode === 'dim' ? undefined : activeBorderColor,
-                            background: mode === 'dim'
-                                ? node.style.background
-                                : (node.data?.__kind__ === 'group'
-                                    ? (tasksNodeIsOverlaid(node) ? node.style.background : tasksGroupBackground(displayColor, '', TASKS_GROUP_BG_ACTIVE, { mode: 'transparent', intensity: 10 }))
-                                    : (tasksNodeIsOverlaid(node) ? node.style.background : tasksNodeBackground(nodeColor, '', colorMix, TASKS_NODE_BG_ACTIVE, false))),
-                            opacity: mode === 'dim' ? branchOpacity * 0.22 : 1,
-                            boxShadow: (mode === 'selected' || mode === 'selected-focus')
-                                ? `${checkedShadow !== 'none' ? `${checkedShadow}, ` : ''}0 0 0 2px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 70%, transparent), 0 0 18px 4px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 40%, transparent)`
-                                : (mode === 'neighbor-focus'
-                                    ? `${checkedShadow !== 'none' ? `${checkedShadow}, ` : ''}0 0 0 3px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 72%, transparent), 0 0 30px 8px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 46%, transparent)`
-                                    : (mode === 'neighbor'
-                                        ? `${checkedShadow !== 'none' ? `${checkedShadow}, ` : ''}0 0 0 2px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 66%, transparent), 0 0 28px 7px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 40%, transparent)`
-                                        : checkedShadow)),
-                        },
-                        zIndex,
-                    };
+                // colorMix and hoverFontSize derive from model, a dependency below. colorMix is
+                // a new object each render, so listing it would rerun the highlight effect forever.
+                const highlighted = tasksHighlightGraph({
+                    baseNodes: graphBaseRef.current.nodes || [],
+                    authoredGraphEdges: graphBaseRef.current.edges || [],
+                    referenceEdges: referenceEdgesRef.current,
+                    nodeId, hoveredNodeId, selectedIds, edgeId,
+                }, {
+                    model, activeColorBy, activeColorPalette, expanded, edgesVisible, edgeOpacity, edgePinBloom, effectiveEdgeTypes,
+                    effectiveQueryFilters, effectiveSwatchFilters, searchMatches, filteredSelectionIds, colorMix, hoverFontSize,
                 });
-                const nextEdges = displayedEdges.map((edge) => {
-                    const requestedMode = focusedEdgeModes.get(edge.id)
-                        ? focusedEdgeModes.get(edge.id)
-                        : (highlightedEdgeIds.has(edge.id) ? 'selected' : 'dim');
-                    const mode = edge.data?.__reference__ && requestedMode !== 'dim' ? 'selected' : requestedMode;
-                    const highlighted = mode !== 'dim';
-                    const focused = mode === 'focused-in' || mode === 'focused-out';
-                    const fixedFocusedLabel = Boolean(isFocusedNeighbor && focused);
-                    const focusColor = mode === 'focused-in' ? TASKS_EDGE_FOCUS_IN_COLOR : TASKS_EDGE_FOCUS_OUT_COLOR;
-                    const edgeColor = edge.data?.edgeColor || edge.style?.stroke || 'currentColor';
-                    const branchOpacity = edge.data?.__projection_branch_opacity__ ?? 1;
-                    const activeOpacity = highlighted ? 1 : branchOpacity;
-                    const hoverDimsLabels = isTasksEdgeLabelHoverDimmingActive(nodeId, hoveredNodeId);
-                    const strokeMode = mode === 'selected'
-                        ? (edge.source === selectDirectionId ? 'selected-out' : (edge.target === selectDirectionId ? 'selected-in' : mode))
-                        : mode;
-                    return {
-                        ...edge,
-                        data: { ...edge.data, highlightMode: mode, strokeMode, hoverDimsLabels, flareKey: `${nodeId}:${hoveredNodeId || ''}` },
-                        zIndex: highlighted ? TASKS_EDGE_FOCUS_Z : TASKS_EDGE_Z,
-                        labelZIndex: tasksEdgeLabelZForMode(mode, TASKS_EDGE_LABEL_Z, TASKS_EDGE_LABEL_SELECTED_Z, TASKS_EDGE_LABEL_FOCUS_Z),
-                        labelStyle: {
-                            ...(edge.labelStyle || {}),
-                            fill: focused
-                                ? focusColor
-                                : (highlighted ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)'),
-                            opacity: activeOpacity * (hoverDimsLabels
-                                ? (focused ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.05, edgeOpacity))
-                                : (focused ? tasksProminentEdgeOpacity() : (highlighted ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.18, edgeOpacity)))),
-                            fontSize: fixedFocusedLabel ? `${TASKS_EDGE_LABEL_FOCUS_FONT_SIZE}px` : (edge.labelStyle?.fontSize || hoverFontSize),
-                            counterScaleMode: fixedFocusedLabel ? 'fixed' : 'capped',
-                            fontWeight: focused ? 850 : (highlighted ? 750 : 600),
-                        },
-                        labelBgStyle: {
-                            ...(edge.labelBgStyle || {}),
-                            fill: mode === 'focused-in'
-                                ? 'color-mix(in srgb, var(--vyasa-paper) 78%, #22c55e 22%)'
-                                : (mode === 'focused-out'
-                                    ? 'color-mix(in srgb, var(--vyasa-paper) 80%, #ef4444 20%)'
-                                    : TASKS_EDGE_LABEL_BG),
-                        fillOpacity: (mode === 'focused-in' || mode === 'focused-out') ? 1 : (highlighted ? 0.86 : 0.04),
-                        },
-                        style: {
-                            ...edge.style,
-                            stroke: mode === 'focused-in' || mode === 'focused-out'
-                                ? focusColor
-                                : (highlighted ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)'),
-                            opacity: activeOpacity * ((mode === 'focused-in' || mode === 'focused-out')
-                                ? tasksProminentEdgeOpacity()
-                                : (highlighted ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.08, edgeOpacity))),
-                            strokeWidth: tasksEdgeStrokeWidthForMode(strokeMode),
-                            '--vyasa-edge-flow-duration': (mode === 'focused-in' || mode === 'focused-out') ? '0.72s' : '0.64s',
-                            strokeLinecap: highlighted ? 'round' : undefined,
-                        },
-                    };
-                });
-                if (window.__vyasaTasksDebug.enabled) {
+                if (highlighted.trace && window.__vyasaTasksDebug.enabled) {
                     const debugPayload = {
-                        selectedNodeId: nodeId,
-                        hoveredNodeId: hoveredNodeId || '',
-                        isFocusedPrimary,
-                        isFocusedNeighbor: Boolean(isFocusedNeighbor),
-                        selectedScopeIds: Array.from(selectedScopeIds),
-                        directEndpointIds: Array.from(directEndpointIds),
-                        highlightedEdgeIds: Array.from(highlightedEdgeIds),
-                        focusedEdgeModes: Object.fromEntries(focusedEdgeModes),
-                        nodes: nextNodes.map((node) => ({
+                        ...highlighted.trace,
+                        nodes: highlighted.nodes.map((node) => ({
                             id: node.id,
                             sourceNodeId: node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id,
                             kind: node.data?.__kind__,
@@ -3530,7 +3249,7 @@ async function renderTasksGraphs(rootElement = document) {
                             opacity: node.style?.opacity ?? null,
                             parentId: node.parentId || '',
                         })),
-                        edges: nextEdges.map((edge) => ({
+                        edges: highlighted.edges.map((edge) => ({
                             id: edge.id,
                             source: edge.source,
                             target: edge.target,
@@ -3548,10 +3267,8 @@ async function renderTasksGraphs(rootElement = document) {
                     window.__vyasaTasksDebug.latestHighlight = debugPayload;
                     logTasksDebugVerbose('highlightState', debugPayload);
                 }
-                setNodesReusing(nextNodes);
-                const edgePriority = { dim: 0, selected: 1, 'focused-in': 2, 'focused-out': 2 };
-                nextEdges.sort((a, b) => (edgePriority[a.data?.highlightMode || 'dim'] - edgePriority[b.data?.highlightMode || 'dim']));
-                setEdgesReusing(nextEdges);
+                setNodesReusing(highlighted.nodes);
+                setEdgesReusing(highlighted.edges);
             }, [effectiveQueryFilters, effectiveSwatchFilters, effectiveEdgeTypes, searchMatches, model, activeColorBy, activeColorPalette, activeColorLevelSpecs, expanded, edgesVisible, edgeOpacity, edgePinBloom, filteredSelectionIds]);
             React.useLayoutEffect(() => {
                 const baseNodeIds = new Set((graphBaseRef.current.nodes || []).map((node) => node.id));
@@ -3713,7 +3430,7 @@ async function renderTasksGraphs(rootElement = document) {
             // A lane cap names the actor a lifeline column stands for. The pinned
             // copy on the top edge must be the same cap, not a lookalike, so both
             // the node and the pinned overlay draw it from here.
-            const tasksSequenceLaneCap = (accent, stage, label) => renderTasksSequenceLaneCap(React, accent, stage, label);
+            const tasksSequenceLaneCap = (accent, stage, label, stacked) => renderTasksSequenceLaneCap(React, accent, stage, label, stacked);
             const renderTasksCustomNode = createTasksNodeRenderer(() => ({
                 Handle, NodeToolbar, Position, React, cardStates, clearSelection, edgeNodeLabels, egoMode, expanded, focusNodeReferenceFromEvent, model, selectedNodeIdRef, selectedNodeIdsRef, setExpanded, setHoveredNodeId, setSelectedNodeId, sourceModel, suppressNextGraphClickRef, toggleCheckedNode, widgetId
             }));
@@ -3804,7 +3521,10 @@ async function renderTasksGraphs(rootElement = document) {
                         // shortcuts scroll the page under the graph on every repeat.
                         if (event.repeat && !TASKS_SHORTCUT_KEYS.has(key) && !isTasksHopCode(event.code)) return;
                         const flowWrapper = flowWrapperRef.current;
-                        const widgetFocused = wrapper.contains(document.activeElement) || wrapper.contains(target) || window.__vyasaTasksActiveWidgetId === widgetId;
+                        // A widget owns an element only when it is the nearest widget around
+                        // it, so keys inside an internals panel never reach the host widget.
+                        const ownsElement = (element) => element?.closest?.('.tasks-container[data-tasks-widget="true"]') === wrapper;
+                        const widgetFocused = ownsElement(document.activeElement) || ownsElement(target) || window.__vyasaTasksActiveWidgetId === widgetId;
                         if ((event.key === 'Escape' || key === 'g') && window.__vyasaTasksDebug.enabled) {
                             logTasksDebug('shortcutKeydown', {
                                 widgetId,
@@ -3862,8 +3582,8 @@ async function renderTasksGraphs(rootElement = document) {
                             && !optionEdgeFit
                             && !(codeModeEntryRef.current || codeModePinnedRef.current?.entry)
                             && !(key === 't' && groupToggleHoverIdRef.current)
-                            && !(key === 'v' && (groupHoverTooltipRef.current || edgeCardOpen || selectedNodeIdRef.current))
-                            && !(key === 'f' && !event.shiftKey && (groupHoverTooltipRef.current || hoveredNodeIdRef.current))
+                            && !(key === 'v' && (hoverCardTargetRef.current || edgeCardOpen || selectedNodeIdRef.current))
+                            && !(key === 'f' && !event.shiftKey && (hoverCardTargetRef.current || hoveredNodeIdRef.current))
                             && !(key === 'g' && hoveredNodeIdRef.current)
                             && !(isTasksHopCode(event.code) && hoveredNodeIdRef.current)) return;
                         // The document shortcuts in scripts.js bind J/K to scroll, C to
@@ -4167,9 +3887,9 @@ async function renderTasksGraphs(rootElement = document) {
             const toggleFilterValue = React.useCallback((key, value, enabled) => {
                 setActiveSwatchFilters((current) => toggleTasksFilterQueryValue(current, key, value, enabled));
             }, []);
-            const clearGroupHoverTooltip = React.useCallback(() => {
-                groupHoverTooltipRef.current = null;
-                setGroupHoverTooltip(null);
+            const clearHoverCardTarget = React.useCallback(() => {
+                hoverCardTargetRef.current = null;
+                setHoverCardTarget(null);
             }, []);
             React.useEffect(() => {
                 const onKeyDown = (event) => {
@@ -4177,19 +3897,19 @@ async function renderTasksGraphs(rootElement = document) {
                     const wrapper = flowWrapperRef.current;
                     const key = event.key.toLowerCase();
                     const editable = target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(target.tagName));
-                    const current = groupHoverTooltipRef.current;
+                    const current = hoverCardTargetRef.current;
                     if (key !== 'enter' || !current || editable || event.repeat || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
                     event.preventDefault();
                     event.stopImmediatePropagation();
                     selectNodeCard(current.nodeId, current.nodeId, current.group ? 'group' : 'task', true);
-                    clearGroupHoverTooltip();
+                    clearHoverCardTarget();
                     logTasksDebug('hoverCardStickySet', { widgetId, nodeId: current.nodeId || '', reason: 'enter' });
                 };
                 document.addEventListener('keydown', onKeyDown, true);
                 return () => {
                     document.removeEventListener('keydown', onKeyDown, true);
                 };
-            }, [clearGroupHoverTooltip, selectNodeCard, widgetId]);
+            }, [clearHoverCardTarget, selectNodeCard, widgetId]);
             const hoverTraceKeyRef = React.useRef('');
             const logHoverCycle = React.useCallback((label, payload = {}) => {
                 logTasksDebug(label, payload);
@@ -4201,10 +3921,10 @@ async function renderTasksGraphs(rootElement = document) {
                 transientGraphHoverActiveRef.current = false;
                 groupToggleHoverIdRef.current = '';
                 setTasksGroupToggleHover(flowWrapperRef.current, '');
-                clearGroupHoverTooltip();
+                clearHoverCardTarget();
                 setHoveredNodeId(null);
-            }, [clearGroupHoverTooltip, logHoverCycle]);
-            const updateGroupHoverTooltip = React.useCallback((event) => {
+            }, [clearHoverCardTarget, logHoverCycle]);
+            const updateHoverCardTarget = React.useCallback((event) => {
                 if (document.pointerLockElement) return;
                 const reactFlow = reactFlowApiRef.current;
                 const wrapper = flowWrapperRef.current;
@@ -4282,14 +4002,14 @@ async function renderTasksGraphs(rootElement = document) {
                 }
                 const liveNode = nodes.find((node) => node.id === hit.node.id) || hit.node;
                 if (!tasksGraphNodeAllowsHover(liveNode, hoverInactiveNodes)) {
-                    clearGroupHoverTooltip();
+                    clearHoverCardTarget();
                     traceHoverHit('blocked', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx });
                     return;
                 }
                 const label = nodeData.label || hit.node.id;
                 const nodeId = nodeData.__kind__ === 'groupTitle' ? (nodeData.sourceGroupId || hit.node.id) : hit.node.id;
                 if (!label) {
-                    clearGroupHoverTooltip();
+                    clearHoverCardTarget();
                     traceHoverHit('empty', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx });
                     return;
                 }
@@ -4311,7 +4031,7 @@ async function renderTasksGraphs(rootElement = document) {
                     }
                 }
                 if (hoverGroupId && !groupHoverCardsEnabled) {
-                    clearGroupHoverTooltip();
+                    clearHoverCardTarget();
                     traceHoverHit('group-card-disabled', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx });
                     return;
                 }
@@ -4323,10 +4043,10 @@ async function renderTasksGraphs(rootElement = document) {
                     y: event.clientY - bounds.top + 18,
                     placement: 'rightRail',
                 };
-                groupHoverTooltipRef.current = hoverCard;
-                setGroupHoverTooltip(hoverCard);
+                hoverCardTargetRef.current = hoverCard;
+                setHoverCardTarget(hoverCard);
                 traceHoverHit('hit', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx, groupHoverChanged });
-            }, [expanded, clearGroupHoverTooltip, clearGraphHoverState, clearOptionEdgePreview, currentGraphEdges, edgeForOptionPointer, previewOptionEdge, nodes, widgetId, model, egoMode, hoverInactiveNodes, groupHoverCardsEnabled, hoveredNodeId, logHoverCycle, selectedNodeId]);
+            }, [expanded, clearHoverCardTarget, clearGraphHoverState, clearOptionEdgePreview, currentGraphEdges, edgeForOptionPointer, previewOptionEdge, nodes, widgetId, model, egoMode, hoverInactiveNodes, groupHoverCardsEnabled, hoveredNodeId, logHoverCycle, selectedNodeId]);
             const selectGroupDescendants = React.useCallback((node) => {
                 const kind = node?.data?.__kind__;
                 if (kind !== 'group' && kind !== 'groupTitle') return false;
@@ -4688,8 +4408,12 @@ async function renderTasksGraphs(rootElement = document) {
                     ? new Set(model.ego_selected_ids.map((id) => String(id || '').trim()).filter(Boolean))
                     : null;
                 const isEgoSeed = (node) => egoSeedIds !== null && egoSeedIds.has(node.id);
+                // A role's bands set the outline: full, thin, or none for a junction.
+                // A look whose lit paint has no bands, such as text, draws none.
                 const activeNodes = nodes.filter((node) => (
-                    !['none', 'dim'].includes(node.data?.highlightMode || 'none') || isEgoSeed(node)
+                    (!['none', 'dim'].includes(node.data?.highlightMode || 'none') || isEgoSeed(node))
+                    && tasksRoleOf(node.data).bands !== 'none'
+                    && tasksLookLitPaint(node.data?.__node_look__).bands
                 ));
                 return React.createElement(rf.ViewportPortal, null, ...activeNodes.flatMap((node) => {
                     const rect = tasksGraphNodeAbsoluteRect(node, byId);
@@ -4704,7 +4428,8 @@ async function renderTasksGraphs(rootElement = document) {
                     // A hover reads through the usual bands, so the seed marker only
                     // shows while the node carries no highlight of its own.
                     const seedBand = ['none', 'dim'].includes(mode) && isEgoSeed(node);
-                    const width = hoverOutline ? 12 : 4;
+                    const thin = tasksRoleOf(node.data).bands === 'thin';
+                    const width = hoverOutline ? (thin ? 3 : 12) : (thin ? 1.5 : 4);
                     const bands = central || seedBand
                         ? [[width, 3]]
                         : [[width / 3, 3], [width / 3, 3 + ((width / 3) * 2)]];
@@ -4716,7 +4441,7 @@ async function renderTasksGraphs(rootElement = document) {
                             transform: `translate(${rect.x}px, ${rect.y}px)`,
                             width: rect.width,
                             height: rect.height,
-                            borderRadius: node.style?.borderRadius || 6,
+                            borderRadius: node.style?.borderRadius ?? 6,
                             outline: `${bandWidth}px ${seedBand ? 'dashed' : 'solid'} ${activeBorderColor}`,
                             outlineOffset: `${bandOffset}px`,
                             pointerEvents: 'none',
@@ -4745,6 +4470,7 @@ async function renderTasksGraphs(rootElement = document) {
                         node.data?.__sequence_color__ || 'currentColor',
                         node.data?.__sequence_stage__,
                         node.data?.label || '',
+                        tasksNodeHasInternals(node.data),
                     ),
                 },
                 { axis: 'top', capHeight: 22, match: (data) => data.__kind__ === 'ganttHeader' },
@@ -4864,9 +4590,23 @@ async function renderTasksGraphs(rootElement = document) {
                     zIndex: 1,
                 },
             });
+            // The one card host. A hovered node shows here in hover mode; hovering
+            // the pinned node keeps the pinned card. Each card is keyed by what it
+            // shows, so every card mounts the same way whichever way it opened.
             const RightRail = () => {
-                if (!selectedNodeId && !optionEdgeNodeCardId && !(edgeCardOpen && (selectedEdgeRecord || edgeCardError))) return null;
-                if (hoverCardsEnabled && groupHoverTooltip && (groupHoverCardsEnabled || !groupHoverTooltip.group)) return null;
+                const hovered = hoverCardsEnabled && hoverCardTarget && (groupHoverCardsEnabled || !hoverCardTarget.group)
+                    && hoverCardTarget.nodeId !== selectedNodeId
+                    ? hoverCardTarget
+                    : null;
+                const edgeCardShown = edgeCardOpen && (selectedEdgeRecord || edgeCardError);
+                if (!hovered && !selectedNodeId && !optionEdgeNodeCardId && !edgeCardShown) return null;
+                const [cardKey, card] = hovered
+                    ? [`hover:${hovered.nodeId}`, SelectedNodePanel(hovered.nodeId, true, hovered)]
+                    : optionEdgeNodeCardId
+                        ? [`option:${optionEdgeNodeCardId}`, SelectedNodePanel(optionEdgeNodeCardId, true)]
+                        : edgeCardShown
+                            ? ['edge', SelectedEdgePanel()]
+                            : [`node:${selectedNodeId}`, SelectedNodePanel()];
                 return window.React.createElement('div', {
                     style: {
                         position: 'absolute',
@@ -4883,10 +4623,8 @@ async function renderTasksGraphs(rootElement = document) {
                         minHeight: 0,
                     },
                 },
-                    NodeCardResizeHandle(),
-                    optionEdgeNodeCardId
-                        ? SelectedNodePanel(optionEdgeNodeCardId, true)
-                        : (edgeCardOpen && (selectedEdgeRecord || edgeCardError) ? SelectedEdgePanel() : SelectedNodePanel())
+                    hovered ? null : NodeCardResizeHandle(),
+                    window.React.createElement(window.React.Fragment, { key: cardKey }, card)
                 );
             };
             const EdgeLiveStatus = () => window.React.createElement('div', {
@@ -4919,16 +4657,6 @@ async function renderTasksGraphs(rootElement = document) {
                         cursor: 'pointer',
                     },
                 }, '×');
-            };
-            const GroupHoverTooltip = () => {
-                if (!hoverCardsEnabled) return null;
-                const transientCard = groupHoverTooltip && (groupHoverCardsEnabled || !groupHoverTooltip.group)
-                    ? SelectedNodePanel(groupHoverTooltip.nodeId, true, groupHoverTooltip)
-                    : null;
-                const transientLayer = transientCard ? window.React.createElement('div', {
-                    style: { position: 'absolute', inset: '12px 12px 12px auto', zIndex: 2400, width: nodeCardWidth, maxWidth: 'calc(100% - 24px)', display: 'flex', flexDirection: 'column', pointerEvents: 'none', minHeight: 0 },
-                }, transientCard) : null;
-                return transientLayer;
             };
             const HelpPopup = () => {
                 if (!helpOpen) return null;
@@ -5215,7 +4943,7 @@ async function renderTasksGraphs(rootElement = document) {
                 onPointerDownCapture: startDragSelection,
                 onPointerMove: (event) => {
                     updateLockedPan(event);
-                    updateGroupHoverTooltip(event);
+                    updateHoverCardTarget(event);
                 },
                 onPointerUp: stopLockedPan,
                 onPointerCancel: stopLockedPan,
@@ -5271,6 +4999,7 @@ async function renderTasksGraphs(rootElement = document) {
                 isolation: 'isolate',
                 overscrollBehavior: 'contain',
                 touchAction: 'none',
+                ...tasksCanvasStyle(graphCanvas),
             };
             return rf.ReactFlowProvider ? window.React.createElement(rf.ReactFlowProvider, null,
                 window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', flex: '1 1 auto', minHeight: 0, display: 'flex', alignItems: 'stretch', position: 'relative' } },
@@ -5293,7 +5022,6 @@ async function renderTasksGraphs(rootElement = document) {
                     GitReviewBar(),
                     RightRail(),
                     window.React.createElement(HelpPopup),
-                    GroupHoverTooltip(),
                     window.React.createElement(DragSelectionOverlay)
                 ))
             ) : window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', flex: '1 1 auto', minHeight: 0, display: 'flex', alignItems: 'stretch', position: 'relative' } },
@@ -5315,12 +5043,15 @@ async function renderTasksGraphs(rootElement = document) {
                     GitReviewBar(),
                     RightRail(),
                     window.React.createElement(HelpPopup),
-                    GroupHoverTooltip(),
                     window.React.createElement(DragSelectionOverlay)
                 )
             );
         };
-        if (window.ReactDOM.createRoot) window.ReactDOM.createRoot(mount).render(window.React.createElement(TasksGraphApp)); else window.ReactDOM.render(window.React.createElement(TasksGraphApp), mount);
+        // The root stays on the mount so an internals panel can unmount its widget.
+        if (window.ReactDOM.createRoot) {
+            mount.__vyasaTasksRoot = window.ReactDOM.createRoot(mount);
+            mount.__vyasaTasksRoot.render(window.React.createElement(TasksGraphApp));
+        } else window.ReactDOM.render(window.React.createElement(TasksGraphApp), mount);
         wrapper.dataset.tasksMounted = 'true';
     }
     if (needsRetry) window.requestAnimationFrame(() => { renderTasksGraphs(rootElement); });

@@ -12,7 +12,7 @@ from ...extensions import AssetBundle, DocumentType, ExtensionMeta, VyasaExtensi
 from ...helpers import content_slug_for_path
 from .api import register_tasks_routes
 from .items_pack import read_schema
-from .render import render_tasks_block
+from .render import _kg_block, render_tasks_block
 
 
 def _request_tasks_assets() -> None:
@@ -46,10 +46,6 @@ class TasksExtension(VyasaExtensionBase):
 
 def _kg_schema_path(pack_path: Path) -> Path:
     return pack_path / "kg.schema"
-
-
-def _kg_block(schema_path: Path) -> str:
-    return f"---\nitems_schema: {schema_path}\nstandalone: true\nwidth: 100%\ndefault_open_depth: -1\n---\n"
 
 
 def _kg_title(schema_path: Path, fallback: str) -> str:

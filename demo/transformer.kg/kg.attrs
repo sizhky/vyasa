@@ -1,0 +1,7 @@
+# Figure parts. Each look gives its node a default role: point is a junction,
+# circle and text are marks. Cards take the view look (outline).
+@node_attrs
+node_look:
+  point: enc_r1 enc_f1 enc_r2 kv dec_r1 dec_f1 dec_r2 dec_r3
+  circle: enc_add enc_pe dec_add dec_pe
+  text: enc_in enc_pe_note enc_nx dec_in dec_pe_note dec_nx prob

@@ -1,4 +1,7 @@
 import { logTasksDebug, logTasksDebugVerbose } from './tasks_diagnostics.js';
+import { tasksIsDashed } from './tasks_graph_core.js';
+import { tasksRoleOf } from './tasks_roles.js';
+import { tasksCheckedShadow, tasksEdgeBaseWidth, tasksGroupLook, tasksGroupRingTokens, tasksLitStyle, tasksLookLitFill, tasksNodeLookStyle, tasksStackShadow } from './tasks_theme.js';
 import {
     TASKS_CARD_STATE_ATTR, TASKS_DEFAULT_CARD_STATES, TASKS_HAS_NOTE_ATTR, TASKS_SPECIAL_NODE_ATTRS,
     clampTasksEdgeOpacity, clampTasksProjectionDisplayOpacity, collectTasksGroupDescendantIds, collectTasksGroupDescendants,
@@ -109,6 +112,13 @@ export function tasksEdgeOpacityLabel(opacity) {
     if (value <= 0.2) return 'Faint';
     if (value >= 0.85) return 'Bold';
     return 'Clear';
+}
+
+// The fill of a lit task node. Hover and focus both read it, so a node keeps
+// its look when it lights up.
+export function tasksActiveNodeFill(node, nodeColor, colorMix) {
+    return tasksLookLitFill(node.data?.__node_look__, nodeColor)
+        ?? tasksNodeBackground(nodeColor, '', colorMix, TASKS_NODE_BG_ACTIVE, false);
 }
 
 export function tasksEdgeStrokeWidthForMode(mode) {
@@ -325,6 +335,62 @@ function tasksPairShiftedProps(props, lift) {
         targetX: props.targetX + target.x,
         targetY: props.targetY + target.y,
     };
+}
+
+/**
+ * SVG path and label point for a routed edge. `radius` rounds each corner
+ * with a quadratic bend. The arrowhead reads the last run from the points,
+ * not from this path, so a route may have any number of points.
+ * `labelAt='run'` puts the label on the middle of the longest run, which suits
+ * a few straight runs. `labelAt='middle'` puts it halfway along the whole
+ * route, which is the apex of an arc.
+ *
+ * >>> tasksRoutePath([{ x: 0, y: 0 }, { x: 50, y: -40 }, { x: 100, y: 0 }], 0, 'middle').slice(1)
+ * [50, -40]
+ *
+ * >>> tasksRoutePath([{ x: 0, y: 0 }, { x: 90, y: 0 }])
+ * ['M 0 0 L 90 0', 45, 0]
+ * >>> tasksRoutePath([{ x: 0, y: 0 }, { x: 0, y: 40 }, { x: 60, y: 40 }], 10)[0]
+ * 'M 0 0 L 0 30 Q 0 40 10 40 L 60 40'
+ */
+export function tasksRoutePath(points, radius = 0, labelAt = 'run') {
+    let d = `M ${points[0].x} ${points[0].y}`;
+    for (let index = 1; index < points.length - 1; index++) {
+        const [prev, corner, next] = [points[index - 1], points[index], points[index + 1]];
+        const r = Math.min(radius, Math.hypot(corner.x - prev.x, corner.y - prev.y) / 2, Math.hypot(next.x - corner.x, next.y - corner.y) / 2);
+        if (!r) {
+            d += ` L ${corner.x} ${corner.y}`;
+            continue;
+        }
+        const inLen = Math.hypot(corner.x - prev.x, corner.y - prev.y) || 1;
+        const outLen = Math.hypot(next.x - corner.x, next.y - corner.y) || 1;
+        const before = { x: corner.x - ((corner.x - prev.x) / inLen) * r, y: corner.y - ((corner.y - prev.y) / inLen) * r };
+        const after = { x: corner.x + ((next.x - corner.x) / outLen) * r, y: corner.y + ((next.y - corner.y) / outLen) * r };
+        d += ` L ${before.x} ${before.y} Q ${corner.x} ${corner.y} ${after.x} ${after.y}`;
+    }
+    const last = points[points.length - 1];
+    d += ` L ${last.x} ${last.y}`;
+    const runs = points.slice(1).map((point, index) => [points[index], point]);
+    const length = ([a, b]) => Math.hypot(b.x - a.x, b.y - a.y);
+    if (labelAt === 'middle') {
+        let left = runs.reduce((sum, run) => sum + length(run), 0) / 2;
+        for (const run of runs) {
+            const size = length(run);
+            if (left <= size && size) {
+                const t = left / size;
+                return [d, run[0].x + (run[1].x - run[0].x) * t, run[0].y + (run[1].y - run[0].y) * t];
+            }
+            left -= size;
+        }
+    }
+    const [a, b] = runs.reduce((best, run) => (length(run) > length(best) ? run : best), runs[0]);
+    return [d, (a.x + b.x) / 2, (a.y + b.y) / 2];
+}
+
+// The last run of a route as the four-point path the arrowhead helpers read.
+export function tasksRouteHeadPath(points) {
+    const [a, b] = points.slice(-2);
+    return `M ${a.x} ${a.y} C ${a.x} ${a.y} ${a.x} ${a.y} ${b.x} ${b.y}`;
 }
 
 function tasksEdgePath(props) {
@@ -1052,33 +1118,97 @@ export function tasksNodeIsOverlaid(node) {
     return Boolean(levels && levels.length);
 }
 
-export function tasksHoverFocusNodeStyle(node, nodeColor, displayColor, activeBorderColor, checkedShadow, colorMix, primary) {
-    const baseZIndex = Number.isFinite(Number(node.zIndex)) ? Number(node.zIndex) : Number(node.style?.zIndex || 0);
-    const zIndex = baseZIndex + (primary ? TASKS_SELECTED_Z_BOOST : TASKS_NEIGHBOR_Z_BOOST);
+// The wrapper style of a task node at rest: its look over the card fill and
+// border, then the checked state's border and shadow, then the stacked frame of
+// a node with internals. Free and fixed views both build task wrappers here.
+export function tasksTaskWrapperStyle({ nodeColor, colorMix, useOverlay, look, dashed, isChecked, stateAccent, internals = false, width, height, zIndex }) {
+    const lookStyle = tasksNodeLookStyle({
+        background: useOverlay ? 'transparent' : tasksNodeBackground(nodeColor, '', colorMix, TASKS_NODE_BG, false),
+        border: nodeColor ? `1px solid color-mix(in srgb, var(--vyasa-paper) 30%, ${nodeColor} 70%)` : TASKS_NODE_BORDER,
+    }, useOverlay ? 'card' : look, nodeColor, dashed);
     return {
+        width,
+        height,
         zIndex,
-        opacity: 1,
-        '--vyasa-tasks-active-border': activeBorderColor,
-        background: tasksNodeIsOverlaid(node)
-            ? node.style.background
-            : (node.data?.__kind__ === 'group'
-                ? tasksGroupBackground(displayColor, '', TASKS_GROUP_BG_ACTIVE, { mode: 'transparent', intensity: primary ? 12 : 8 })
-                : tasksNodeBackground(nodeColor, '', colorMix, TASKS_NODE_BG_ACTIVE, false)),
-        boxShadow: `${checkedShadow !== 'none' ? `${checkedShadow}, ` : ''}0 0 0 ${primary ? 3 : 2}px color-mix(in srgb, ${displayColor} ${primary ? 76 : 68}%, transparent), 0 0 ${primary ? 24 : 32}px ${primary ? 6 : 8}px color-mix(in srgb, ${displayColor} ${primary ? 48 : 46}%, transparent)`,
+        borderRadius: 6,
+        boxShadow: [isChecked ? tasksCheckedShadow(stateAccent) : '', internals ? tasksStackShadow(look) : ''].filter(Boolean).join(', ') || 'none',
+        ...(internals && nodeColor ? { '--vyasa-tasks-stack-rim': `color-mix(in srgb, ${nodeColor} 60%, transparent)` } : {}),
+        overflow: 'hidden',
+        // A look may restate the radius and the overflow it needs.
+        ...lookStyle,
+        border: isChecked ? `2px solid color-mix(in srgb, ${stateAccent} 78%, white 22%)` : lookStyle.border,
     };
 }
 
-export function tasksHoverFocusEdge(edge, hoveredNodeId) {
+// The frame of a group, open or closed, in the free graph and in a fixed layout.
+// The frame takes the group look of the node look. A group's border is one pixel
+// heavier than a card's look, and a look with no border gets a ring instead.
+// `tokens` set the CSS ring an open group draws.
+export function tasksGroupFrameStyle(group, { groupColor, isExpanded, nodeLook, transparent = false, fillExpanded = 0, fillCollapsed = 14, borderMix = 70 }) {
+    const background = isExpanded
+        ? tasksGroupBackground(groupColor, '', TASKS_GROUP_EXPANDED_BG, { mode: 'transparent', intensity: fillExpanded })
+        : tasksGroupBackground(groupColor, '', TASKS_GROUP_BG, { intensity: fillCollapsed });
+    const border = groupColor
+        ? `1px solid color-mix(in srgb, var(--vyasa-paper) ${100 - borderMix}%, ${groupColor} ${borderMix}%)`
+        : TASKS_NODE_BORDER;
+    const lookStyle = tasksNodeLookStyle({ background: transparent ? 'transparent' : background, border }, tasksGroupLook(nodeLook), groupColor, tasksIsDashed(group));
+    if (typeof lookStyle.border === 'string') {
+        lookStyle.border = lookStyle.border.replace(/^(\d+(?:\.\d+)?)px\b/, (_, width) => `${Number(width) + 1}px`);
+    }
+    const ring = !lookStyle.border || lookStyle.border === 'none'
+        ? `0 0 0 1px color-mix(in srgb, ${groupColor || 'var(--vyasa-ink)'} 42%, transparent)`
+        : 'none';
+    return { lookStyle, ring, tokens: tasksGroupRingTokens(nodeLook) };
+}
+
+// The z-index of a lit node: its own z plus the boost its state earns.
+export function tasksStateZIndex(node, boost) {
+    const baseZIndex = Number.isFinite(Number(node.zIndex)) ? Number(node.zIndex) : Number(node.style?.zIndex || 0);
+    return baseZIndex + boost;
+}
+
+// The fill of a lit node. An overlaid node keeps its overlay; a group takes a
+// faint wash of its colour; a task takes its look's lit fill.
+export function tasksLitNodeFill(node, nodeColor, groupColor, colorMix, groupIntensity) {
+    if (tasksNodeIsOverlaid(node)) return node.style.background;
+    return node.data?.__kind__ === 'group'
+        ? tasksGroupBackground(groupColor, '', TASKS_GROUP_BG_ACTIVE, { mode: 'transparent', intensity: groupIntensity })
+        : tasksActiveNodeFill(node, nodeColor, colorMix);
+}
+
+// The lit style of a node in a highlight state: its look's lit paint at its role's bands.
+export function tasksLitNodeStyle(node, state, color, { border = color, checkedShadow = 'none' } = {}) {
+    const look = node.data?.__node_look__;
+    const stackShadow = tasksNodeHasInternals(node.data) ? tasksStackShadow(look) : '';
+    return tasksLitStyle(look, state, color, { bands: tasksRoleOf(node.data).bands, border, checkedShadow, stackShadow });
+}
+
+// A node whose `internals` attr names a pack: design KG_INTERNALS.
+export function tasksNodeHasInternals(record) {
+    return Boolean(String(record?.internals ?? '').trim());
+}
+
+export function tasksHoverFocusNodeStyle(node, nodeColor, displayColor, activeBorderColor, checkedShadow, colorMix, primary) {
+    return {
+        zIndex: tasksStateZIndex(node, primary ? TASKS_SELECTED_Z_BOOST : TASKS_NEIGHBOR_Z_BOOST),
+        opacity: 1,
+        background: tasksLitNodeFill(node, nodeColor, displayColor, colorMix, primary ? 12 : 8),
+        ...tasksLitNodeStyle(node, primary ? 'hover' : 'hoverNeighbor', displayColor, { border: activeBorderColor, checkedShadow }),
+    };
+}
+
+// `outward`: the edge leads away from the hovered node, directly or through junctions.
+export function tasksHoverFocusEdge(edge, hoveredNodeId, outward = edge.source === hoveredNodeId) {
     const edgeColor = edge.data?.edgeColor || edge.style?.stroke || 'currentColor';
     const branchOpacity = edge.data?.__projection_branch_opacity__ ?? 1;
-    const strokeMode = edge.source === hoveredNodeId ? 'selected-out' : 'selected-in';
+    const strokeMode = outward ? 'selected-out' : 'selected-in';
     return {
         ...edge,
         zIndex: TASKS_EDGE_FOCUS_Z,
         data: { ...edge.data, highlightMode: 'selected', strokeMode, flareKey: `hover:${hoveredNodeId || ''}` },
         labelStyle: { ...(edge.labelStyle || {}), fill: edgeColor, opacity: tasksProminentEdgeOpacity() * branchOpacity, fontWeight: 800 },
         labelBgStyle: { ...(edge.labelBgStyle || {}), fill: TASKS_EDGE_LABEL_BG, fillOpacity: 0.9 },
-        style: { ...edge.style, stroke: edgeColor, opacity: tasksProminentEdgeOpacity() * branchOpacity, strokeWidth: Math.max(4.75, tasksEdgeStrokeWidthForMode(strokeMode)), strokeLinecap: 'round' },
+        style: { ...edge.style, stroke: edgeColor, opacity: tasksProminentEdgeOpacity() * branchOpacity, strokeWidth: tasksEdgeBaseWidth(edge.data?.__edge_path__, true), strokeLinecap: 'round' },
     };
 }
 

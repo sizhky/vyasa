@@ -6,7 +6,7 @@ import { tasksModelBooleanSetting, tasksProjectionSchemaPrefs } from '../vyasa/e
 import { averageTasksHexColors, resolveTasksCollapsedGroupColor, tasksCompositeSweep, tasksEdgeStrokeWidthForMode, tasksGroupBackground, tasksNodeBackground, tasksProminentEdgeLabelScale, tasksTaperedArrowHeadPath, tasksTaperedBezierPath } from '../vyasa/extensions_builtin/tasks/static/tasks_paint.js';
 
 // Older wiring checks inspect all owners; value checks call the real exports.
-const taskSources = ['tasks', 'tasks_cards', 'tasks_edges', 'tasks_nodes', 'tasks_panels', 'tasks_paint', 'tasks_layouts', 'tasks_graph_model']
+const taskSources = ['tasks', 'tasks_cards', 'tasks_edges', 'tasks_nodes', 'tasks_panels', 'tasks_paint', 'tasks_layouts', 'tasks_graph_model', 'tasks_highlight', 'tasks_theme']
     .map(name => fs.readFileSync(new URL(`../vyasa/extensions_builtin/tasks/static/${name}.js`, import.meta.url), 'utf8')).join('\n');
 
 globalThis.window = { innerWidth: 1000, innerHeight: 800 };
@@ -555,7 +555,7 @@ test('Knowledge Graph hover edges override faint global opacity', () => {
     const source = taskSources;
     assert.ok(source.includes('opacity: tasksProminentEdgeOpacity() * branchOpacity, fontWeight: 800'));
     assert.ok(source.includes('fillOpacity: 0.9'));
-    assert.ok(source.includes('strokeWidth: Math.max(4.75, tasksEdgeStrokeWidthForMode'));
+    assert.ok(source.includes('strokeWidth: tasksEdgeBaseWidth(edge.data?.__edge_path__, true)'));
     assert.ok(source.includes('highlighted ? 0.86 : 0.04'));
 });
 
@@ -1177,4 +1177,13 @@ test('tasksHopSeedIds lets hover start a chain without hijacking one', async () 
     assert.deepEqual(Array.from(titleHover.seeds), ['a']);
     assert.equal(titleHover.fromHover, false);
     assert.deepEqual(Array.from(tasksHopSeedIds(new Set(), '').seeds), []);
+});
+
+test('a hover card keeps only the view hover_attrs, in their order, and a group range stands in', async () => {
+    const { tasksHoverAttrs, tasksHoverCardEntries } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_model.js');
+    const entries = [{ key: 'part' }, { key: 'op' }, { key: 'shape' }, { key: 'range:params' }];
+    assert.deepEqual(tasksHoverCardEntries(entries, tasksHoverAttrs({ hover_attrs: ['shape', 'op', 'params', 'missing'] }, {})).map((entry) => entry.key), ['shape', 'op', 'range:params']);
+    // The view's list wins; with none, the graph's applies; with neither, every entry shows.
+    assert.deepEqual(tasksHoverAttrs({}, { hover_attrs: 'op, shape' }), ['op', 'shape']);
+    assert.deepEqual(tasksHoverCardEntries(entries, tasksHoverAttrs({}, {})), entries);
 });

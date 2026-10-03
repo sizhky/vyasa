@@ -1,10 +1,12 @@
+import { hydrateMarkdown } from '../../../static/page_shell.js';
 import { logTasksDebug } from './tasks_diagnostics.js';
-import { measureTextWidth, normalizeTasksNodeImageUrl, resolveTasksNodeImage, tasksInlineLinkPlainText } from './tasks_graph_core.js';
+import { TASKS_STYLE_ATTRS, measureTextWidth, normalizeTasksNodeImageUrl, resolveTasksNodeImage, tasksInlineLinkPlainText } from './tasks_graph_core.js';
 import {
     TASKS_CARD_STATE_ATTR, TASKS_DERIVED_METRIC_KEYS, TASKS_SPECIAL_NODE_ATTRS, collectTasksGroupDescendants,
     formatTasksMetricValue, isTasksGradientPalette, parseTasksNumericValue, tasksIsHiddenNodeMetaKey,
     tasksNodeMetaEntries, tasksNodeMetaLabel,
 } from './tasks_graph_model.js';
+import { tasksLookStacks } from './tasks_theme.js';
 
 export async function copyTasksText(text) {
     const value = String(text || '');
@@ -296,7 +298,8 @@ function tasksAttributeRenderedLinks(record, key) {
 // Raw values remain the fallback for inline graphs without rendered attributes.
 export function tasksAttributeLinks(record) {
     if (!record) return [];
-    const keys = Object.keys(record).filter((key) => key !== '__rendered_attrs__' && !key.startsWith('__'));
+    // A presentation attr such as `internals=../mha.kg` names a pack, not a page to preview.
+    const keys = Object.keys(record).filter((key) => key !== '__rendered_attrs__' && !key.startsWith('__') && !TASKS_STYLE_ATTRS.has(String(key).toLowerCase()));
     const codeKey = keys.find((key) => String(key).toLowerCase() === 'code');
     const orderedKeys = codeKey ? [codeKey, ...keys.filter((key) => key !== codeKey)] : keys;
     return orderedKeys.flatMap((key) => {
@@ -363,6 +366,9 @@ export function tasksNodeLinkKinds(node) {
             if (kind) kinds.add(kind);
         }
     }
+    // A node with internals shows a stacked frame (tasksStackShadow). A look with
+    // no frame of its own shows the internals badge instead.
+    if (String(node.internals ?? '').trim() && !tasksLookStacks(node.__node_look__)) kinds.add('internals');
     return kinds;
 }
 
@@ -381,7 +387,7 @@ export function renderTasksNodeLinkBadge(React, options = {}) {
         },
     }, ...kinds.map((kind) => React.createElement('span', {
         key: kind,
-        'uk-icon': kind === 'external' ? 'link-external' : (kind === 'note' ? 'file-text' : 'link'),
+        'uk-icon': { external: 'link-external', note: 'file-text', internals: 'album' }[kind] || 'link',
     })));
 }
 
@@ -536,6 +542,12 @@ export function renderTasksCardDetailsAndNotes(React, options = {}) {
     );
 }
 
+// Server-rendered attr HTML gets the page's markdown hydration, so $...$ becomes KaTeX.
+// A ref runs on mount only, so each span is keyed by its HTML below.
+const hydrateTasksRenderedValue = (element) => {
+    if (element) hydrateMarkdown(element);
+};
+
 export function renderTasksDetailEntries(React, entries, options = {}) {
     return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', fontSize: options.fontSize || '14px', lineHeight: options.lineHeight || 1.35 } },
         ...(entries || []).map((entry, index) => {
@@ -562,7 +574,10 @@ export function renderTasksDetailEntries(React, entries, options = {}) {
                 : renderedValues.length
                 ? React.createElement('span', { className: 'vyasa-task-node-card-value', style: { display: 'grid', gap: '4px' } },
                     ...renderedValues.map((renderedValue, renderedIndex) => React.createElement('span', {
-                        key: `${renderedIndex}`,
+                        // Keyed by its HTML: new content mounts a new span, so the
+                        // hydrating ref runs again after a live reload changes the value.
+                        key: `${renderedIndex}:${renderedValue}`,
+                        ref: hydrateTasksRenderedValue,
                         dangerouslySetInnerHTML: { __html: renderedValue },
                     })))
                 : React.createElement('span', { className: 'vyasa-task-node-card-value' }, entry.value),

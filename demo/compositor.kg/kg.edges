@@ -1,0 +1,12 @@
+c1: paint-in -> commit carries dashed=true
+c2: commit -> layerize produces
+c3: layerize -> pending produces note="layer list"
+c4: pending -> raster carries note="tiles to raster"
+c5: decode -> raster serves note="decoded images"
+c6: raster -> pending fills note="tiles ready"
+c7: pending -> active becomes note="activate"
+c8: input-in -> scroll carries dashed=true
+c9: scroll -> active shapes note="new scroll offset"
+c10: active -> aggregate carries note="compositor frame"
+c11: aggregate -> draw produces
+c12: draw -> screen-out produces note="vsync" dashed=true

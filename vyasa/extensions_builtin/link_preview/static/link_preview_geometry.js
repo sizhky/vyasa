@@ -1,82 +1,38 @@
-const WIDTH_STORAGE_KEY = 'vyasa-link-preview-width';
-const HEIGHT_STORAGE_KEY = 'vyasa-link-preview-height';
-const POSITION_STORAGE_KEY = 'vyasa-link-preview-position';
+import { createPanelMemory, resizePanelRect } from '../../../static/floating_panel.js';
 
-// Width and height keep the same memory: the last resized value, held in local
-// storage and clamped to the viewport when a new popup opens.
-function createDimensionMemory(storageKey) {
-    let stored = null;
-    try {
-        const value = Number(globalThis.localStorage?.getItem(storageKey));
-        if (Number.isFinite(value) && value > 0) stored = value;
-    } catch (_) {}
-    return {
-        remember(value) {
-            if (!Number.isFinite(value) || value <= 0) return;
-            stored = value;
-            try { globalThis.localStorage?.setItem(storageKey, String(value)); } catch (_) {}
-        },
-        preferred(fallback, viewportSize, margin) {
-            return Math.min(stored ?? fallback, viewportSize - margin * 2);
-        },
-    };
-}
-
-const widthMemory = createDimensionMemory(WIDTH_STORAGE_KEY);
-const heightMemory = createDimensionMemory(HEIGHT_STORAGE_KEY);
+// Width, height and the dragged place live in the shared panel memory under the
+// keys link previews always used: vyasa-link-preview-width, -height, -position.
+const memory = createPanelMemory('vyasa-link-preview');
 
 export function rememberLinkPreviewWidth(width) {
-    widthMemory.remember(width);
+    memory.rememberWidth(width);
 }
 
 export function linkPreviewPreferredWidth(fallback, viewportWidth, margin = 12) {
-    return widthMemory.preferred(fallback, viewportWidth, margin);
+    return memory.preferredWidth(fallback, viewportWidth, margin);
 }
 
 export function rememberLinkPreviewHeight(height) {
-    heightMemory.remember(height);
+    memory.rememberHeight(height);
 }
 
 export function linkPreviewPreferredHeight(fallback, viewportHeight, margin = 12) {
-    return heightMemory.preferred(fallback, viewportHeight, margin);
+    return memory.preferredHeight(fallback, viewportHeight, margin);
 }
-
-function storedPreferredPosition() {
-    try {
-        const stored = JSON.parse(globalThis.localStorage?.getItem(POSITION_STORAGE_KEY) || 'null');
-        const { left, top } = stored || {};
-        return Number.isFinite(left) && Number.isFinite(top) ? { left, top } : null;
-    } catch (_) {
-        return null;
-    }
-}
-
-let preferredPosition = storedPreferredPosition();
 
 export function rememberLinkPreviewPosition(left, top) {
-    if (!Number.isFinite(left) || !Number.isFinite(top)) return;
-    preferredPosition = { left, top };
-    try {
-        globalThis.localStorage?.setItem(POSITION_STORAGE_KEY, JSON.stringify(preferredPosition));
-    } catch (_) {}
+    memory.rememberPosition(left, top);
 }
 
 export function linkPreviewStoredPosition() {
-    return preferredPosition;
+    return memory.storedPosition();
 }
 
 // A dragged popup decides where the next one opens. While that popup stays open,
 // the next one steps to its bottom right. After it closes, its last place stays
 // the default. Without a drag, the popup opens at the pointer as before.
 export function linkPreviewPreferredPosition(fallback, size, viewport, anchor = null, margin = 12, step = 26) {
-    const base = anchor
-        ? { left: anchor.left + step, top: anchor.top + step }
-        : preferredPosition ?? fallback;
-    const clamp = (value, low, high) => Math.min(Math.max(value, low), Math.max(low, high));
-    return {
-        left: clamp(base.left, margin, viewport.width - size.width - margin),
-        top: clamp(base.top, margin, viewport.height - size.height - margin),
-    };
+    return memory.preferredPosition(fallback, size, viewport, anchor, margin, step);
 }
 
 export function installLinkPreviewPanTracking(target, refresh) {
@@ -189,21 +145,5 @@ export function linkPreviewPointerPoints(sourceRect, popupRect, baseWidth = 28) 
 }
 
 export function resizeLinkPreviewRect(rect, edge, dx, dy, viewport, margin = 8) {
-    const right = rect.left + rect.width;
-    const bottom = rect.top + rect.height;
-    const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
-    let { left, top, width, height } = rect;
-    if (edge.includes('left')) {
-        width = clamp(rect.width - dx, 288, right - margin);
-        left = right - width;
-    } else if (edge.includes('right')) {
-        width = clamp(rect.width + dx, 288, viewport.width - rect.left - margin);
-    }
-    if (edge.includes('top')) {
-        height = clamp(rect.height - dy, 192, bottom - margin);
-        top = bottom - height;
-    } else if (edge.includes('bottom')) {
-        height = clamp(rect.height + dy, 192, viewport.height - rect.top - margin);
-    }
-    return { left, top, width, height };
+    return resizePanelRect(rect, edge, dx, dy, viewport, margin);
 }

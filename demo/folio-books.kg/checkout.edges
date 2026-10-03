@@ -1,0 +1,8 @@
+c1: basket -> address next
+c2: address -> shipping next
+c3: shipping -> payment next
+c4: payment -> review next
+c5: review -> placed confirms
+c6: basket -> payment express
+c7: payment -> address declined_card dashed=true
+c8: review -> shipping change_speed dashed=true

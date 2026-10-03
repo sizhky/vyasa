@@ -7,6 +7,7 @@ import shlex
 import re
 from typing import TYPE_CHECKING, Any, Union
 
+from .layouts import KG_STYLE_DEFAULT_KEYS, PRESENTATION_ATTRS
 from .query import resolve_context_id
 
 if TYPE_CHECKING:
@@ -168,6 +169,8 @@ def read_kg_pack(schema_path: PathLike, context_id: str = "") -> dict[str, Any]:
         "node_hidden_attrs": _list_value(schema.graph.get("node_hidden_attrs", "")),
         "edge_hidden_attrs": _list_value(schema.graph.get("edge_hidden_attrs", "")),
         "card_states": _list_value(schema.graph.get("card_states", "")),
+        # Graph-wide style defaults; a view or a node/edge attr overrides them.
+        **{key: schema.graph[key] for key in KG_STYLE_DEFAULT_KEYS if schema.graph.get(key)},
         "acl": _acl_payload(schema),
         "kg_history": dict(schema.history),
     }
@@ -289,6 +292,8 @@ def _read_context_kg_pack(schema_path: PathLike, schema: KgSchema, context_id: s
         "node_hidden_attrs": _list_value(schema.graph.get("node_hidden_attrs", "")),
         "edge_hidden_attrs": _list_value(schema.graph.get("edge_hidden_attrs", "")),
         "card_states": _list_value(schema.graph.get("card_states", "")),
+        # Graph-wide style defaults; a view or a node/edge attr overrides them.
+        **{key: schema.graph[key] for key in KG_STYLE_DEFAULT_KEYS if schema.graph.get(key)},
         "acl": _acl_payload(schema),
         "kg_context": {"id": active.id, "seq": active.seq, "label": active.label, "stage": active.stage, "caption": active.caption},
         "kg_contexts": [{"id": item.id, "seq": item.seq, "label": item.label, "stage": item.stage, "caption": item.caption} for item in contexts],
@@ -1047,7 +1052,8 @@ def apply_attrs(path: PathLike, nodes: dict[str, dict], edges: dict[str, dict]) 
         if not line.startswith((" ", "\t")) and stripped.endswith(":"):
             current_key = stripped[:-1].strip()
             index_key = "node" if section == "@node_attrs" else "edge"
-            if current_key and current_key not in indexed[index_key]:
+            # A presentation key is an assignment, not a dimension to filter by.
+            if current_key and current_key not in indexed[index_key] and current_key not in PRESENTATION_ATTRS:
                 indexed[index_key].append(current_key)
             continue
         if current_key and line.startswith((" ", "\t")) and ":" in stripped:

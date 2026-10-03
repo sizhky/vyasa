@@ -13,7 +13,7 @@ Aliases keep packs written against an earlier key working.
 >>> layout_keys("nope")
 ()
 >>> sorted(all_layout_keys())[:3]
-['layered_aside', 'layered_order', 'layered_tier']
+['arc_order', 'grid_col', 'grid_col_order']
 >>> unknown_layout_keys({"layout": "matrix", "matrix_col": "layer", "matrix_rows": "flow"})
 ['matrix_rows']
 >>> unknown_layout_keys({"layout": "matrix", "matrix_col": "layer", "caption": "hi"})
@@ -21,6 +21,8 @@ Aliases keep packs written against an earlier key working.
 """
 
 from __future__ import annotations
+
+import logging
 
 LAYOUT_KEYS: dict[str, tuple[str, ...]] = {
     "sequence": (
@@ -38,7 +40,54 @@ LAYOUT_KEYS: dict[str, tuple[str, ...]] = {
     "layered": ("layered_tier", "layered_order", "layered_aside"),
     "matrix": ("matrix_col", "matrix_row", "matrix_col_order", "matrix_tint"),
     "grid": ("grid_col", "grid_row", "grid_col_order", "grid_row_order"),
+    # Nodes on one baseline; `arc_order` names the attr that orders them.
+    "arc": ("arc_order",),
 }
+
+# View-wide style defaults. A node or edge attr of the same name overrides them.
+# Any layout accepts them, so they are not layout keys.
+STYLE_KEYS: dict[str, tuple[str, ...]] = {
+    "node_look": ("card", "outline", "sketch", "blueprint", "tab", "station", "point", "circle", "text"),
+    "edge_path": ("ribbon", "line", "orthogonal", "octilinear", "arc"),
+    "edge_corner": ("sharp", "round"),
+    "canvas": ("plain", "blueprint"),
+}
+
+# Values of the `node_role` attr: what a node is, apart from how it is drawn.
+# An item has card state and notes, a mark is an inspectable figure part, and a
+# junction only joins routes. tasks_roles.js holds the behaviour of each role.
+NODE_ROLES: tuple[str, ...] = ("item", "mark", "junction")
+
+# Attrs that set how a node or edge is drawn, which role a node plays, or which
+# pack holds its internals, never what it says. kg.attrs may assign them in bulk; they never become filter or
+# group-by dimensions. TASKS_STYLE_ATTRS in tasks_graph_core.js mirrors this set.
+PRESENTATION_ATTRS: frozenset[str] = frozenset({*STYLE_KEYS, "subtitle_from", "dashed", "source_port", "target_port", "node_role", "internals"})
+
+# Keys a site or an @graph line may set as the starting default for every view.
+KG_STYLE_DEFAULT_KEYS: tuple[str, ...] = (*STYLE_KEYS, "subtitle_from")
+
+
+def kg_style_defaults(site: dict, graph: dict) -> dict:
+    """The style defaults a graph starts from: the site's, then its @graph line.
+
+    A site key or value that is not a style is dropped with a warning, because
+    a typo in a server flag should not silently restyle nothing.
+
+    >>> kg_style_defaults({"node_look": "outline", "edge_path": "orthogonal"}, {"edge_path": "line"})
+    {'node_look': 'outline', 'edge_path': 'line'}
+    >>> kg_style_defaults({"node_look": "fancy", "colour": "red"}, {})
+    {}
+    """
+    merged = {}
+    for key, value in (site or {}).items():
+        allowed = STYLE_KEYS.get(key)
+        if key not in KG_STYLE_DEFAULT_KEYS or (allowed and str(value).lower() not in allowed):
+            logging.getLogger(__name__).warning("kg_defaults: %s=%s is not a KG style default; ignored.", key, value)
+            continue
+        merged[key] = str(value).lower() if allowed else str(value)
+    merged.update({key: graph[key] for key in KG_STYLE_DEFAULT_KEYS if graph.get(key)})
+    return merged
+
 
 # Old name -> current name. A pack written before a rename keeps working.
 LAYOUT_KEY_ALIASES: dict[str, str] = {}
@@ -63,10 +112,16 @@ def layout_error(view: dict) -> str:
     >>> layout_error({"layout": "matrix", "matrix_rows": "b"})
     "layout=matrix has no key 'matrix_rows'. It accepts matrix_col, matrix_col_order, matrix_row, matrix_tint."
     >>> layout_error({"layout": "spiral"})
-    'layout=spiral is not a layout. Known layouts: layered, matrix, sequence.'
+    'layout=spiral is not a layout. Known layouts: arc, grid, layered, matrix, sequence.'
     >>> layout_error({"group_by": "kind"})
     ''
+    >>> layout_error({"edge_path": "curvy"})
+    'edge_path=curvy is not a style. Use one of ribbon, line, orthogonal, octilinear, arc.'
     """
+    for key, allowed in STYLE_KEYS.items():
+        value = str(view.get(key) or "").strip().lower()
+        if value and value not in allowed:
+            return f"{key}={value} is not a style. Use one of {', '.join(allowed)}."
     layout = str(view.get("layout") or "").strip().lower()
     if not layout:
         return ""

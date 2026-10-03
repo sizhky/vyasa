@@ -1,4 +1,4 @@
-.react-flow__node.vyasa-tasks-node--expanded-group { background: transparent !important; background-color: transparent !important; background-image: none !important; box-shadow: 0 0 0 2px color-mix(in srgb, var(--vyasa-ink) 52%, transparent), 0 24px 64px color-mix(in srgb, var(--vyasa-primary) 10%, transparent) !important; }
+.react-flow__node.vyasa-tasks-node--expanded-group { background: transparent !important; background-color: transparent !important; background-image: none !important; box-shadow: var(--kg-group-ring, 0 0 0 2px color-mix(in srgb, var(--vyasa-ink) 52%, transparent), 0 24px 64px color-mix(in srgb, var(--vyasa-primary) 10%, transparent)) !important; }
 .react-flow__node.vyasa-tasks-node--sequence-lifeline { background: transparent !important; background-color: transparent !important; background-image: none !important; }
 .vyasa-task-link-badge { display: inline-flex; align-items: center; justify-content: flex-end; gap: 0.14rem; min-width: 0.8rem; height: 0.8rem; color: color-mix(in srgb, currentColor 58%, transparent); pointer-events: none; opacity: 0.72; }
 .vyasa-task-link-badge svg { width: 0.8rem; height: 0.8rem; stroke: currentColor !important; fill: none !important; }
@@ -216,7 +216,7 @@ html:not(.vyasa-tasks-edge-labels-on) .vyasa-tasks-flow .vyasa-tasks-edge-label:
 }
 .react-flow__node.vyasa-tasks-node--expanded-group[data-vyasa-group-toggle-hover="true"],
 .react-flow__node[data-vyasa-group-toggle-hover="true"] {
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--vyasa-ink) 64%, transparent), 0 24px 72px color-mix(in srgb, var(--vyasa-primary) 16%, transparent) !important;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--vyasa-ink) 64%, transparent), 0 0 0 7px color-mix(in srgb, var(--vyasa-primary) 22%, transparent) !important;
 }
 /* Review-tagged nodes keep their bloom while hovered or selected. Without the
    exclusion this !important strips the bloom's box-shadow on interaction. */
@@ -625,3 +625,94 @@ html:not(.vyasa-tasks-edge-labels-on) .vyasa-tasks-flow .vyasa-tasks-edge-label:
 .vyasa-tasks-filter-card .ruleGroup button {
     cursor: pointer;
 }
+/* Internals panels: docs/implementation/KG_INTERNALS/design.md. A peek sits by
+   its node; a dive fills the host inside a margin. The shadow is static on one
+   element, so it paints when a panel opens, not on every hover. Each nested dive
+   sits inside the margin of the one around it. */
+.vyasa-kg-internals {
+    position: absolute;
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--vyasa-paper);
+    border: 1px solid color-mix(in srgb, var(--vyasa-ink) 24%, transparent);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
+    contain: layout paint;
+}
+.vyasa-kg-internals[data-state="dive"] {
+    inset: 22px;
+    padding: 10px;
+    border-width: 2px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+}
+.vyasa-kg-internals-scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 59;
+    background: color-mix(in srgb, var(--vyasa-ink) 22%, transparent);
+    pointer-events: none;
+}
+.vyasa-kg-internals-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    color: color-mix(in srgb, var(--vyasa-ink) 72%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--vyasa-ink) 14%, transparent);
+}
+.vyasa-kg-internals-trail {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.vyasa-kg-internals-bar button {
+    border: 1px solid color-mix(in srgb, var(--vyasa-ink) 22%, transparent);
+    border-radius: 4px;
+    padding: 0 6px;
+    line-height: 18px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+}
+.vyasa-kg-internals-body {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+.vyasa-kg-internals-note {
+    padding: 16px;
+    font-size: 12px;
+    color: color-mix(in srgb, var(--vyasa-ink) 60%, transparent);
+}
+/* World chips: the parent's edges that cross into and out of the node, on the
+   panel edge they cross. Dashed, because the world they name is outside. */
+.vyasa-kg-internals-world {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+    padding: 4px 8px;
+    font: 600 10.5px/1.4 ui-monospace, monospace;
+    color: color-mix(in srgb, var(--vyasa-ink) 70%, transparent);
+    background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--vyasa-ink) 5%, transparent) 0 4px, transparent 4px 8px);
+}
+.vyasa-kg-internals-world[data-side="out"] { border-bottom: 1px dashed color-mix(in srgb, var(--vyasa-ink) 30%, transparent); }
+.vyasa-kg-internals-world[data-side="in"] { border-top: 1px dashed color-mix(in srgb, var(--vyasa-ink) 30%, transparent); }
+.vyasa-kg-internals-chip {
+    border: 1px dashed color-mix(in srgb, var(--vyasa-ink) 40%, transparent);
+    border-radius: 999px;
+    padding: 0 8px;
+    background: var(--vyasa-paper);
+    white-space: nowrap;
+}
+/* A floating panel moves by its bar and resizes by its edges (floating_panel.js).
+   A dive fills the host, so its own handles go; a nested panel keeps its own. */
+.vyasa-kg-internals-bar { cursor: grab; user-select: none; }
+.vyasa-kg-internals[data-state="dive"] > .vyasa-panel-resize-handle { display: none; }
+.vyasa-kg-internals[data-state="dive"] > .vyasa-kg-internals-bar { cursor: default; }

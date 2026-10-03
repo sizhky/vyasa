@@ -1,0 +1,26 @@
+@graph id=sdpa title="Scaled Dot-Product Attention"
+default_view=figure
+color_by=part
+node_look=outline
+edge_path=orthogonal
+hover_attrs=op,shape,params,description
+node_hidden_attrs=column,track,part
+
+@sources
+nodes=kg.nodes
+attrs=kg.attrs
+base:
+	edges=kg.edges
+palette=../transformer.kg/kg.palette
+
+@views
+figure:
+	source=base
+	layout=grid
+	grid_col=column
+	grid_row=track
+	grid_col_order=q,k,v
+	grid_row_order=out,matmul2,softmax,mask,scale,matmul1,in
+	color_by=part
+	edge_label_from=shape
+	caption="Scaled dot-product attention for one head, after Attention Is All You Need, figure 2."

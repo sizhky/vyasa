@@ -1,0 +1,19 @@
+k1: psk-in -> early produces note=IKM dashed=true
+k2: early -> derived-1 produces
+k3: derived-1 -> handshake-secret produces note=salt
+k4: ecdhe-in -> handshake-secret produces note=IKM dashed=true
+k5: handshake-secret -> c-hs produces
+k6: handshake-secret -> s-hs produces
+k7: transcript-in -> c-hs shapes note="CH..SH" dashed=true
+k8: transcript-in -> s-hs shapes note="CH..SH" dashed=true
+k9: handshake-secret -> derived-2 produces
+k10: derived-2 -> master produces note=salt
+k11: master -> c-ap produces
+k12: master -> s-ap produces
+k13: master -> res-master produces
+k14: transcript-in -> c-ap shapes note="CH..server Finished" dashed=true
+k15: c-hs -> expand becomes
+k16: s-hs -> expand becomes
+k17: c-ap -> expand becomes
+k18: s-ap -> expand becomes
+k19: expand -> keys-out produces dashed=true

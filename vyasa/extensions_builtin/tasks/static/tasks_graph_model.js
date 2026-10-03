@@ -1,6 +1,6 @@
 import { logTasksPerf, traceTasksEdge } from './tasks_diagnostics.js';
 import {
-    applyTasksFilterAttributePolicy, resolveTasksNodeImage, sizeTaskNode, tasksUngroupModelForGrouping,
+    TASKS_STYLE_ATTRS, applyTasksFilterAttributePolicy, resolveTasksNodeImage, sizeTaskNode, tasksNodeLook, tasksNodeSubtitle, tasksUngroupModelForGrouping,
     tasksViewMatchesContext,
 } from './tasks_graph_core.js';
 
@@ -19,7 +19,7 @@ const TASKS_INTERNAL_NODE_META_KEYS = new Set([
     'handlelayout', 'highlightmode', 'sourcegroupid', 'source_group_id',
     'width', 'height', 'position', 'parentid',
     'parent_id', 'color', 'href', 'image', 'image_by', 'collapsed', 'child_group_ids',
-    'child_task_ids', 'projection',
+    'child_task_ids', 'projection', 'inherit',
     'active_projection', 'graph_x', 'graph_y',
 ]);
 const TASKS_DERIVED_METRIC_KEYS = new Set(['rank', 'connectivity']);
@@ -211,6 +211,7 @@ export function tasksIsHiddenNodeMetaKey(key) {
     return tasksIsInternalMetaKey(key)
         || TASKS_INTERNAL_NODE_META_KEYS.has(normalized)
         || TASKS_SPECIAL_NODE_ATTRS.has(String(key))
+        || TASKS_STYLE_ATTRS.has(normalized)
         || TASKS_DERIVED_METRIC_KEYS.has(normalized);
 }
 
@@ -247,7 +248,7 @@ export function tasksEdgeMetaEntries(edge, attrOrder = [], hiddenAttrs = []) {
         ['evidence', 100], ['introduced_context', 101], ['introduced_stage', 102], ['definition', 103],
     ]);
     const entries = Object.entries(edge)
-        .filter(([key, value]) => !hidden.has(key) && !tasksIsInternalMetaKey(key) && !TASKS_INTERNAL_EDGE_META_KEYS.has(String(key).toLowerCase()) && tasksAttrValues(value).length)
+        .filter(([key, value]) => !hidden.has(key) && !tasksIsInternalMetaKey(key) && !TASKS_INTERNAL_EDGE_META_KEYS.has(String(key).toLowerCase()) && !TASKS_STYLE_ATTRS.has(String(key).toLowerCase()) && tasksAttrValues(value).length)
         .map(([key, value], index) => ({
             key,
             label: key.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase()),
@@ -273,17 +274,36 @@ export function tasksOrderedEdges(edges, incidentNodeId = '') {
                 .join('\u0000')));
 }
 
-export function tasksGroupHoverAttrRows(directRows, detailEntries, hoverAttrs) {
-    const directByAttr = new Map((directRows || []).map((row) => [String(row?.attr || ''), row]));
-    const statsByAttr = new Map((detailEntries || [])
-        .filter((entry) => String(entry?.key || '').startsWith('range:'))
-        .map((entry) => [String(entry.key).slice('range:'.length), entry]));
-    return (hoverAttrs || []).map((attr) => {
-        const key = String(attr || '').trim();
-        const stat = statsByAttr.get(key);
-        if (stat) return { attr: key, label: stat.label, value: stat.value, renderedValue: stat.renderedValue || '' };
-        return directByAttr.get(key);
-    }).filter(Boolean);
+/**
+ * The attrs a hover card shows: the view's hover_attrs, else the graph's.
+ * An empty list means the hover card shows every attr, as the pinned card does.
+ *
+ * >>> tasksHoverAttrs({ hover_attrs: ['op'] }, { hover_attrs: ['shape'] })
+ * ['op']
+ * >>> tasksHoverAttrs({}, { hover_attrs: 'op, shape' })
+ * ['op', 'shape']
+ */
+export function tasksHoverAttrs(viewModel, sourceModel) {
+    const listOf = (value) => (Array.isArray(value) ? value : String(value || '').split(','))
+        .map((attr) => String(attr || '').trim())
+        .filter(Boolean);
+    const own = listOf(viewModel?.hover_attrs);
+    return own.length ? own : listOf(sourceModel?.hover_attrs);
+}
+
+/**
+ * A hover card keeps the configured attrs, in configured order. A group's range
+ * statistic stands in for the attr of the same name.
+ *
+ * >>> tasksHoverCardEntries([{ key: 'a' }, { key: 'b' }, { key: 'range:c' }], ['c', 'a'])
+ * [{ key: 'range:c' }, { key: 'a' }]
+ * >>> tasksHoverCardEntries([{ key: 'a' }], [])
+ * [{ key: 'a' }]
+ */
+export function tasksHoverCardEntries(entries, hoverAttrs) {
+    if (!hoverAttrs?.length) return entries || [];
+    const byKey = new Map((entries || []).map((entry) => [String(entry?.key || ''), entry]));
+    return hoverAttrs.map((attr) => byKey.get(`range:${attr}`) || byKey.get(attr)).filter(Boolean);
 }
 
 export function tasksEmptyFilterQuery() {
@@ -479,20 +499,84 @@ export function tasksEdgeFilterNodeIds(edges, edgeTypes) {
     return nodeIds;
 }
 
-export function tasksFilterHoverFocus(matchingNodeIds, edges, hoveredNodeId) {
+// The hovered node's links inside a filtered view. A junction need not match
+// the filter: it is part of a route, not a destination (tasksJunctionReach).
+// `walked` maps each edge reached through a junction to its direction.
+export function tasksFilterHoverFocus(matchingNodeIds, edges, hoveredNodeId, passesThrough = () => false) {
     const matching = matchingNodeIds instanceof Set ? matchingNodeIds : new Set(matchingNodeIds || []);
     const nodeIds = new Set();
     const edgeIds = new Set();
-    if (!hoveredNodeId || !matching.has(hoveredNodeId)) return { nodeIds, edgeIds };
+    const walked = new Map();
+    if (!hoveredNodeId || !matching.has(hoveredNodeId)) return { nodeIds, edgeIds, walked };
     nodeIds.add(hoveredNodeId);
+    const inView = (id) => matching.has(id) || passesThrough(id);
+    const seeds = [];
     for (const edge of edges || []) {
-        if (!matching.has(edge.source) || !matching.has(edge.target)) continue;
+        if (!inView(edge.source) || !inView(edge.target)) continue;
         if (edge.source !== hoveredNodeId && edge.target !== hoveredNodeId) continue;
         nodeIds.add(edge.source);
         nodeIds.add(edge.target);
         if (edge.id) edgeIds.add(edge.id);
+        seeds.push(edge);
     }
-    return { nodeIds, edgeIds };
+    const reach = tasksJunctionReach(seeds, edges || [], passesThrough);
+    if (!reach.edgeIds.size) return { nodeIds, edgeIds, walked };
+    for (const edge of edges) {
+        const outward = reach.edgeIds.get(edge.id);
+        if (outward === undefined || !inView(edge.source) || !inView(edge.target)) continue;
+        nodeIds.add(edge.source);
+        nodeIds.add(edge.target);
+        edgeIds.add(edge.id);
+        walked.set(edge.id, outward);
+    }
+    return { nodeIds, edgeIds, walked };
+}
+
+/**
+ * The edges and nodes a highlight reaches past the first hop through
+ * pass-through nodes (junctions). A walk that reaches a junction by an edge's
+ * target leaves by its outgoing edges; by an edge's source, by its incoming
+ * edges. So a route keeps its direction and never lights a sibling branch.
+ * `edgeIds` maps each edge to true when the walk ran forward (out of the seed).
+ *
+ * >>> const edges = [{ id: 'a', source: 'x', target: 'j' }, { id: 'b', source: 'j', target: 'y' }, { id: 'c', source: 'k', target: 'j' }];
+ * >>> tasksJunctionReach([edges[0]], edges, (id) => id === 'j')
+ * { edgeIds: Map { 'b' => true }, nodeIds: Set { 'j', 'y' } }
+ */
+export function tasksJunctionReach(seedEdges, edges, passesThrough) {
+    const edgeIds = new Map();
+    const nodeIds = new Set();
+    // Most graphs have no junction, so a seed set that touches none builds no index.
+    if (!seedEdges.some((edge) => passesThrough(edge.source) || passesThrough(edge.target))) return { edgeIds, nodeIds };
+    const outgoing = new Map();
+    const incoming = new Map();
+    for (const edge of edges || []) {
+        if (!outgoing.has(edge.source)) outgoing.set(edge.source, []);
+        if (!incoming.has(edge.target)) incoming.set(edge.target, []);
+        outgoing.get(edge.source).push(edge);
+        incoming.get(edge.target).push(edge);
+    }
+    const seen = new Set(seedEdges.map((edge) => edge.id));
+    // Each entry is a junction and whether the walk leaves it forward (by its
+    // outgoing edges) or backward (by its incoming edges).
+    const stack = [];
+    const reach = (id, forward) => { if (passesThrough(id)) stack.push([id, forward]); };
+    for (const edge of seedEdges) {
+        reach(edge.target, true);
+        reach(edge.source, false);
+    }
+    while (stack.length) {
+        const [id, forward] = stack.pop();
+        for (const edge of (forward ? outgoing : incoming).get(id) || []) {
+            if (seen.has(edge.id)) continue;
+            seen.add(edge.id);
+            edgeIds.set(edge.id, forward);
+            nodeIds.add(edge.source);
+            nodeIds.add(edge.target);
+            reach(forward ? edge.target : edge.source, forward);
+        }
+    }
+    return { edgeIds, nodeIds };
 }
 
 function tasksSearchNormalizeText(value) {
@@ -1305,7 +1389,7 @@ export function buildVisibleTasksGraph(model, expanded) {
         ...Array.from(visibleTasks).map((id) => {
             const source = tasksById[id] || {};
             const label = source.label || id;
-            return { ...source, id, label, __kind__: 'task', ...sizeTaskNode(label, 'task', null, { hasImage: Boolean(resolveTasksNodeImage(source, model)), nodeLabels }) };
+            return { ...source, id, label, __kind__: 'task', ...sizeTaskNode(label, 'task', null, { hasImage: Boolean(resolveTasksNodeImage(source, model)), nodeLabels, look: tasksNodeLook(source, model), subtitle: tasksNodeSubtitle(source, model) }) };
         }),
     ];
     const parentOfGroup = Object.fromEntries((model.groups || []).map((g) => [g.id, g.parent_group_id || null]));
@@ -1400,7 +1484,7 @@ export function normalizeTasksGraphNodes(graph, model) {
             // box. Auto-sizing it to a card would throw that away.
             const size = node.__fixed_size__
                 ? { width: node.width, height: node.height }
-                : sizeTaskNode(label, kind, null, { hasImage: Boolean(resolveTasksNodeImage(source, model)), nodeLabels });
+                : sizeTaskNode(label, kind, null, { hasImage: Boolean(resolveTasksNodeImage(source, model)), nodeLabels, look: tasksNodeLook(source, model), subtitle: tasksNodeSubtitle(source, model) });
             return { ...source, ...nodeRest, __kind__: kind, label, ...size };
         }),
     };

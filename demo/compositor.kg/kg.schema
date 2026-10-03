@@ -1,0 +1,20 @@
+@graph id=compositor title="From paint to pixels"
+hover_attrs=description,example
+default_view=pipeline
+color_by=kind
+
+@sources
+nodes=kg.nodes
+attrs=kg.attrs
+pipeline:
+	edges=kg.edges
+palette=../browser-page-load.kg/kg.palette
+
+@views
+pipeline:
+	source=pipeline
+	color_by=kind
+	edge_label_from=note
+	edge_path=orthogonal
+	hover_attrs=description,example
+	caption="The second half of Chromium's RenderingNG pipeline. Paint records only describe drawing; nothing reaches the screen until the compositor has rastered tiles and the GPU process has drawn them. Scrolling stays on the compositor thread, which is why a page can scroll while its main thread is busy."

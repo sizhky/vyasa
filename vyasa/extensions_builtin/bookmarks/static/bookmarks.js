@@ -85,7 +85,7 @@ function renderBookmarksBlock(rootElement = document) {
         if (!list) return;
         list.innerHTML = vyasaBookmarks.items.map((item) => `
             <div class="vyasa-bookmark-row vyasa-action-row flex items-center gap-1 w-max">
-                <a href="${item.href}" hx-get="${item.href}" hx-target="#main-content" hx-push-url="true" hx-swap="outerHTML show:window:top settle:0.1s" class="vyasa-tree-link vyasa-tree-row vyasa-tree-row-shell post-link vyasa-bookmark-link whitespace-nowrap" data-path="${item.path}" data-bookmark-link="true">
+                <a href="${item.href}" hx-get="${item.href}" hx-target="#main-content" hx-push-url="true" hx-swap="outerHTML show:window:top settle:0.1s" class="vyasa-tree-link vyasa-tree-row vyasa-tree-row-shell post-link vyasa-bookmark-link whitespace-nowrap" data-path="${item.path}" data-bookmark-link="true" data-vyasa-link-preview="true">
                     <span class="whitespace-nowrap" title="${item.path}">${item.path}</span>
                 </a>
                 <button type="button" class="vyasa-sidebar-tree-action vyasa-row-action vyasa-bookmark-delete" data-bookmark-delete="true" data-bookmark-path="${item.path}" data-bookmark-title="${item.title}" aria-label="Remove bookmark for ${item.title}" title="Remove bookmark for ${item.title}">
