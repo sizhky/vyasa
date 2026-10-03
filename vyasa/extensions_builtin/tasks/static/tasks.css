@@ -711,3 +711,8 @@ html:not(.vyasa-tasks-edge-labels-on) .vyasa-tasks-flow .vyasa-tasks-edge-label:
     background: var(--vyasa-paper);
     white-space: nowrap;
 }
+/* A floating panel moves by its bar and resizes by its edges (floating_panel.js).
+   A dive fills the host, so its own handles go; a nested panel keeps its own. */
+.vyasa-kg-internals-bar { cursor: grab; user-select: none; }
+.vyasa-kg-internals[data-state="dive"] > .vyasa-panel-resize-handle { display: none; }
+.vyasa-kg-internals[data-state="dive"] > .vyasa-kg-internals-bar { cursor: default; }

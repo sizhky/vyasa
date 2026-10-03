@@ -1,18 +1,25 @@
 // Internals: docs/implementation/KG_INTERNALS/design.md. A node whose
 // `internals` attr names another KG pack opens that pack inside this widget.
-// Hold the internals key to peek, key+Enter to pin, key+Enter again to dive,
-// Esc to close. Each
-// panel holds a full KG widget, so internals nest inside internals.
+// Hold the internals key to peek, key+Enter to pin, double-tap the key to dive,
+// Esc to close the topmost panel. Each panel holds a full KG widget, so
+// internals nest inside internals. Panels move, resize and remember their size
+// through the shared floating panel module, as link previews do.
 import { tasksHeldKeyApplies } from './tasks_cards.js';
+import { createPanelMemory, installPanelDrag, installPanelResize, panelRect } from '../../../static/floating_panel.js';
 
 // The held key that opens internals. `label` names it in titles and status text.
 const TASKS_INTERNALS_KEY = { code: 'Digit1', label: '1' };
 const TASKS_INTERNALS_PEEK = { width: 640, height: 480, margin: 16, gap: 8 };
 const TASKS_INTERNALS_DIVE_MS = 220;
-// Open panels across every widget, innermost last. Esc closes only the innermost.
+// Two presses of the key closer than this are a double tap: dive.
+const TASKS_INTERNALS_DOUBLE_TAP_MS = 320;
+const TASKS_INTERNALS_Z = 60;
+// Open panels across every widget, topmost last. Esc closes the topmost.
 const openPanels = [];
 // Rendered widget HTML per parent schema and ref; a second peek costs no request.
 const htmlCache = new Map();
+// One size and place memory for every internals panel on every page.
+const panelMemory = createPanelMemory('vyasa-kg-internals');
 
 /**
  * Where a peek panel sits in its host: centred under the node when there is
@@ -136,115 +143,201 @@ function tasksPanelElement(trail, world) {
     return element;
 }
 
+
+// Bring a panel to the top of every open panel, for Esc and for z-order.
+function tasksRaisePanel(entry) {
+    const index = openPanels.indexOf(entry);
+    if (index >= 0) openPanels.splice(index, 1);
+    openPanels.push(entry);
+    openPanels.forEach((item, order) => {
+        item.element.style.zIndex = String(TASKS_INTERNALS_Z + order * 2 + 1);
+        if (item.scrim) item.scrim.style.zIndex = String(TASKS_INTERNALS_Z + order * 2);
+    });
+}
+
 /**
  * Attach internals to one widget. Every option is read when a key arrives, so
  * the controller lives as long as the widget and never sees stale React state.
- * Returns a function that closes the open panel and removes the listeners.
+ * Returns a function that closes this widget's panels and removes the listeners.
  */
 export function createTasksInternals({ host, flowWrapper, schemaPath, hoveredRecord, nodeElement, worldOf, mount, setStatus, log }) {
-    let panel = null;
+    // This widget's open panels, oldest first.
+    const panels = [];
+    // The panel the held key opened; releasing the key closes it unless pinned.
+    let peek = null;
     let held = false;
-    const close = () => {
-        if (!panel) return;
-        const { element, scrim } = panel;
-        panel = null;
-        for (let index = openPanels.length - 1; index >= 0; index -= 1) {
-            if (element.contains(openPanels[index].element) || openPanels[index].element === element) openPanels.splice(index, 1);
+    let lastTapAt = 0;
+    const hostBox = () => host.getBoundingClientRect();
+    const close = (entry) => {
+        const index = panels.indexOf(entry);
+        if (index < 0) return;
+        panels.splice(index, 1);
+        if (peek === entry) peek = null;
+        for (let item = openPanels.length - 1; item >= 0; item -= 1) {
+            if (entry.element.contains(openPanels[item].element)) openPanels.splice(item, 1);
         }
-        tasksUnmountWidgets(element);
-        element.remove();
-        scrim?.remove();
-        log('internalsClose', {});
+        tasksUnmountWidgets(entry.element);
+        entry.element.remove();
+        entry.scrim?.remove();
+        log('internalsClose', { nodeId: entry.nodeId });
     };
-    const placePeek = (element, nodeId) => {
-        const hostBox = host.getBoundingClientRect();
+    const closeAll = () => [...panels].reverse().forEach(close);
+    // A new panel opens at the remembered size. It steps from this widget's
+    // last floating panel, else takes the last dragged place, else sits by its node.
+    const place = (element, nodeId) => {
+        const box = hostBox();
+        const size = {
+            width: panelMemory.preferredWidth(TASKS_INTERNALS_PEEK.width, box.width, TASKS_INTERNALS_PEEK.margin),
+            height: panelMemory.preferredHeight(TASKS_INTERNALS_PEEK.height, box.height, TASKS_INTERNALS_PEEK.margin),
+        };
         const nodeBox = nodeElement(nodeId)?.getBoundingClientRect();
         const node = nodeBox
-            ? { x: nodeBox.left - hostBox.left, y: nodeBox.top - hostBox.top, width: nodeBox.width, height: nodeBox.height }
-            : { x: hostBox.width / 2, y: TASKS_INTERNALS_PEEK.margin, width: 0, height: 0 };
-        const rect = tasksInternalsPeekRect(node, { width: hostBox.width, height: hostBox.height });
-        Object.assign(element.style, { left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px` });
+            ? { x: nodeBox.left - box.left, y: nodeBox.top - box.top, width: nodeBox.width, height: nodeBox.height }
+            : { x: box.width / 2, y: TASKS_INTERNALS_PEEK.margin, width: 0, height: 0 };
+        const byNode = tasksInternalsPeekRect(node, box, { ...TASKS_INTERNALS_PEEK, ...size });
+        const anchorEntry = [...panels].reverse().find((entry) => entry.state !== 'dive');
+        const anchor = anchorEntry ? panelRect(anchorEntry.element, box) : null;
+        const at = panelMemory.preferredPosition(byNode, size, box, anchor, TASKS_INTERNALS_PEEK.margin);
+        Object.assign(element.style, { left: `${at.left}px`, top: `${at.top}px`, width: `${size.width}px`, height: `${size.height}px` });
     };
-    // The panel changes size between peek and dive. Resize first so the inner
-    // widget lays out at its final size, then play the move as one transform.
-    const setState = (state) => {
-        if (!panel || panel.state === state) return;
-        const { element } = panel;
+    // The panel changes size between floating and dive. The inner widget follows
+    // its panel body (applyTasksStandaloneHeight), then the move plays as one transform.
+    const setState = (entry, state) => {
+        if (!entry || entry.state === state) return;
+        const { element } = entry;
         const first = element.getBoundingClientRect();
-        panel.state = state;
+        const wasDive = entry.state === 'dive';
+        entry.state = state;
         element.dataset.state = state;
         if (state === 'dive') {
-            panel.peekStyle = element.getAttribute('style') || '';
-            element.removeAttribute('style');
-            panel.scrim = document.createElement('div');
-            panel.scrim.className = 'vyasa-kg-internals-scrim';
-            host.insertBefore(panel.scrim, element);
-        } else if (panel.peekStyle !== undefined) {
-            element.setAttribute('style', panel.peekStyle);
-            panel.scrim?.remove();
-            panel.scrim = null;
+            entry.floatStyle = { left: element.style.left, top: element.style.top, width: element.style.width, height: element.style.height };
+            Object.assign(element.style, { left: '', top: '', width: '', height: '' });
+            entry.scrim = document.createElement('div');
+            entry.scrim.className = 'vyasa-kg-internals-scrim';
+            host.insertBefore(entry.scrim, element);
+        } else if (wasDive) {
+            Object.assign(element.style, entry.floatStyle || {});
+            entry.scrim?.remove();
+            entry.scrim = null;
         }
-        window.dispatchEvent(new Event('resize'));
+        if (peek === entry && state !== 'peek') peek = null;
+        tasksRaisePanel(entry);
         const last = element.getBoundingClientRect();
-        if (last.width && last.height) {
+        if (last.width && last.height && (state === 'dive' || wasDive)) {
             element.animate([
                 { transformOrigin: 'top left', transform: `translate(${first.left - last.left}px, ${first.top - last.top}px) scale(${first.width / last.width}, ${first.height / last.height})` },
                 { transformOrigin: 'top left', transform: 'none' },
             ], { duration: TASKS_INTERNALS_DIVE_MS, easing: 'cubic-bezier(0.2, 0, 0, 1)' });
+            const innerId = element.querySelector('.tasks-container[data-tasks-widget="true"]')?.id;
+            if (innerId) window.setTimeout(() => window.runTasksHeaderAction?.(innerId, 'fit'), TASKS_INTERNALS_DIVE_MS);
         }
-        const innerId = element.querySelector('.tasks-container[data-tasks-widget="true"]')?.id;
-        if (innerId) window.setTimeout(() => window.runTasksHeaderAction?.(innerId, 'fit'), TASKS_INTERNALS_DIVE_MS);
-        setStatus(state === 'dive' ? 'Inside internals. Esc steps out.' : `Internals pinned. ${TASKS_INTERNALS_KEY.label}+Enter dives in, Esc closes.`);
-        log('internalsState', { state });
+        const key = TASKS_INTERNALS_KEY.label;
+        setStatus(state === 'dive'
+            ? 'Inside internals. Double-click the bar to float it again, Esc closes it.'
+            : `Internals pinned. Drag the bar to move, an edge to resize. Double-tap ${key} to dive.`);
+        log('internalsState', { nodeId: entry.nodeId, state });
     };
-    const open = async (record) => {
-        const ref = String(record?.internals ?? '').trim();
-        if (!ref) {
-            if (record) setStatus('No internals here. Point at a node with the internals badge.');
-            return;
-        }
-        const nodeId = String(record.id || '');
-        if (panel?.nodeId === nodeId) return;
-        close();
-        const outer = host.closest('.vyasa-kg-internals');
-        const trail = tasksInternalsTrail(outer, host.dataset.tasksTitle, schemaPath(), String(record.label || nodeId));
-        const element = tasksPanelElement(trail, worldOf(nodeId));
-        placePeek(element, nodeId);
-        host.appendChild(element);
+    // Drag and resize work only while a panel floats; a dive fills the host.
+    const installFloating = (entry) => {
+        const { element } = entry;
+        const raise = () => tasksRaisePanel(entry);
+        element.addEventListener('pointerdown', raise);
+        installPanelResize(element, {
+            box: hostBox,
+            raise,
+            onResize: (rect, edge) => {
+                if (entry.state === 'peek') setState(entry, 'pinned');
+                if (edge.includes('left') || edge.includes('right')) panelMemory.rememberWidth(rect.width);
+                if (edge.includes('top') || edge.includes('bottom')) panelMemory.rememberHeight(rect.height);
+            },
+        });
+        installPanelDrag(element.querySelector('.vyasa-kg-internals-bar'), element, {
+            box: hostBox,
+            raise,
+            onMove: () => { if (entry.state === 'peek') setState(entry, 'pinned'); },
+            onDrop: (rect) => panelMemory.rememberPosition(rect.left, rect.top),
+        });
+        element.querySelector('.vyasa-kg-internals-bar').addEventListener('dblclick', (event) => {
+            if (event.target.closest('button')) return;
+            setState(entry, entry.state === 'dive' ? 'pinned' : 'dive');
+        });
         element.addEventListener('click', (event) => {
             const action = event.target?.closest?.('[data-internals-action]')?.dataset.internalsAction;
-            if (action === 'close') close();
-            if (action === 'dive') setState(panel?.state === 'dive' ? 'pinned' : 'dive');
+            if (action === 'close') close(entry);
+            if (action === 'dive') setState(entry, entry.state === 'dive' ? 'pinned' : 'dive');
         });
-        const opened = { element, nodeId, state: 'peek', scrim: null };
-        opened.advance = () => setState(opened.state === 'peek' ? 'pinned' : 'dive');
-        panel = opened;
-        openPanels.push(opened);
-        log('internalsOpen', { nodeId, ref });
-        const body = element.querySelector('.vyasa-kg-internals-body');
+    };
+    // Fill a new panel with its widget. The request may outlive the panel.
+    const load = async (entry, ref, trail) => {
+        const body = entry.element.querySelector('.vyasa-kg-internals-body');
         try {
             const payload = await tasksLoadInternals(schemaPath(), ref);
-            if (panel !== opened) return;
+            if (!panels.includes(entry)) return;
             // A pack already open above would open itself forever.
             if (trail.schemas.includes(payload.schema_path)) {
                 body.firstElementChild.textContent = 'This pack is already open above this one.';
                 return;
             }
-            element.dataset.schemas = JSON.stringify([...trail.schemas, payload.schema_path]);
+            entry.element.dataset.schemas = JSON.stringify([...trail.schemas, payload.schema_path]);
             body.innerHTML = payload.html;
             mount(body);
-            setStatus(`Internals open. Release ${TASKS_INTERNALS_KEY.label} to close, ${TASKS_INTERNALS_KEY.label}+Enter to pin.`);
+            const key = TASKS_INTERNALS_KEY.label;
+            if (entry.state === 'peek') setStatus(`Internals open. Release ${key} to close, ${key}+Enter to pin, double-tap ${key} to dive.`);
         } catch (error) {
-            if (panel === opened) body.firstElementChild.textContent = error instanceof Error ? error.message : String(error);
+            if (panels.includes(entry)) body.firstElementChild.textContent = error instanceof Error ? error.message : String(error);
         }
+    };
+    // Open a node's internals, or raise its panel when one is open. The panel
+    // exists when this returns, so a quick key release still finds it.
+    const open = (record, state = 'peek') => {
+        const ref = String(record?.internals ?? '').trim();
+        if (!ref) {
+            if (record) setStatus('No internals here. Point at a node with the internals stack.');
+            return null;
+        }
+        const nodeId = String(record.id || '');
+        const existing = panels.find((entry) => entry.nodeId === nodeId);
+        if (existing) {
+            tasksRaisePanel(existing);
+            if (state === 'dive') setState(existing, 'dive');
+            return existing;
+        }
+        const outer = host.closest('.vyasa-kg-internals');
+        const trail = tasksInternalsTrail(outer, host.dataset.tasksTitle, schemaPath(), String(record.label || nodeId));
+        const element = tasksPanelElement(trail, worldOf(nodeId));
+        place(element, nodeId);
+        host.appendChild(element);
+        const entry = { element, nodeId, state: 'peek', scrim: null, floatStyle: null };
+        // Another widget's controller dives this panel through openPanels.
+        entry.dive = () => setState(entry, 'dive');
+        panels.push(entry);
+        tasksRaisePanel(entry);
+        installFloating(entry);
+        log('internalsOpen', { nodeId, ref, panels: panels.length });
+        if (state !== 'peek') setState(entry, state);
+        load(entry, ref, trail);
+        return entry;
+    };
+    // A double tap dives the hovered node's internals. With nothing of its own
+    // under the pointer, it dives the panel that holds this widget.
+    const dive = () => {
+        const record = hoveredRecord();
+        if (String(record?.internals ?? '').trim()) {
+            open(record, 'dive');
+            return;
+        }
+        const outer = host.closest('.vyasa-kg-internals');
+        const outerEntry = openPanels.find((entry) => entry.element === outer);
+        outerEntry?.dive?.();
     };
     const editableTarget = (event) => event.target instanceof Element
         && Boolean(event.target.closest('input, textarea, select, [contenteditable="true"]'));
     const onKeyDown = (event) => {
-        if (event.key === 'Escape' && panel && openPanels[openPanels.length - 1] === panel && !editableTarget(event)) {
+        const top = openPanels[openPanels.length - 1];
+        if (event.key === 'Escape' && top && panels.includes(top) && !editableTarget(event)) {
             event.preventDefault();
             event.stopImmediatePropagation();
-            close();
+            close(top);
             return;
         }
         if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
@@ -254,34 +347,41 @@ export function createTasksInternals({ host, flowWrapper, schemaPath, hoveredRec
             event.stopPropagation();
             if (event.repeat) return;
             held = true;
-            open(hoveredRecord());
+            const now = Date.now();
+            const doubleTap = now - lastTapAt < TASKS_INTERNALS_DOUBLE_TAP_MS;
+            lastTapAt = doubleTap ? 0 : now;
+            if (doubleTap) {
+                dive();
+                return;
+            }
+            const entry = open(hoveredRecord());
+            if (entry?.state === 'peek') peek = entry;
             return;
         }
-        // Key+Enter advances this widget's panel, or, from inside a pinned panel
-        // with nothing of its own open, the panel that holds this widget.
-        if (event.key === 'Enter' && held) {
-            const outer = host.closest('.vyasa-kg-internals');
-            const target = panel || openPanels.find((entry) => entry.element === outer);
-            if (!target) return;
+        // Key+Enter pins the panel the held key opened. Enter alone keeps its
+        // meaning: select the hovered node and open its notes.
+        if (event.key === 'Enter' && held && peek) {
             event.preventDefault();
             event.stopImmediatePropagation();
-            target.advance();
+            setState(peek, 'pinned');
         }
     };
     const onKeyUp = (event) => {
         if (event.code !== TASKS_INTERNALS_KEY.code || !held) return;
         held = false;
-        if (panel?.state === 'peek') close();
+        if (peek?.state === 'peek') close(peek);
+        peek = null;
     };
     const onBlur = () => {
         held = false;
-        if (panel?.state === 'peek') close();
+        if (peek?.state === 'peek') close(peek);
+        peek = null;
     };
     window.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('keyup', onKeyUp, true);
     window.addEventListener('blur', onBlur);
     return () => {
-        close();
+        closeAll();
         window.removeEventListener('keydown', onKeyDown, true);
         window.removeEventListener('keyup', onKeyUp, true);
         window.removeEventListener('blur', onBlur);

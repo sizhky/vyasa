@@ -541,14 +541,26 @@ function applyTasksStandaloneHeight(wrapper) {
     const box = wrapper.getBoundingClientRect();
     // The nearest height owner: an internals panel body, else the page shell.
     const boundary = wrapper.closest('.vyasa-kg-internals-body, .vyasa-main-shell') || wrapper.parentElement;
+    // A panel body sets its own size, so the page's 420px floor does not apply.
+    const inPanel = Boolean(boundary?.classList?.contains('vyasa-kg-internals-body'));
     const boundaryBox = boundary?.getBoundingClientRect?.();
     const viewportBottom = window.visualViewport?.height || window.innerHeight || 0;
     const bottom = boundaryBox?.height ? Math.min(boundaryBox.bottom, viewportBottom) : viewportBottom;
-    const height = Math.max(420, Math.floor(bottom - box.top));
+    const height = Math.max(inPanel ? 0 : 420, Math.floor(bottom - box.top));
     wrapper.style.height = `${height}px`;
     if (!wrapper.__tasksStandaloneResize) {
-        wrapper.__tasksStandaloneResize = () => applyTasksStandaloneHeight(wrapper);
-        window.addEventListener('resize', wrapper.__tasksStandaloneResize);
+        const resize = () => {
+            // A closed panel takes its widget with it; stop listening for it.
+            if (!wrapper.isConnected) {
+                window.removeEventListener('resize', resize);
+                return;
+            }
+            applyTasksStandaloneHeight(wrapper);
+        };
+        wrapper.__tasksStandaloneResize = resize;
+        window.addEventListener('resize', resize);
+        // A panel body changes size with no window resize: an edge drag, a dive.
+        if (inPanel && typeof ResizeObserver !== 'undefined') new ResizeObserver(resize).observe(boundary);
     }
 }
 
