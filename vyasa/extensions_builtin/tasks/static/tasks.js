@@ -3425,7 +3425,7 @@ async function renderTasksGraphs(rootElement = document) {
             // A lane cap names the actor a lifeline column stands for. The pinned
             // copy on the top edge must be the same cap, not a lookalike, so both
             // the node and the pinned overlay draw it from here.
-            const tasksSequenceLaneCap = (accent, stage, label) => renderTasksSequenceLaneCap(React, accent, stage, label);
+            const tasksSequenceLaneCap = (accent, stage, label, stacked) => renderTasksSequenceLaneCap(React, accent, stage, label, stacked);
             const renderTasksCustomNode = createTasksNodeRenderer(() => ({
                 Handle, NodeToolbar, Position, React, cardStates, clearSelection, edgeNodeLabels, egoMode, expanded, focusNodeReferenceFromEvent, model, selectedNodeIdRef, selectedNodeIdsRef, setExpanded, setHoveredNodeId, setSelectedNodeId, sourceModel, suppressNextGraphClickRef, toggleCheckedNode, widgetId
             }));
@@ -4465,6 +4465,7 @@ async function renderTasksGraphs(rootElement = document) {
                         node.data?.__sequence_color__ || 'currentColor',
                         node.data?.__sequence_stage__,
                         node.data?.label || '',
+                        tasksNodeHasInternals(node.data),
                     ),
                 },
                 { axis: 'top', capHeight: 22, match: (data) => data.__kind__ === 'ganttHeader' },

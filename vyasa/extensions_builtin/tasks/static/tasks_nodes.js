@@ -4,14 +4,14 @@ import {
     normalizeTasksNodeImageUrl, tasksGraphCornerPath, tasksIsDashed, tasksNodeSubtitle, tasksReviewTarget,
 } from './tasks_graph_core.js';
 import { tasksRoleOf } from './tasks_roles.js';
-import { tasksGroupTitleLook, tasksLookBody } from './tasks_theme.js';
+import { tasksGroupTitleLook, tasksLookBody, tasksStackShadow } from './tasks_theme.js';
 import { TASKS_DEFAULT_CARD_STATES, tasksLogicalNodeId, tasksNodeHasChildren } from './tasks_graph_model.js';
-import { TASKS_DONE_ACCENT, TASKS_NODE_LABEL_FONT_SIZE, tasksColorOverlay } from './tasks_paint.js';
+import { TASKS_DONE_ACCENT, TASKS_NODE_LABEL_FONT_SIZE, tasksColorOverlay, tasksNodeHasInternals } from './tasks_paint.js';
 
 export function createTasksNodeRenderer(getState) {
     return ({ data, id }) => {
         const { Handle, NodeToolbar, Position, React, cardStates, clearSelection, edgeNodeLabels, egoMode, expanded, focusNodeReferenceFromEvent, model, selectedNodeIdRef, selectedNodeIdsRef, setExpanded, setHoveredNodeId, setSelectedNodeId, sourceModel, suppressNextGraphClickRef, toggleCheckedNode, widgetId } = getState();
-        const tasksSequenceLaneCap = (accent, stage, label) => renderTasksSequenceLaneCap(React, accent, stage, label);
+        const tasksSequenceLaneCap = (accent, stage, label, stacked) => renderTasksSequenceLaneCap(React, accent, stage, label, stacked);
         const handlePosition = (side) => ({
                             top: Position?.Top || 'top',
                             right: Position?.Right || 'right',
@@ -356,7 +356,7 @@ export function createTasksNodeRenderer(getState) {
                             },
                                 ...renderHandles('target'),
                                 ...renderHandles('source'),
-                                tasksSequenceLaneCap(accent, data.__sequence_stage__, data?.label || ''),
+                                tasksSequenceLaneCap(accent, data.__sequence_stage__, data?.label || '', tasksNodeHasInternals(data)),
                                 // The lifeline body is a tinted column, not a hairline, so it
                                 // still reads when the whole diagram is zoomed to fit.
                                 React.createElement('div', {
@@ -610,8 +610,11 @@ export function createTasksNodeRenderer(getState) {
     };
 }
 
-export const renderTasksSequenceLaneCap = (React, accent, stage, label) => React.createElement('div', {
+// A lane whose participant has internals stacks its cap, as a node stacks its
+// frame (tasksStackShadow): the lifeline body is a column, not a frame.
+export const renderTasksSequenceLaneCap = (React, accent, stage, label, stacked = false) => React.createElement('div', {
                 style: {
+                    ...(stacked ? { boxShadow: tasksStackShadow('card'), '--vyasa-tasks-stack-rim': `color-mix(in srgb, ${accent} 60%, transparent)` } : {}),
                     boxSizing: 'border-box',
                     padding: '6px 6px 7px',
                     borderRadius: '8px 8px 0 0',
