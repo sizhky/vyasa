@@ -27,3 +27,35 @@ test('a highlight pass keeps a routed edge thin and a pair half no wider than it
     assert.equal(tasksEdgeStateWidth(half, false, 1.25), 1.25, 'a dim half is never wider than a dim ribbon');
     assert.equal(tasksEdgeStateWidth({ data: { __edge_path__: 'ribbon' } }, true, 4.5), 4.5);
 });
+
+test('a junction walk keeps edge direction, skips sibling branches and stops on cycles', async () => {
+    const { tasksJunctionReach } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_model.js');
+    const e = (id, source, target) => ({ id, source, target });
+    // in -> r1 -> an (residual), r1 -> f1 -> mha -> an, an -> r2 -> ffn, r2 -> an2.
+    const edges = [e('in', 'add', 'r1'), e('res', 'r1', 'an'), e('fork', 'r1', 'f1'), e('q', 'f1', 'mha'), e('sub', 'mha', 'an'), e('out', 'an', 'r2'), e('ffn', 'r2', 'ffn'), e('res2', 'r2', 'an2')];
+    const junction = (id) => ['r1', 'r2', 'f1'].includes(id);
+    const seeds = edges.filter((edge) => edge.source === 'an' || edge.target === 'an');
+    const reach = tasksJunctionReach(seeds, edges, junction);
+    assert.deepEqual([...reach.edgeIds].sort(), [['ffn', true], ['in', false], ['res2', true]]);
+    assert.deepEqual([...reach.nodeIds].sort(), ['add', 'an2', 'ffn', 'r1', 'r2']);
+    assert.equal(tasksJunctionReach(seeds, edges, () => false).edgeIds.size, 0);
+    const loop = [e('a', 'x', 'j'), e('b', 'j', 'k'), e('c', 'k', 'j')];
+    assert.deepEqual([...tasksJunctionReach([loop[0]], loop, (id) => id !== 'x').edgeIds.keys()].sort(), ['b', 'c']);
+});
+
+test('selecting a node lights the nodes beyond a junction, in edge direction', async () => {
+    const { graph, baseCtx } = await import('./fixtures/kg_highlight_scenarios.mjs');
+    const node = (id, look) => ({ ...graph.baseNodes[0], id, data: { ...graph.baseNodes[0].data, label: id, __node_look__: look } });
+    const edge = (id, source, target) => ({ ...graph.authoredGraphEdges[0], id, source, target });
+    const out = tasksHighlightGraph({
+        baseNodes: [node('add', 'circle'), node('r1', 'point'), node('mha', 'outline'), node('an', 'outline'), node('r2', 'point'), node('ffn', 'outline')],
+        authoredGraphEdges: [edge('in', 'add', 'r1'), edge('res', 'r1', 'an'), edge('sub', 'mha', 'an'), edge('out', 'an', 'r2'), edge('next', 'r2', 'ffn')],
+        referenceEdges: [],
+        nodeId: 'an',
+    }, baseCtx);
+    const modes = Object.fromEntries(out.nodes.map((n) => [n.id, n.data.highlightMode]));
+    assert.deepEqual(modes, { add: 'neighbor', r1: 'neighbor', mha: 'neighbor', an: 'selected', r2: 'neighbor', ffn: 'neighbor' });
+    const strokes = Object.fromEntries(out.edges.map((e) => [e.id, e.data.strokeMode]));
+    assert.equal(strokes.in, 'selected-in');
+    assert.equal(strokes.next, 'selected-out');
+});

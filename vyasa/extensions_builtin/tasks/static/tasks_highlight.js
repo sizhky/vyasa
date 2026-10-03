@@ -2,7 +2,7 @@
 // which state each node and edge is in for a selection, a hover, a filter or an
 // open edge card, and returns the painted elements. It reads no React state.
 import { isTasksEdgeInternalToSelection, tasksEdgeLabelZForMode, isTasksEdgeLabelHoverDimmingActive } from './tasks_graph_core.js';
-import { collectTasksGroupDescendantIds, tasksEdgesMatchingTypes, tasksFilterHoverFocus, tasksFilterQueryHasRules } from './tasks_graph_model.js';
+import { collectTasksGroupDescendantIds, tasksEdgesMatchingTypes, tasksFilterHoverFocus, tasksFilterQueryHasRules, tasksJunctionReach } from './tasks_graph_model.js';
 import {
     TASKS_DONE_ACCENT, TASKS_EDGE_FOCUS_IN_COLOR, TASKS_EDGE_FOCUS_OUT_COLOR, TASKS_EDGE_FOCUS_Z, TASKS_EDGE_LABEL_BG,
     TASKS_EDGE_LABEL_FOCUS_Z, TASKS_EDGE_LABEL_SELECTED_Z, TASKS_EDGE_LABEL_Z, TASKS_EDGE_Z,
@@ -13,6 +13,7 @@ import {
 import {
     TASKS_DIM_EDGE_INK, TASKS_DIM_LABEL_INK, TASKS_DIM_OPACITY, TASKS_SELECTION_DIM_OPACITY, tasksCheckedShadow, tasksEdgeStateWidth,
 } from './tasks_theme.js';
+import { tasksRoleOf } from './tasks_roles.js';
 
 export const TASKS_EDGE_LABEL_FOCUS_FONT_SIZE = 16;
 
@@ -63,9 +64,14 @@ export function tasksHighlightGraph(input, ctx) {
         ));
     const baseEdges = [...authoredEdges, ...activeReferenceEdges];
     const displayedEdges = edgesVisible ? baseEdges : activeReferenceEdges;
+    // A junction passes a highlight on along its route: tasksJunctionReach.
+    const nodesById = new Map(baseNodes.map((node) => [node.id, node]));
+    const passesThrough = (id) => nodesById.has(id) && tasksRoleOf(nodesById.get(id).data).passThrough;
+    const junctionReach = (seedEdges) => tasksJunctionReach(seedEdges, baseEdges, passesThrough);
     const selectedEdge = edgeId ? baseEdges.find((edge) => tasksEdgeRecordId(edge) === edgeId) : null;
     if (selectedEdge) {
-        const endpointIds = new Set([selectedEdge.source, selectedEdge.target]);
+        const edgeReach = junctionReach([selectedEdge]);
+        const endpointIds = new Set([selectedEdge.source, selectedEdge.target, ...edgeReach.nodeIds]);
         // A call and its reply are one exchange. Previewing half of a
         // double harpoon and leaving the other half dim would cut the
         // exchange in two, so the mate lights with it. Only the half
@@ -89,7 +95,7 @@ export function tasksHighlightGraph(input, ctx) {
         }));
         result.edges = (displayedEdges.map((edge) => {
             const focused = edge === selectedEdge;
-            const hit = focused || (Boolean(mateId) && tasksEdgeRecordId(edge) === mateId);
+            const hit = focused || (Boolean(mateId) && tasksEdgeRecordId(edge) === mateId) || edgeReach.edgeIds.has(edge.id);
             const edgeColor = edge.data?.edgeColor || edge.style?.stroke || 'currentColor';
             return {
                 ...edge,
@@ -127,6 +133,7 @@ export function tasksHighlightGraph(input, ctx) {
     // the bar borrows that lane to tell the two apart.
     const hoverDirectionId = baseNodes.find((node) => node.id === hoveredNodeId)
         ?.data?.__sequence_lane__ || hoveredNodeId;
+    const hoverReach = junctionReach(hoveredNodeId ? baseEdges.filter(touchesHovered) : []);
     const multiSelectedIds = selectedIds instanceof Set ? selectedIds : new Set(selectedIds || []);
     const multiSelectedHighlightIds = new Set(multiSelectedIds);
     for (const selectedId of multiSelectedIds) {
@@ -144,6 +151,7 @@ export function tasksHighlightGraph(input, ctx) {
                     multiHoverEndpointIds.add(edge.target);
                 }
             }
+            for (const id of hoverReach.nodeIds) multiHoverEndpointIds.add(id);
         }
         result.nodes = (baseNodes.map((node) => {
             const sourceGroupId = node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : null;
@@ -169,7 +177,8 @@ export function tasksHighlightGraph(input, ctx) {
             };
         }));
         result.edges = (displayedEdges.map((edge) => {
-            const touchesHover = Boolean(hoveredNodeId) && touchesHovered(edge);
+            const walkedOut = hoverReach.edgeIds.get(edge.id);
+            const touchesHover = Boolean(hoveredNodeId) && (touchesHovered(edge) || walkedOut !== undefined);
             const hit = touchesHover
                 || (multiSelectedHighlightIds.has(edge.source) && multiSelectedHighlightIds.has(edge.target));
             const edgeColor = edge.data?.edgeColor || edge.style?.stroke || 'currentColor';
@@ -180,7 +189,7 @@ export function tasksHighlightGraph(input, ctx) {
                 data: {
                     ...edge.data,
                     highlightMode: hit ? 'selected' : 'dim',
-                    strokeMode: hit && touchesHover ? (edge.source === hoverDirectionId ? 'selected-out' : 'selected-in') : (hit ? 'selected' : 'dim'),
+                    strokeMode: hit && touchesHover ? ((walkedOut ?? edge.source === hoverDirectionId) ? 'selected-out' : 'selected-in') : (hit ? 'selected' : 'dim'),
                     flareKey: `hover:${hoveredNodeId || ''}`,
                 },
                 labelStyle: { ...(edge.labelStyle || {}), fill: hit ? edgeColor : TASKS_DIM_LABEL_INK, opacity: (hit ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.12, edgeOpacity)) * branchOpacity },
@@ -202,6 +211,7 @@ export function tasksHighlightGraph(input, ctx) {
                         hoverEndpointIds.add(edge.target);
                     }
                 }
+                for (const id of hoverReach.nodeIds) hoverEndpointIds.add(id);
             }
             result.nodes = (hoveredNodeId
                 ? baseNodes.map((node) => {
@@ -221,8 +231,8 @@ export function tasksHighlightGraph(input, ctx) {
                 : baseNodes);
             result.edges = (hoveredNodeId
                 ? displayedEdges.map((edge) => {
-                    if (!touchesHovered(edge)) return edge;
-                    return tasksHoverFocusEdge(edge, hoverDirectionId);
+                    if (!touchesHovered(edge) && !hoverReach.edgeIds.has(edge.id)) return edge;
+                    return tasksHoverFocusEdge(edge, hoverDirectionId, hoverReach.edgeIds.get(edge.id));
                 })
                 : displayedEdges);
             return result;
@@ -305,6 +315,9 @@ export function tasksHighlightGraph(input, ctx) {
             highlightedEdgeIds.add(edge.id);
         }
     }
+    const selectReach = junctionReach(baseEdges.filter(touchesSelected));
+    for (const id of selectReach.edgeIds.keys()) highlightedEdgeIds.add(id);
+    for (const id of selectReach.nodeIds) directEndpointIds.add(id);
     for (const endpointId of Array.from(directEndpointIds)) {
         for (const descendantId of collectTasksGroupDescendantIds(endpointId, model)) {
             directEndpointIds.add(descendantId);
@@ -365,7 +378,10 @@ export function tasksHighlightGraph(input, ctx) {
         const branchOpacity = edge.data?.__projection_branch_opacity__ ?? 1;
         const activeOpacity = highlighted ? 1 : branchOpacity;
         const hoverDimsLabels = isTasksEdgeLabelHoverDimmingActive(nodeId, hoveredNodeId);
-        const strokeMode = mode === 'selected'
+        const walkedOut = selectReach.edgeIds.get(edge.id);
+        const strokeMode = mode === 'selected' && walkedOut !== undefined
+            ? (walkedOut ? 'selected-out' : 'selected-in')
+            : mode === 'selected'
             ? (edge.source === selectDirectionId ? 'selected-out' : (edge.target === selectDirectionId ? 'selected-in' : mode))
             : mode;
         return {

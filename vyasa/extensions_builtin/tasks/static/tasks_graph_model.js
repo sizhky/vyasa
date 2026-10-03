@@ -515,6 +515,53 @@ export function tasksFilterHoverFocus(matchingNodeIds, edges, hoveredNodeId) {
     return { nodeIds, edgeIds };
 }
 
+/**
+ * The edges and nodes a highlight reaches past the first hop through
+ * pass-through nodes (junctions). A walk that reaches a junction by an edge's
+ * target leaves by its outgoing edges; by an edge's source, by its incoming
+ * edges. So a route keeps its direction and never lights a sibling branch.
+ * `edgeIds` maps each edge to true when the walk ran forward (out of the seed).
+ *
+ * >>> const edges = [{ id: 'a', source: 'x', target: 'j' }, { id: 'b', source: 'j', target: 'y' }, { id: 'c', source: 'k', target: 'j' }];
+ * >>> tasksJunctionReach([edges[0]], edges, (id) => id === 'j')
+ * { edgeIds: Map { 'b' => true }, nodeIds: Set { 'j', 'y' } }
+ */
+export function tasksJunctionReach(seedEdges, edges, passesThrough) {
+    const edgeIds = new Map();
+    const nodeIds = new Set();
+    // Most graphs have no junction, so a seed set that touches none builds no index.
+    if (!seedEdges.some((edge) => passesThrough(edge.source) || passesThrough(edge.target))) return { edgeIds, nodeIds };
+    const outgoing = new Map();
+    const incoming = new Map();
+    for (const edge of edges || []) {
+        if (!outgoing.has(edge.source)) outgoing.set(edge.source, []);
+        if (!incoming.has(edge.target)) incoming.set(edge.target, []);
+        outgoing.get(edge.source).push(edge);
+        incoming.get(edge.target).push(edge);
+    }
+    const seen = new Set(seedEdges.map((edge) => edge.id));
+    // Each entry is a junction and whether the walk leaves it forward (by its
+    // outgoing edges) or backward (by its incoming edges).
+    const stack = [];
+    const reach = (id, forward) => { if (passesThrough(id)) stack.push([id, forward]); };
+    for (const edge of seedEdges) {
+        reach(edge.target, true);
+        reach(edge.source, false);
+    }
+    while (stack.length) {
+        const [id, forward] = stack.pop();
+        for (const edge of (forward ? outgoing : incoming).get(id) || []) {
+            if (seen.has(edge.id)) continue;
+            seen.add(edge.id);
+            edgeIds.set(edge.id, forward);
+            nodeIds.add(edge.source);
+            nodeIds.add(edge.target);
+            reach(forward ? edge.target : edge.source, forward);
+        }
+    }
+    return { edgeIds, nodeIds };
+}
+
 function tasksSearchNormalizeText(value) {
     return String(value ?? '').replace(/\s+/g, ' ').trim();
 }
