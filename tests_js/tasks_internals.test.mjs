@@ -41,3 +41,12 @@ test('an internals ref is never collected as a previewable attribute link', asyn
     globalThis.document ??= { createElement: () => ({ setAttribute() {}, getAttribute() { return ''; }, dataset: {} }) };
     assert.deepEqual(tasksAttributeLinks({ id: 'enc_mha', internals: '../mha.kg' }), []);
 });
+
+test('open and close motion lays the panel over its node, and falls back to a small scale', async () => {
+    const { tasksInternalsFlipTransform } = await import('../vyasa/extensions_builtin/tasks/static/tasks_internals.js');
+    assert.equal(
+        tasksInternalsFlipTransform({ left: 100, top: 50, width: 120, height: 40 }, { left: 20, top: 98, width: 640, height: 480 }),
+        'translate(80px, -48px) scale(0.1875, 0.08333333333333333)',
+    );
+    assert.equal(tasksInternalsFlipTransform(undefined, { left: 0, top: 0, width: 640, height: 480 }), 'scale(0.96)');
+});
