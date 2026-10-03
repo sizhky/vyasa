@@ -2,7 +2,7 @@
 name: story-telling-with-graphs
 description: "Use Vyasa `items` graphs or knowledge-graphs plus seeded prose to tell strong stories in any domain by turning entities, events, states, and relationships into explorable narrative maps."
 metadata:
-  version: "0.2.1"
+  version: "0.3.0"
 ---
 
 # Story Telling With Graphs
@@ -90,6 +90,18 @@ Color carries the meta-lesson the prose can't repeat on every node. Bind it to t
 - **Collision / climax pattern:** real failures are usually two upstream limits meeting. Model them as exactly two `can cause` edges converging on one failure node (2 → 1). It is instantly recognizable and points straight at the fix.
 - **Convergence / payoff pattern:** end by funneling the spine's roots into one synthesis node (many `enables` into one), then a short tail to the final outcome.
 
+## Zoom Levels (Internals)
+
+A strong system story has levels. Each level answers its own question in its own shape; the reader zooms in only where they need to.
+
+- **Keep each level at one altitude.** When one node hides a world of its own steps (MULTI-HEAD ATTENTION, TLS handshake, a mitochondrion), do not expand it inline. Give it `internals=<pack>` and write that world as its own pack.
+- **Pick the layout per level.** The parent may be a figure; the inside of a handshake is a sequence; a key schedule or a render pipeline is a flow. A level that looks like its parent should probably be a group, not internals.
+- **Reuse a shared mechanism.** One internals pack, opened from every parent that uses it (`tcp-handshake.kg` from the page load and from DNS fallback). The parent's chips tell the reader which world they came from.
+- **Draw the boundary.** The root group is the node's own frame; ports sit outside it as `text` nodes with `dashed=true` edges. The Sentence and Direction laws hold across the boundary: `Q in · feeds · LINEAR` still reads as a sentence and flows downstream.
+- **Keep one palette across levels.** Point every internals pack at the parent palette with an `@sources` path, so a `Message` is the same colour at every depth.
+- **Earn the depth.** A demo is strong when a real question can only be answered by diving ("why does a first visit cost 300 ms more?"). Two or three levels are enough; stop where the next level is textbook detail, not a decision.
+- **Seed the dive.** Name the nodes with internals in the parent caption, and say what the reader will find inside.
+
 ## Load First
 
 1. Read `../markdown/items-graphs.md`.
@@ -116,6 +128,7 @@ Color carries the meta-lesson the prose can't repeat on every node. Bind it to t
 - **Duality:** one node, two opposite-colored forward edges (`enables` vs `can cause`) — the core device for capability/limitation stories.
 - **Return:** feedback loops, incident timelines, learning journeys.
 - **Fork:** options, fallbacks, risk pivots as edge kinds, not duplicate text branches.
+- **Zoom:** a node opens its own pack one level down (`internals=`); the parent keeps one altitude.
 
 ## Strong Defaults
 

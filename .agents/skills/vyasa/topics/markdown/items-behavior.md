@@ -3,6 +3,8 @@
 Current `items` view is a React Flow graph.
 It supports draggable cards, dependency edges, collapsed group cards, expandable group regions, keyboard fit/unfold controls, and popout.
 
+Held keys open detail on demand while the pointer rests on the graph: `A` previews a node's links, `W` previews the selected edge, `1` opens a node's internals. Enter while a held key is down pins that preview; Enter alone selects the hovered node and opens its notes.
+
 Collapsed groups are selectable summary nodes for neighbor inspection.
 Expanded group regions are background containers, not selectable cards.
 
