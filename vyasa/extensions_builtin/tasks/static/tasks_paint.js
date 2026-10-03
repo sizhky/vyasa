@@ -1189,10 +1189,11 @@ export function tasksHoverFocusNodeStyle(node, nodeColor, displayColor, activeBo
     };
 }
 
-export function tasksHoverFocusEdge(edge, hoveredNodeId) {
+// `outward`: the edge leads away from the hovered node, directly or through junctions.
+export function tasksHoverFocusEdge(edge, hoveredNodeId, outward = edge.source === hoveredNodeId) {
     const edgeColor = edge.data?.edgeColor || edge.style?.stroke || 'currentColor';
     const branchOpacity = edge.data?.__projection_branch_opacity__ ?? 1;
-    const strokeMode = edge.source === hoveredNodeId ? 'selected-out' : 'selected-in';
+    const strokeMode = outward ? 'selected-out' : 'selected-in';
     return {
         ...edge,
         zIndex: TASKS_EDGE_FOCUS_Z,

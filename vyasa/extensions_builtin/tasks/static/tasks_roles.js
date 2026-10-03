@@ -10,16 +10,18 @@ import { tasksLookDefaultRole } from './tasks_theme.js';
  * - interactive: the node takes pointer events, selection and a hover card.
  * - bands: the strength of its highlight bands and rings: 'full', 'thin' or 'none'.
  * - joinsRoutes: edges meet at its centre, with no arrowhead and no gap.
+ * - passThrough: a highlight that reaches it continues along the route to the
+ *   nodes beyond, in edge direction (tasksJunctionReach).
  * - clearance: how far a route keeps off its box, in px. It covers the widest
  *   highlight band the role draws (3px offset plus a 12px band for full).
  */
 const TASKS_ROLES = {
     // A thing the graph is about: a task, a service, a concept.
-    item: { cardState: true, notes: true, interactive: true, bands: 'full', joinsRoutes: false, clearance: 16 },
+    item: { cardState: true, notes: true, interactive: true, bands: 'full', joinsRoutes: false, passThrough: false, clearance: 16 },
     // A figure part a reader can inspect but not track, such as an operator or a label.
-    mark: { cardState: false, notes: false, interactive: true, bands: 'thin', joinsRoutes: false, clearance: 8 },
+    mark: { cardState: false, notes: false, interactive: true, bands: 'thin', joinsRoutes: false, passThrough: false, clearance: 8 },
     // A point where routes split or merge.
-    junction: { cardState: false, notes: false, interactive: false, bands: 'none', joinsRoutes: true, clearance: 0 },
+    junction: { cardState: false, notes: false, interactive: false, bands: 'none', joinsRoutes: true, passThrough: true, clearance: 0 },
 };
 
 export const TASKS_NODE_ROLES = Object.keys(TASKS_ROLES);
