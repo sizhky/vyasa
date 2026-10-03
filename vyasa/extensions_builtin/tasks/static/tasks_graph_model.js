@@ -499,20 +499,37 @@ export function tasksEdgeFilterNodeIds(edges, edgeTypes) {
     return nodeIds;
 }
 
-export function tasksFilterHoverFocus(matchingNodeIds, edges, hoveredNodeId) {
+// The hovered node's links inside a filtered view. A junction need not match
+// the filter: it is part of a route, not a destination (tasksJunctionReach).
+// `walked` maps each edge reached through a junction to its direction.
+export function tasksFilterHoverFocus(matchingNodeIds, edges, hoveredNodeId, passesThrough = () => false) {
     const matching = matchingNodeIds instanceof Set ? matchingNodeIds : new Set(matchingNodeIds || []);
     const nodeIds = new Set();
     const edgeIds = new Set();
-    if (!hoveredNodeId || !matching.has(hoveredNodeId)) return { nodeIds, edgeIds };
+    const walked = new Map();
+    if (!hoveredNodeId || !matching.has(hoveredNodeId)) return { nodeIds, edgeIds, walked };
     nodeIds.add(hoveredNodeId);
+    const inView = (id) => matching.has(id) || passesThrough(id);
+    const seeds = [];
     for (const edge of edges || []) {
-        if (!matching.has(edge.source) || !matching.has(edge.target)) continue;
+        if (!inView(edge.source) || !inView(edge.target)) continue;
         if (edge.source !== hoveredNodeId && edge.target !== hoveredNodeId) continue;
         nodeIds.add(edge.source);
         nodeIds.add(edge.target);
         if (edge.id) edgeIds.add(edge.id);
+        seeds.push(edge);
     }
-    return { nodeIds, edgeIds };
+    const reach = tasksJunctionReach(seeds, edges || [], passesThrough);
+    if (!reach.edgeIds.size) return { nodeIds, edgeIds, walked };
+    for (const edge of edges) {
+        const outward = reach.edgeIds.get(edge.id);
+        if (outward === undefined || !inView(edge.source) || !inView(edge.target)) continue;
+        nodeIds.add(edge.source);
+        nodeIds.add(edge.target);
+        edgeIds.add(edge.id);
+        walked.set(edge.id, outward);
+    }
+    return { nodeIds, edgeIds, walked };
 }
 
 /**

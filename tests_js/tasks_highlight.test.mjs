@@ -59,3 +59,15 @@ test('selecting a node lights the nodes beyond a junction, in edge direction', a
     assert.equal(strokes.in, 'selected-in');
     assert.equal(strokes.next, 'selected-out');
 });
+
+test('a filtered hover walks through junctions that the filter does not match', async () => {
+    const { tasksFilterHoverFocus } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_model.js');
+    const e = (id, source, target) => ({ id, source, target });
+    const edges = [e('in', 'add', 'r1'), e('res', 'r1', 'an'), e('fork', 'r1', 'f1'), e('out', 'an', 'r2'), e('next', 'r2', 'ffn'), e('hidden', 'r2', 'off')];
+    const junction = (id) => ['r1', 'r2', 'f1'].includes(id);
+    const focus = tasksFilterHoverFocus(new Set(['add', 'an', 'ffn']), edges, 'an', junction);
+    assert.deepEqual([...focus.edgeIds].sort(), ['in', 'next', 'out', 'res']);
+    assert.deepEqual([...focus.walked].sort(), [['in', false], ['next', true]]);
+    assert.ok(!focus.nodeIds.has('off'), 'a node outside the filter stays out past a junction');
+    assert.equal(tasksFilterHoverFocus(new Set(['add', 'an', 'ffn']), edges, 'an').edgeIds.size, 0, 'without pass-through the filter keeps today\'s subset');
+});

@@ -240,7 +240,7 @@ export function tasksHighlightGraph(input, ctx) {
         const matchingIds = filteredSelectionIds();
         const containerGroupIds = tasksGroupIdsContainingSelection(model, matchingIds);
         const visibleSelectionIds = new Set([...matchingIds, ...containerGroupIds]);
-        const filterHoverFocus = tasksFilterHoverFocus(matchingIds, baseEdges, hoveredNodeId);
+        const filterHoverFocus = tasksFilterHoverFocus(matchingIds, baseEdges, hoveredNodeId, passesThrough);
         result.nodes = (baseNodes.map((node) => {
             const sourceNodeId = node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id;
             const selected = visibleSelectionIds.has(sourceNodeId);
@@ -267,7 +267,7 @@ export function tasksHighlightGraph(input, ctx) {
         result.edges = (displayedEdges.map((edge) => {
             const hit = (visibleSelectionIds.has(edge.source) && visibleSelectionIds.has(edge.target)) || searchMatches.edgeIds.has(edge.id);
             if (filterHoverFocus.edgeIds.has(edge.id)) {
-                return tasksHoverFocusEdge(edge, hoveredNodeId);
+                return tasksHoverFocusEdge(edge, hoveredNodeId, filterHoverFocus.walked.get(edge.id));
             }
             const edgeColor = edge.data?.edgeColor || edge.style?.stroke || 'currentColor';
             const branchOpacity = edge.data?.__projection_branch_opacity__ ?? 1;
@@ -323,7 +323,7 @@ export function tasksHighlightGraph(input, ctx) {
             directEndpointIds.add(descendantId);
         }
     }
-    const hoverOutlineIds = tasksFilterHoverFocus(directEndpointIds, baseEdges, hoveredNodeId).nodeIds;
+    const hoverOutlineIds = tasksFilterHoverFocus(directEndpointIds, baseEdges, hoveredNodeId, passesThrough).nodeIds;
     if (hoveredNodeId) hoverOutlineIds.add(nodeId);
     const focusedEdgeModes = new Map();
     if (isFocusedPrimary) {

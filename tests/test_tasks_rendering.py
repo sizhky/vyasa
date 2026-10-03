@@ -1365,7 +1365,7 @@ def test_tasks_edge_type_filter_is_searchable_persisted_and_applied():
     assert "edgeTypes: activeEdgeTypes" in source
     assert "tasksEdgeFilterNodeIds(graphBaseRef.current.edges || [], effectiveEdgeTypes)" in source
     assert "tasksEdgesMatchingTypes(graphBaseRef.current.edges || [], effectiveEdgeTypes)" in source
-    assert "const filterHoverFocus = tasksFilterHoverFocus(matchingIds, baseEdges, hoveredNodeId);" in source
+    assert "const filterHoverFocus = tasksFilterHoverFocus(matchingIds, baseEdges, hoveredNodeId, passesThrough);" in source
     assert "'neighbor-focus'" in source
     assert "tasksHoverFocusNodeStyle(node, nodeColor, displayColor, activeBorderColor, checkedShadow, colorMix, true)" in source
     assert "const matchingIds = filteredSelectionIds();" in source
