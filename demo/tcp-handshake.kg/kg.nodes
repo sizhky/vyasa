@@ -1,0 +1,8 @@
+client: Client
+	kind=Action
+	description=The side that opens the connection. Its kernel picks a random initial sequence number, x.
+	example=The browser's network stack, or a DNS resolver retrying over TCP.
+server: Server
+	kind=Action
+	description=The side listening on the port. A SYN on a listening socket enters its SYN queue.
+	example=The web server on port 443, or a DNS server on port 53.

@@ -1,0 +1,20 @@
+@graph id=tls13-key-schedule title="TLS 1.3 key schedule"
+hover_attrs=description,example
+default_view=schedule
+color_by=kind
+
+@sources
+nodes=kg.nodes
+attrs=kg.attrs
+schedule:
+	edges=kg.edges
+palette=../browser-page-load.kg/kg.palette
+
+@views
+schedule:
+	source=schedule
+	color_by=kind
+	edge_label_from=note
+	edge_path=orthogonal
+	hover_attrs=description,example
+	caption="RFC 8446, section 7.1. Three extract steps, each salted by the one before: early secret, handshake secret, master secret. Every traffic secret is a Derive-Secret over the transcript so far, so changing any earlier message changes every key."

@@ -1,0 +1,15 @@
+t1: client -> server carries
+	note=SYN  seq=x
+	message=async
+	description=The client asks to open a connection and states its initial sequence number. It also offers options: maximum segment size, window scaling, and selective acknowledgement. The client is now in SYN-SENT.
+	example=SYN, seq=1000, MSS=1460, wscale=7, SACK permitted.
+t2: server -> client carries
+	note=SYN-ACK  seq=y  ack=x+1
+	message=async
+	description=The server acknowledges the client's number and states its own. The server is now in SYN-RECEIVED. If this segment is lost, the client resends its SYN after a timeout, which costs about a second.
+	example=SYN-ACK, seq=5000, ack=1001.
+t3: client -> server carries
+	note=ACK  ack=y+1
+	message=async
+	description=The client acknowledges the server's number. Both sides are now ESTABLISHED. The client may send data in the same flight, so the handshake costs one round trip before the first request.
+	example=ACK, ack=5001, then the TLS ClientHello right behind it.

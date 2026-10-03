@@ -1,0 +1,48 @@
+# Ports sit outside the thread frames, so each port edge crosses a boundary.
+main: Main thread
+	kind=Action
+	description=The renderer thread that runs script, style, layout and paint.
+	commit: Commit
+		kind=Action
+		description=The main thread hands its layer tree and paint records to the compositor thread, then is free to run script again.
+	layerize: Layerize
+		kind=Action
+		description=Groups paint chunks into composited layers, so a layer can move without repainting.
+		example=A fixed header and the scrolling content become separate layers.
+compositor-thread: Compositor thread
+	kind=Action
+	description=A renderer thread that never runs page script.
+	pending: Pending tree
+		kind=Artifact
+		description=The committed tree, waiting for its tiles to be rastered.
+	active: Active tree
+		kind=Artifact
+		description=The tree being drawn. Activation swaps in the pending tree once enough of its tiles are ready.
+	scroll: Threaded scroll
+		kind=Action
+		description=Scroll and some animations update the active tree directly, without the main thread.
+		example=The page keeps scrolling while a long task blocks the main thread.
+raster-workers: Raster workers and GPU
+	kind=Action
+	raster: Raster
+		kind=Action
+		description=Turns the paint records of each visible tile into pixels on the GPU.
+		example=256 by 256 tiles near the viewport are rastered first.
+	decode: Image decode
+		kind=Action
+		description=Decodes images off the main thread so raster can use them.
+viz: Viz (GPU process)
+	kind=Action
+	description=The display compositor that combines frames from every renderer and the browser UI.
+	aggregate: Aggregate
+		kind=Action
+		description=Merges the compositor frames of the page, its iframes and the browser UI into one frame.
+	draw: Draw
+		kind=Action
+		description=Issues the GPU draw calls for the aggregated quads and presents at the next vsync.
+paint-in: paint records
+	kind=Artifact
+input-in: scroll input
+	kind=Message
+screen-out: frame on screen
+	kind=Artifact

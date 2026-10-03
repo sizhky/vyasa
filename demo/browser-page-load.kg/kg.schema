@@ -27,7 +27,7 @@ phases:
 	edge_color_by=phase
 	edge_label_from=label
 	hover_attrs=description,example
-	caption="The nearest thing to order this graph can say today: six phases, coloured. Inside a phase the sequence is still invisible."
+	caption="The nearest thing to order this graph can say today: six phases, coloured. Inside a phase the sequence is still invisible. Four nodes have a stacked frame: DNS query, TCP handshake, TLS handshake and Composited frame. Hold 1 on one to open its internals, and double-tap 1 to dive."
 	slides:
 		request: Decide what to fetch
 			nodes=url,nav-request,hsts,http-cache,cache-policy
