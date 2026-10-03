@@ -538,16 +538,21 @@ const { setTasksMaximized } = createTasksFullscreenController({
 
 function applyTasksStandaloneHeight(wrapper) {
     if (String(wrapper?.dataset?.tasksStandalone || '').toLowerCase() !== 'true') return;
-    const box = wrapper.getBoundingClientRect();
     // The nearest height owner: an internals panel body, else the page shell.
     const boundary = wrapper.closest('.vyasa-kg-internals-body, .vyasa-main-shell') || wrapper.parentElement;
     // A panel body sets its own size, so the page's 420px floor does not apply.
     const inPanel = Boolean(boundary?.classList?.contains('vyasa-kg-internals-body'));
-    const boundaryBox = boundary?.getBoundingClientRect?.();
-    const viewportBottom = window.visualViewport?.height || window.innerHeight || 0;
-    const bottom = boundaryBox?.height ? Math.min(boundaryBox.bottom, viewportBottom) : viewportBottom;
-    const height = Math.max(inPanel ? 0 : 420, Math.floor(bottom - box.top));
-    wrapper.style.height = `${height}px`;
+    if (inPanel) {
+        // A panel body can be mid-animation (a dive plays as a transform), and a
+        // client rect includes the transform. Layout sizes do not, so read those.
+        wrapper.style.height = `${Math.max(0, boundary.clientHeight - wrapper.offsetTop)}px`;
+    } else {
+        const box = wrapper.getBoundingClientRect();
+        const boundaryBox = boundary?.getBoundingClientRect?.();
+        const viewportBottom = window.visualViewport?.height || window.innerHeight || 0;
+        const bottom = boundaryBox?.height ? Math.min(boundaryBox.bottom, viewportBottom) : viewportBottom;
+        wrapper.style.height = `${Math.max(420, Math.floor(bottom - box.top))}px`;
+    }
     if (!wrapper.__tasksStandaloneResize) {
         const resize = () => {
             // A closed panel takes its widget with it; stop listening for it.
