@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-const { tasksInternalsPeekRect, tasksInternalsTrail, tasksInternalsWorld } = await import('../vyasa/extensions_builtin/tasks/static/tasks_internals.js');
+const { tasksInternalsPeekRect, tasksInternalsTrail } = await import('../vyasa/extensions_builtin/tasks/static/tasks_internals.js');
 const { tasksNodeLinkKinds } = await import('../vyasa/extensions_builtin/tasks/static/tasks_cards.js');
 
 test('a peek sits under its node when there is room, else above, and stays inside the host', () => {
@@ -22,18 +22,6 @@ test('only a look with no stacked frame shows the internals badge', () => {
     assert.ok(!tasksNodeLinkKinds({ id: 'enc_mha', internals: '../mha.kg', __node_look__: 'outline' }).has('internals'));
     assert.ok(tasksNodeLinkKinds({ id: 'note', internals: '../mha.kg', __node_look__: 'text' }).has('internals'));
     assert.ok(!tasksNodeLinkKinds({ id: 'enc_an1', internals: ' ', __node_look__: 'text' }).has('internals'));
-});
-
-test('world chips group the edges that cross a node by neighbour and direction', () => {
-    const edges = [
-        { source: 'f1', target: 'mha', shape: 'Q' }, { source: 'f1', target: 'mha', shape: 'K' }, { source: 'f1', target: 'mha', shape: 'V' },
-        { source: 'mem', target: 'mha', shape: 'K' }, { source: 'mha', target: 'an1', shape: '[B, T, 512]' }, { source: 'x', target: 'y' },
-    ];
-    const labels = { f1: 'qkv', an1: 'ADD & NORM' };
-    assert.deepEqual(tasksInternalsWorld('mha', edges, (id) => labels[id], (edge) => edge.shape), {
-        incoming: ['Q · K · V ← qkv', 'K ← mem'],
-        outgoing: ['[B, T, 512] → ADD & NORM'],
-    });
 });
 
 test('an internals ref is never collected as a previewable attribute link', async () => {

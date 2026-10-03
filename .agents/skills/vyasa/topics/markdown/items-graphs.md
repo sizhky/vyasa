@@ -462,7 +462,6 @@ enc_mha: MULTI-HEAD ATTENTION
 - An internals pack is its own KG with its own schema, views and layout. Share parent data only by explicit `@sources` paths, such as `palette=../browser-page-load.kg/kg.palette`. There is no implicit inheritance, because one pack can serve several parents.
 - Many parent nodes can point to one pack. `tcp-handshake.kg` is opened from the page load's TCP step and from the DNS resolver's TCP fallback.
 - Make the pack's root group the node's own frame. Put ports outside that frame as `text`-look nodes (`q_in`, `out`), and mark port edges `dashed=true`, so every port edge crosses the boundary.
-- The reader sees the parent's own crossing edges as chips on the panel edges. The parent supplies them, so do not author parent neighbour names in the pack.
 - A node with internals draws a stacked frame; `text`, `station`, `point` and `sketch` show a badge instead; a sequence lane stacks its cap.
 - A pack already open above is not opened again. Internals do not open in a static build yet.
 
