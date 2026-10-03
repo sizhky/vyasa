@@ -1,0 +1,4 @@
+# Ports: what crosses into the schedule from the handshake, and what leaves it.
+@node_attrs
+node_look:
+  text: psk-in ecdhe-in transcript-in keys-out

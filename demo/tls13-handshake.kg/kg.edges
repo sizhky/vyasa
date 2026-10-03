@@ -1,0 +1,62 @@
+h1: client -> server carries
+	note=ClientHello + key_share
+	message=sync
+	description=The client guesses the key exchange group and sends its public key share now, so no second round trip is needed. It also sends supported versions, cipher suites, the server name (SNI) and the protocols it speaks (ALPN).
+	example=key_share X25519, SNI example.com, ALPN h2 and http/1.1.
+h2: server -> client produces
+	note=ServerHello + key_share
+	message=reply
+	description=The server picks the cipher suite and sends its own key share. From here on, both sides can compute the same shared secret.
+	example=TLS_AES_128_GCM_SHA256, key_share X25519.
+h3: client -> key-schedule produces
+	note=derive handshake keys
+	message=sync
+	description=The client combines its private key with the server's share, then derives the handshake traffic secrets from that shared secret and the transcript of both hellos.
+h4: key-schedule -> client produces
+	note=client and server handshake keys
+	message=reply
+h5: server -> client carries
+	note={EncryptedExtensions}
+	message=async
+	description=Encrypted from here on. It carries the server's answers to the client's extensions.
+	example=ALPN h2.
+h6: server -> client carries
+	note={Certificate}
+	message=async
+	description=The server's certificate chain, encrypted, so an observer cannot see which certificate the server presented.
+h7: server -> client carries
+	note={CertificateVerify}
+	message=async
+	description=A signature over the transcript with the certificate's private key. It proves the server holds that key now, not only that it once got the certificate.
+h8: server -> client carries
+	note={Finished}
+	message=async
+	description=A MAC over the whole transcript. Any change to an earlier message by an attacker makes it fail.
+h9: client -> trust-store checks
+	note=verify chain to a trusted root
+	message=sync
+	description=The client checks each signature in the chain, the validity dates, the name example.com, and revocation where it checks it.
+h10: trust-store -> client produces
+	note=trusted for example.com
+	message=reply
+h11: client -> server carries
+	note={Finished}
+	message=async
+	description=The client's MAC over the transcript. The handshake is complete for the client after one round trip.
+h12: client -> key-schedule produces
+	note=derive application keys
+	message=sync
+	description=The application traffic secrets come from the master secret and the transcript through the server's Finished.
+h13: key-schedule -> client produces
+	note=client and server application keys
+	message=reply
+h14: client -> server carries
+	note=[GET /pricing]
+	message=async
+	description=The first HTTP request, encrypted with application keys, leaves with or right after the client's Finished.
+	example=This is where the page load's HTTP request step begins.
+h15: client -> server carries
+	note=[early data] on resumption
+	message=async
+	fragment=opt:resumed session with 0-RTT
+	description=A client that resumes a session with a pre-shared key may send early data in its first flight. Early data can be replayed by an attacker, so a server accepts it only for requests that are safe to repeat.

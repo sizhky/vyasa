@@ -1,0 +1,21 @@
+@graph id=tcp-handshake title="TCP three-way handshake"
+hover_attrs=description,example
+default_view=handshake
+color_by=kind
+
+@sources
+nodes=kg.nodes
+handshake:
+	edges=kg.edges
+palette=../browser-page-load.kg/kg.palette
+
+@views
+handshake:
+	source=handshake
+	layout=sequence
+	sequence_lanes=client,server
+	sequence_message=message
+	color_by=kind
+	edge_label_from=note
+	hover_attrs=description,example
+	caption="One round trip before any byte of the page moves. This pack is opened from two places: the page load's connection step and the DNS resolver's TCP fallback. The chips on the panel edges name which one you came from."

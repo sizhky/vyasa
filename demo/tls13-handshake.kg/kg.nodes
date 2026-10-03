@@ -1,0 +1,17 @@
+trust-store: Trust store
+	kind=Store
+	description=The root certificates the browser or the operating system trusts.
+	example=The certificate chain for example.com must end at one of these roots.
+key-schedule: Key schedule
+	kind=Action
+	internals=../tls13-key-schedule.kg
+	description=The client's derivation of every secret in the connection from one key exchange and the transcript so far. The server runs the same schedule and reaches the same secrets.
+	example=The X25519 shared secret becomes handshake keys, then application keys.
+client: Client
+	kind=Action
+	description=The browser's TLS stack.
+	example=BoringSSL in Chrome, NSS in Firefox.
+server: Server
+	kind=Action
+	description=The web server's TLS stack, holding the private key for the certificate it presents.
+	example=The server for example.com on port 443.

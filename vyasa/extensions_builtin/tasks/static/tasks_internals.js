@@ -11,6 +11,9 @@ import { createPanelMemory, installPanelDrag, installPanelResize, panelRect } fr
 const TASKS_INTERNALS_KEY = { code: 'Digit1', label: '1' };
 const TASKS_INTERNALS_PEEK = { width: 640, height: 480, margin: 16, gap: 8 };
 const TASKS_INTERNALS_DIVE_MS = 220;
+// Open and close motion. A peek opens and closes on every key press, so it is
+// quicker than a pinned or dived panel.
+const TASKS_INTERNALS_MOTION = { open: 200, close: 150, peekOpen: 140, peekClose: 110 };
 // Two presses of the key closer than this are a double tap: dive.
 const TASKS_INTERNALS_DOUBLE_TAP_MS = 320;
 const TASKS_INTERNALS_Z = 60;
@@ -144,6 +147,22 @@ function tasksPanelElement(trail, world) {
 }
 
 
+/**
+ * The transform that lays a panel over another rect, for a FLIP motion from
+ * or to its node. Both rects are client rects.
+ *
+ * >>> tasksInternalsFlipTransform({ left: 100, top: 50, width: 120, height: 40 }, { left: 20, top: 98, width: 640, height: 480 })
+ * 'translate(80px, -48px) scale(0.1875, 0.08333333333333333)'
+ */
+export function tasksInternalsFlipTransform(from, to) {
+    if (!from?.width || !from?.height || !to?.width || !to?.height) return 'scale(0.96)';
+    return `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${from.width / to.width}, ${from.height / to.height})`;
+}
+
+function tasksReducedMotion() {
+    return Boolean(globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches);
+}
+
 // Bring a panel to the top of every open panel, for Esc and for z-order.
 function tasksRaisePanel(entry) {
     const index = openPanels.indexOf(entry);
@@ -168,7 +187,10 @@ export function createTasksInternals({ host, flowWrapper, schemaPath, hoveredRec
     let held = false;
     let lastTapAt = 0;
     const hostBox = () => host.getBoundingClientRect();
-    const close = (entry) => {
+    // A panel leaves the open lists at once, so keys and Esc skip it, then
+    // shrinks back into its node and goes. `instant` skips the motion, for a
+    // widget that is unmounting with its panels.
+    const close = (entry, { instant = false } = {}) => {
         const index = panels.indexOf(entry);
         if (index < 0) return;
         panels.splice(index, 1);
@@ -176,12 +198,38 @@ export function createTasksInternals({ host, flowWrapper, schemaPath, hoveredRec
         for (let item = openPanels.length - 1; item >= 0; item -= 1) {
             if (entry.element.contains(openPanels[item].element)) openPanels.splice(item, 1);
         }
-        tasksUnmountWidgets(entry.element);
-        entry.element.remove();
-        entry.scrim?.remove();
         log('internalsClose', { nodeId: entry.nodeId });
+        const remove = () => {
+            tasksUnmountWidgets(entry.element);
+            entry.element.remove();
+            entry.scrim?.remove();
+        };
+        if (instant || tasksReducedMotion() || !entry.element.isConnected) {
+            remove();
+            return;
+        }
+        const { element, scrim } = entry;
+        element.style.pointerEvents = 'none';
+        element.getAnimations().forEach((animation) => animation.cancel());
+        const duration = entry.state === 'peek' ? TASKS_INTERNALS_MOTION.peekClose : TASKS_INTERNALS_MOTION.close;
+        const to = tasksInternalsFlipTransform(nodeElement(entry.nodeId)?.getBoundingClientRect(), element.getBoundingClientRect());
+        scrim?.animate([{ opacity: 1 }, { opacity: 0 }], { duration, easing: 'ease-in', fill: 'forwards' });
+        element.animate([
+            { transformOrigin: 'top left', transform: 'none', opacity: 1 },
+            { transformOrigin: 'top left', transform: to, opacity: 0 },
+        ], { duration, easing: 'cubic-bezier(0.4, 0, 1, 1)', fill: 'forwards' }).finished.then(remove, remove);
     };
-    const closeAll = () => [...panels].reverse().forEach(close);
+    // Grow a new panel out of its node.
+    const playOpen = (entry, quick) => {
+        if (tasksReducedMotion()) return;
+        const { element } = entry;
+        const from = tasksInternalsFlipTransform(nodeElement(entry.nodeId)?.getBoundingClientRect(), element.getBoundingClientRect());
+        element.animate([
+            { transformOrigin: 'top left', transform: from, opacity: 0 },
+            { transformOrigin: 'top left', transform: 'none', opacity: 1 },
+        ], { duration: quick ? TASKS_INTERNALS_MOTION.peekOpen : TASKS_INTERNALS_MOTION.open, easing: 'cubic-bezier(0.2, 0, 0, 1)' });
+    };
+    const closeAll = () => [...panels].reverse().forEach((entry) => close(entry, { instant: true }));
     // A new panel opens at the remembered size. It steps from this widget's
     // last floating panel, else takes the last dragged place, else sits by its node.
     const place = (element, nodeId) => {
@@ -215,19 +263,25 @@ export function createTasksInternals({ host, flowWrapper, schemaPath, hoveredRec
             entry.scrim = document.createElement('div');
             entry.scrim.className = 'vyasa-kg-internals-scrim';
             host.insertBefore(entry.scrim, element);
+            if (!tasksReducedMotion()) entry.scrim.animate([{ opacity: 0 }, { opacity: 1 }], { duration: TASKS_INTERNALS_DIVE_MS, easing: 'ease-out' });
         } else if (wasDive) {
             Object.assign(element.style, entry.floatStyle || {});
-            entry.scrim?.remove();
+            const scrim = entry.scrim;
             entry.scrim = null;
+            if (scrim && !tasksReducedMotion()) {
+                scrim.animate([{ opacity: 1 }, { opacity: 0 }], { duration: TASKS_INTERNALS_DIVE_MS, easing: 'ease-in', fill: 'forwards' }).finished.then(() => scrim.remove(), () => scrim.remove());
+            } else scrim?.remove();
         }
         if (peek === entry && state !== 'peek') peek = null;
         tasksRaisePanel(entry);
         const last = element.getBoundingClientRect();
-        if (last.width && last.height && (state === 'dive' || wasDive)) {
-            element.animate([
-                { transformOrigin: 'top left', transform: `translate(${first.left - last.left}px, ${first.top - last.top}px) scale(${first.width / last.width}, ${first.height / last.height})` },
-                { transformOrigin: 'top left', transform: 'none' },
-            ], { duration: TASKS_INTERNALS_DIVE_MS, easing: 'cubic-bezier(0.2, 0, 0, 1)' });
+        if (state === 'dive' || wasDive) {
+            if (last.width && last.height && !tasksReducedMotion()) {
+                element.animate([
+                    { transformOrigin: 'top left', transform: tasksInternalsFlipTransform(first, last) },
+                    { transformOrigin: 'top left', transform: 'none' },
+                ], { duration: TASKS_INTERNALS_DIVE_MS, easing: 'cubic-bezier(0.2, 0, 0, 1)' });
+            }
             const innerId = element.querySelector('.tasks-container[data-tasks-widget="true"]')?.id;
             if (innerId) window.setTimeout(() => window.runTasksHeaderAction?.(innerId, 'fit'), TASKS_INTERNALS_DIVE_MS);
         }
@@ -315,6 +369,9 @@ export function createTasksInternals({ host, flowWrapper, schemaPath, hoveredRec
         installFloating(entry);
         log('internalsOpen', { nodeId, ref, panels: panels.length });
         if (state !== 'peek') setState(entry, state);
+        // One motion: from the node straight to where the panel lands.
+        element.getAnimations().forEach((animation) => animation.cancel());
+        playOpen(entry, state === 'peek');
         load(entry, ref, trail);
         return entry;
     };
@@ -358,8 +415,19 @@ export function createTasksInternals({ host, flowWrapper, schemaPath, hoveredRec
             if (entry?.state === 'peek') peek = entry;
             return;
         }
-        // Key+Enter pins the panel the held key opened. Enter alone keeps its
-        // meaning: select the hovered node and open its notes.
+        // Enter over empty canvas inside a floating panel dives that panel. Over
+        // a node, Enter keeps its meaning: select it and open its notes.
+        if (event.key === 'Enter' && !held && !event.repeat && !hoveredRecord() && tasksHeldKeyApplies(event, flowWrapper(), false)) {
+            const outer = host.closest('.vyasa-kg-internals');
+            const outerEntry = openPanels.find((entry) => entry.element === outer);
+            if (outerEntry && outerEntry.state !== 'dive') {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                outerEntry.dive();
+                return;
+            }
+        }
+        // Key+Enter pins the panel the held key opened.
         if (event.key === 'Enter' && held && peek) {
             event.preventDefault();
             event.stopImmediatePropagation();

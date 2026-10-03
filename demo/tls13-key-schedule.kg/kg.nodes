@@ -1,0 +1,49 @@
+# Ports sit outside the root frame, so each port edge crosses the boundary.
+schedule: Key schedule
+	kind=Action
+	description=HKDF-Extract mixes new key material into the chain; Derive-Secret expands a secret with a label and a transcript hash.
+	early: Early secret
+		kind=Artifact
+		description=HKDF-Extract(salt 0, PSK). Without a resumed session, the PSK is a string of zeros.
+	derived-1: derived
+		kind=Action
+		description=Derive-Secret(early secret, "derived", empty). It salts the next extract step.
+	handshake-secret: Handshake secret
+		kind=Artifact
+		description=HKDF-Extract(salt derived, ECDHE shared secret). This is where the key exchange enters.
+	c-hs: client handshake traffic secret
+		kind=Artifact
+		description=Derive-Secret(handshake secret, "c hs traffic", ClientHello..ServerHello).
+	s-hs: server handshake traffic secret
+		kind=Artifact
+		description=Derive-Secret(handshake secret, "s hs traffic", ClientHello..ServerHello). It encrypts the server's Certificate and Finished.
+	derived-2: derived
+		kind=Action
+		description=Derive-Secret(handshake secret, "derived", empty).
+	master: Master secret
+		kind=Artifact
+		description=HKDF-Extract(salt derived, zeros). No new key material enters here.
+	c-ap: client application traffic secret
+		kind=Artifact
+		description=Derive-Secret(master secret, "c ap traffic", ClientHello..server Finished).
+	s-ap: server application traffic secret
+		kind=Artifact
+		description=Derive-Secret(master secret, "s ap traffic", ClientHello..server Finished).
+	res-master: resumption master secret
+		kind=Artifact
+		description=Derive-Secret(master secret, "res master", ClientHello..client Finished). A later visit resumes from it, which makes 0-RTT possible.
+	expand: HKDF-Expand-Label "key", "iv"
+		kind=Action
+		description=Each traffic secret expands into an AEAD key and an IV.
+		example=16 bytes of key and 12 bytes of IV for TLS_AES_128_GCM_SHA256.
+psk-in: PSK or zeros
+	kind=Message
+ecdhe-in: ECDHE shared secret
+	kind=Message
+	description=From the key shares in ClientHello and ServerHello.
+transcript-in: transcript hash
+	kind=Message
+	description=The hash of every handshake message so far.
+keys-out: traffic keys
+	kind=Message
+	description=Back to the handshake, which encrypts records with them.

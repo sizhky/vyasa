@@ -28,6 +28,7 @@ store: Stored copies
 naming: Name lookup
 	description=Turning a name into an address.
 	dns-query: DNS query
+		internals=../dns-resolution.kg
 		description=A question sent to a resolver asking where a name lives.
 		example=The browser asks the resolver for `example.com`.
 	ip-address: IP address
@@ -36,9 +37,11 @@ naming: Name lookup
 connect: Connection
 	description=Opening a channel the browser can trust.
 	tcp-handshake: TCP handshake
+		internals=../tcp-handshake.kg
 		description=Three messages that open a reliable connection.
 		example=SYN, SYN-ACK, ACK complete in one round trip.
 	tls-handshake: TLS handshake
+		internals=../tls13-handshake.kg
 		description=The exchange that agrees on keys and checks the certificate.
 		example=The browser verifies the certificate for `example.com`.
 	secure-channel: Secure channel
@@ -93,6 +96,7 @@ render: Rendering
 		description=The ordered drawing instructions for those boxes.
 		example=Fill this rectangle, then draw this text on top.
 	composited-frame: Composited frame
+		internals=../compositor.kg
 		description=The painted layers combined into one image.
 		example=The fixed header layer sits over the scrolling content layer.
 	first-paint: First contentful paint

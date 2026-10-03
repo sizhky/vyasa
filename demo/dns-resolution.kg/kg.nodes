@@ -1,0 +1,29 @@
+stub: Stub resolver
+	kind=Message
+	description=The resolver library in the operating system. It does no walking of its own: it sends one recursive query and waits.
+	example=The OS resolver forwards the browser's lookup for example.com to 1.1.1.1.
+recursive: Recursive resolver
+	kind=Action
+	description=The server that does the walking. It follows referrals from the root down until it reaches a server that knows the answer.
+	example=Your ISP's resolver, or a public one such as 1.1.1.1 or 8.8.8.8.
+cache: Resolver cache
+	kind=Store
+	description=Answers and referrals the recursive resolver already holds, each kept for its TTL.
+	example=The NS records for .com are cached for two days, so the root is almost never asked.
+root: Root server
+	kind=Store
+	description=One of 13 named root server identities, each served by many anycast instances. It knows only who serves each top-level domain.
+	example=a.root-servers.net refers the resolver to the .com servers.
+tld: TLD server
+	kind=Store
+	description=The server for the top-level domain. It knows only who serves each domain under it.
+	example=a.gtld-servers.net refers the resolver to example.com's name servers.
+auth: Authoritative server
+	kind=Store
+	description=The server that holds the zone and gives the final answer with its TTL.
+	example=ns1.example.com answers 93.184.216.34, TTL 3600.
+tcp-fallback: TCP fallback
+	kind=Action
+	internals=../tcp-handshake.kg
+	description=A UDP answer too large for the reply sets the truncation (TC) bit. The resolver then asks again over TCP, which first needs a TCP handshake.
+	example=A signed DNSSEC answer larger than the EDNS buffer is retried over TCP.
