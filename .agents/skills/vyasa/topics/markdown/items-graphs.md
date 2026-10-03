@@ -413,6 +413,19 @@ Node looks:
 - `blueprint`: thin mono box in ink. Pair it with `canvas=blueprint`.
 - `tab`: C4 box. The name on a band in the role colour, then `[kind]` (the node's value for the view's `color_by`), then the subtitle.
 - `station`: a metro dot with its name above. Routes end at the dot. Pair it with `edge_path=octilinear`.
+- `point`: an 8px junction where routes split or merge. Its default role is `junction`.
+- `circle`: a ring around a short symbol such as `+` or `~`. Its default role is `mark`.
+- `text`: a bare mono label, for annotations and internals ports. Its default role is `mark`.
+
+`node_role` says what a node does, apart from how it is drawn. Each look sets a default; a `node_role=` attr overrides it. The attr is `node_role`, because packs already author `role` as content.
+
+| Role | Card state and notes | Pointer | Highlight | Routes |
+| --- | --- | --- | --- | --- |
+| `item` | yes | yes | full rings and bands | end at the box |
+| `mark` | no | yes | thin ring | end at the box |
+| `junction` | no | no | none; a highlight passes through it to the nodes beyond, in edge direction | meet at the centre |
+
+Assign looks and roles in bulk in `kg.attrs` (`@node_attrs` → `node_look:` → `point: r1 r2`). Style keys and `node_role` there stay assignments; they never become filter dimensions.
 
 A subtitle shows on `outline`, `sketch`, `blueprint`, and `tab`. Name a short attr in `subtitle_from`; a long `description` makes tall boxes.
 
@@ -434,6 +447,28 @@ Rules:
 - A bad style value on a view draws the view's error card. A bad value on a node, an edge, `@graph`, or a fence is skipped and the next level decides.
 
 See `demo/folio-books.md`: one pack, six views, one style each.
+
+## Internals
+
+A node can open another Knowledge Graph pack that shows its inside: `internals=<path>`. Use it when a node is an abstraction over a graph one level down that needs its own layout. Use a group when the parts fit the parent's layout.
+
+```text
+enc_mha: MULTI-HEAD ATTENTION
+	internals=../mha.kg
+```
+
+- The path is relative to the node's pack folder, as `@sources` paths are. It names a pack folder or a schema file.
+- `internals` is a presentation attr: never a filter dimension, never rendered as prose, never an attribute link.
+- An internals pack is its own KG with its own schema, views and layout. Share parent data only by explicit `@sources` paths, such as `palette=../browser-page-load.kg/kg.palette`. There is no implicit inheritance, because one pack can serve several parents.
+- Many parent nodes can point to one pack. `tcp-handshake.kg` is opened from the page load's TCP step and from the DNS resolver's TCP fallback.
+- Make the pack's root group the node's own frame. Put ports outside that frame as `text`-look nodes (`q_in`, `out`), and mark port edges `dashed=true`, so every port edge crosses the boundary.
+- The reader sees the parent's own crossing edges as chips on the panel edges. The parent supplies them, so do not author parent neighbour names in the pack.
+- A node with internals draws a stacked frame; `text`, `station`, `point` and `sketch` show a badge instead; a sequence lane stacks its cap.
+- A pack already open above is not opened again. Internals do not open in a static build yet.
+
+Reader gestures: hold `1` on a stacked node to peek, `1`+Enter to pin, double-tap `1` to dive. Enter over empty canvas inside a panel dives it. Drag the bar to move, an edge to resize; the next panel reuses the size. Esc closes the topmost panel.
+
+Demos: `demo/transformer.kg` (MHA → `mha.kg` → `sdpa.kg`), `demo/browser-page-load.kg` (DNS, TCP, TLS 1.3 → key schedule, compositor).
 
 ## Slides
 
