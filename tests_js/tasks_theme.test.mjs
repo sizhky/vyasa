@@ -90,3 +90,36 @@ test('a look sets a default role; a node_role attr overrides it; an authored rol
     assert.equal(theme.tasksStateShadow('hover', '#f00', 'none', 'none'), 'none');
     assert.equal(theme.tasksStateShadow('hover', '#f00', 'none', 'thin'), '0 0 0 1px color-mix(in srgb, #f00 76%, transparent)');
 });
+
+test('lit paint never blurs or filters, for every look, state and band strength', () => {
+    const states = ['endpoint', 'picked', 'selected', 'neighbor', 'neighborFocus', 'hover', 'hoverNeighbor'];
+    const allowed = new Set(['--vyasa-tasks-active-border', 'boxShadow', 'color', 'textDecoration']);
+    for (const look of theme.TASKS_NODE_LOOKS) {
+        for (const state of states) {
+            for (const bands of ['full', 'thin', 'none']) {
+                const style = theme.tasksLitStyle(look, state, '#f00', { bands, checkedShadow: theme.tasksCheckedShadow('#0f0') });
+                const where = `${look} ${state} ${bands}`;
+                assert.deepEqual(Object.keys(style).filter((key) => !allowed.has(key)), [], where);
+                // Every shadow is `0 0 <blur> <spread>` or inset; the blur must be 0.
+                for (const shadow of String(style.boxShadow).split(/,\s*(?![^(]*\))/)) {
+                    if (shadow === 'none') continue;
+                    assert.match(shadow, /^(inset )?0 0 0 /, `${where}: ${shadow}`);
+                }
+            }
+        }
+    }
+});
+
+test('a look picks how its lit state draws: rings, bands only, or ink', () => {
+    assert.deepEqual(['card', 'sketch', 'text', 'station', 'point'].map((look) => theme.tasksLookLitPaint(look)), [
+        { ring: true, bands: true, ink: false },
+        { ring: false, bands: true, ink: false },
+        { ring: false, bands: false, ink: true },
+        { ring: false, bands: false, ink: true },
+        { ring: false, bands: false, ink: false },
+    ]);
+    assert.equal(theme.tasksLitStyle('sketch', 'hover', '#f00').boxShadow, 'none');
+    assert.equal(theme.tasksLitStyle('text', 'hover', '#f00', { bands: 'thin' }).textDecoration, 'underline solid #f00');
+    assert.equal(theme.tasksLitStyle('text', 'neighbor', '#f00', { bands: 'thin' }).textDecoration, 'underline dotted #f00');
+    assert.equal(theme.tasksLitStyle('card', 'hover', '#f00').boxShadow, '0 0 0 3px color-mix(in srgb, #f00 76%, transparent)');
+});

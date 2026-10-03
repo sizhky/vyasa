@@ -60,7 +60,7 @@ import {
 } from './tasks_paint.js';
 import {
     tasksCanvasBackgroundProps, tasksCanvasStyle, tasksEdgeStrokeStyle, tasksGroupLook, tasksGroupRingTokens,
-    tasksCheckedShadow, tasksGroupTitleLook, tasksNodeLookStyle,
+    tasksCheckedShadow, tasksGroupTitleLook, tasksLookLitPaint, tasksNodeLookStyle,
 } from './tasks_theme.js';
 import { createTasksPanels } from './tasks_panels.js';
 import { tasksHighlightGraph } from './tasks_highlight.js';
@@ -4367,9 +4367,11 @@ async function renderTasksGraphs(rootElement = document) {
                     : null;
                 const isEgoSeed = (node) => egoSeedIds !== null && egoSeedIds.has(node.id);
                 // A role's bands set the outline: full, thin, or none for a junction.
+                // A look whose lit paint has no bands, such as text, draws none.
                 const activeNodes = nodes.filter((node) => (
                     (!['none', 'dim'].includes(node.data?.highlightMode || 'none') || isEgoSeed(node))
                     && tasksRoleOf(node.data).bands !== 'none'
+                    && tasksLookLitPaint(node.data?.__node_look__).bands
                 ));
                 return React.createElement(rf.ViewportPortal, null, ...activeNodes.flatMap((node) => {
                     const rect = tasksGraphNodeAbsoluteRect(node, byId);
@@ -4397,7 +4399,7 @@ async function renderTasksGraphs(rootElement = document) {
                             transform: `translate(${rect.x}px, ${rect.y}px)`,
                             width: rect.width,
                             height: rect.height,
-                            borderRadius: node.style?.borderRadius || 6,
+                            borderRadius: node.style?.borderRadius ?? 6,
                             outline: `${bandWidth}px ${seedBand ? 'dashed' : 'solid'} ${activeBorderColor}`,
                             outlineOffset: `${bandOffset}px`,
                             pointerEvents: 'none',
