@@ -15,6 +15,7 @@ from ...markdown_fence import (
     split_fence_frontmatter,
 )
 from .layout import build_collapsed_graph
+from .layouts import PRESENTATION_ATTRS
 from .model import apply_edge_label_fallbacks, parse_tasks_text
 from ..markdown.renderer import _render_markdown_fragment
 
@@ -27,6 +28,8 @@ _RENDERABLE_NODE_KEYS = {
     "width", "height", "position", "parentid", "color", "href", "image", "rank",
     "card_state", "__checked__", "__card_state__", "__card_state_color__", "__has_note__",
     "__rendered_attrs__",
+    # Attrs that say how a node is drawn or what it opens, never what it says.
+    *PRESENTATION_ATTRS,
 }
 _RENDERABLE_EDGE_KEYS = _RENDERABLE_NODE_KEYS | {"source", "target", "relation"}
 

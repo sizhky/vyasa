@@ -35,3 +35,9 @@ test('world chips group the edges that cross a node by neighbour and direction',
         outgoing: ['[B, T, 512] → ADD & NORM'],
     });
 });
+
+test('an internals ref is never collected as a previewable attribute link', async () => {
+    const { tasksAttributeLinks } = await import('../vyasa/extensions_builtin/tasks/static/tasks_cards.js');
+    globalThis.document ??= { createElement: () => ({ setAttribute() {}, getAttribute() { return ''; }, dataset: {} }) };
+    assert.deepEqual(tasksAttributeLinks({ id: 'enc_mha', internals: '../mha.kg' }), []);
+});

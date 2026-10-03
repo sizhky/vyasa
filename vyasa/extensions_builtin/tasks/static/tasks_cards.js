@@ -1,6 +1,6 @@
 import { hydrateMarkdown } from '../../../static/page_shell.js';
 import { logTasksDebug } from './tasks_diagnostics.js';
-import { measureTextWidth, normalizeTasksNodeImageUrl, resolveTasksNodeImage, tasksInlineLinkPlainText } from './tasks_graph_core.js';
+import { TASKS_STYLE_ATTRS, measureTextWidth, normalizeTasksNodeImageUrl, resolveTasksNodeImage, tasksInlineLinkPlainText } from './tasks_graph_core.js';
 import {
     TASKS_CARD_STATE_ATTR, TASKS_DERIVED_METRIC_KEYS, TASKS_SPECIAL_NODE_ATTRS, collectTasksGroupDescendants,
     formatTasksMetricValue, isTasksGradientPalette, parseTasksNumericValue, tasksIsHiddenNodeMetaKey,
@@ -298,7 +298,8 @@ function tasksAttributeRenderedLinks(record, key) {
 // Raw values remain the fallback for inline graphs without rendered attributes.
 export function tasksAttributeLinks(record) {
     if (!record) return [];
-    const keys = Object.keys(record).filter((key) => key !== '__rendered_attrs__' && !key.startsWith('__'));
+    // A presentation attr such as `internals=../mha.kg` names a pack, not a page to preview.
+    const keys = Object.keys(record).filter((key) => key !== '__rendered_attrs__' && !key.startsWith('__') && !TASKS_STYLE_ATTRS.has(String(key).toLowerCase()));
     const codeKey = keys.find((key) => String(key).toLowerCase() === 'code');
     const orderedKeys = codeKey ? [codeKey, ...keys.filter((key) => key !== codeKey)] : keys;
     return orderedKeys.flatMap((key) => {
