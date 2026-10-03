@@ -1,0 +1,8 @@
+s01: q_in -> matmul1 feeds target_port=bottom:30 shape=Q dashed=true
+s02: k_in -> matmul1 feeds target_port=bottom:70 shape=K dashed=true
+s03: matmul1 -> scale feeds shape=scores
+s04: scale -> mask feeds
+s05: mask -> softmax feeds
+s06: softmax -> matmul2 feeds shape=weights
+s07: v_in -> matmul2 feeds shape=V dashed=true
+s08: matmul2 -> out feeds shape="[B, 8, T, 64]" dashed=true

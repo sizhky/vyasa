@@ -2155,7 +2155,7 @@ def test_react_flow_component_fills_flow_wrapper():
     render_source = source.split("return rf.ReactFlowProvider ?", 1)[1].split("if (window.ReactDOM.createRoot)", 1)[0]
 
     assert "function applyTasksStandaloneHeight(wrapper)" in source
-    assert "wrapper.closest('.vyasa-main-shell')" in source
+    assert "wrapper.closest('.vyasa-kg-internals-body, .vyasa-main-shell')" in source
     assert "applyTasksStandaloneHeight(wrapper);" in source
     assert "width: '100%'" in render_source
     assert "height: '100%'" in render_source

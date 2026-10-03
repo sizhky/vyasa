@@ -1,0 +1,62 @@
+# Ports sit outside the root frame, so each port edge crosses the boundary
+# between this pack and the graph that opens it.
+mha: Multi-Head Attention
+	inherit=part
+	part=block
+	description=h = 8 heads, d_k = d_v = 64. Each head attends in its own 64-dimensional subspace.
+	proj_q: LINEAR
+		column=q
+		track=proj
+		op=$Q W^Q$
+		shape=[B, T, 512] → [B, 8, T, 64]
+		params=512 × 512 + 512
+	proj_k: LINEAR
+		column=k
+		track=proj
+		op=$K W^K$
+		shape=[B, S, 512] → [B, 8, S, 64]
+		params=512 × 512 + 512
+	proj_v: LINEAR
+		column=v
+		track=proj
+		op=$V W^V$
+		shape=[B, S, 512] → [B, 8, S, 64]
+		params=512 × 512 + 512
+	sdpa: SCALED DOT-PRODUCT ATTENTION × 8
+		column=k
+		track=sdpa
+		internals=../sdpa.kg
+		op=$\mathrm{softmax}\left(\frac{QK^\top}{\sqrt{d_k}} + M\right) V$
+		shape=[B, 8, T, 64]
+		description=All 8 heads run as one batched matmul. Hold 1 on this node to open its internals.
+	concat: CONCAT
+		column=k
+		track=concat
+		op=$\mathrm{Concat}(\mathrm{head}_1, \dots, \mathrm{head}_8)$
+		shape=[B, 8, T, 64] → [B, T, 512]
+	wo: LINEAR
+		column=k
+		track=wo
+		op=$\cdot\, W^O$
+		shape=[B, T, 512]
+		params=512 × 512 + 512
+q_in: Q
+	part=io
+	column=q
+	track=in
+	shape=[B, T, 512]
+k_in: K
+	part=io
+	column=k
+	track=in
+	shape=[B, S, 512]
+v_in: V
+	part=io
+	column=v
+	track=in
+	shape=[B, S, 512]
+out: OUTPUT
+	part=io
+	column=k
+	track=out
+	shape=[B, T, 512]

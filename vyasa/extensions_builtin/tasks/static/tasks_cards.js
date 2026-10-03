@@ -6,6 +6,7 @@ import {
     formatTasksMetricValue, isTasksGradientPalette, parseTasksNumericValue, tasksIsHiddenNodeMetaKey,
     tasksNodeMetaEntries, tasksNodeMetaLabel,
 } from './tasks_graph_model.js';
+import { tasksLookStacks } from './tasks_theme.js';
 
 export async function copyTasksText(text) {
     const value = String(text || '');
@@ -364,6 +365,9 @@ export function tasksNodeLinkKinds(node) {
             if (kind) kinds.add(kind);
         }
     }
+    // A node with internals shows a stacked frame (tasksStackShadow). A look with
+    // no frame of its own shows the internals badge instead.
+    if (String(node.internals ?? '').trim() && !tasksLookStacks(node.__node_look__)) kinds.add('internals');
     return kinds;
 }
 
@@ -382,7 +386,7 @@ export function renderTasksNodeLinkBadge(React, options = {}) {
         },
     }, ...kinds.map((kind) => React.createElement('span', {
         key: kind,
-        'uk-icon': kind === 'external' ? 'link-external' : (kind === 'note' ? 'file-text' : 'link'),
+        'uk-icon': { external: 'link-external', note: 'file-text', internals: 'album' }[kind] || 'link',
     })));
 }
 

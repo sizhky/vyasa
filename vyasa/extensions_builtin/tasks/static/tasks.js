@@ -55,7 +55,7 @@ import {
     tasksDefaultEdgeOpacity, tasksEdgeColorPaletteFor, tasksEdgeRecordId, tasksEdgeStrokeWidthForMode,
     tasksGroupBackground, tasksGroupIdsContainingSelection, tasksHoverFocusEdge, tasksHoverFocusNodeStyle,
     tasksNodeBackground, tasksNodeColorLevels, tasksNodeIsOverlaid, tasksProminentEdgeOpacity,
-    tasksActiveNodeFill, tasksGroupFrameStyle, tasksTaskWrapperStyle,
+    tasksActiveNodeFill, tasksGroupFrameStyle, tasksNodeHasInternals, tasksTaskWrapperStyle,
     tasksReferenceFlowEdge, tasksResolvedThemeColor, tasksUseColorOverlay,
 } from './tasks_paint.js';
 import {
@@ -65,6 +65,7 @@ import {
 import { createTasksPanels } from './tasks_panels.js';
 import { tasksHighlightGraph } from './tasks_highlight.js';
 import { tasksRoleOf } from './tasks_roles.js';
+import { createTasksInternals, tasksInternalsWorld } from './tasks_internals.js';
 import {
     TASKS_EDGES_VISIBLE_KEY, TASKS_HOVER_CARD_MODES, TASKS_HOVER_CARD_MODE_KEY, buildTasksNodeNotesBackup,
     checkedNodeIdsFromStates, clearTasksGlobalToggle, downloadTasksNodeNotes, readTasksCheckedNodeIds,
@@ -538,7 +539,8 @@ const { setTasksMaximized } = createTasksFullscreenController({
 function applyTasksStandaloneHeight(wrapper) {
     if (String(wrapper?.dataset?.tasksStandalone || '').toLowerCase() !== 'true') return;
     const box = wrapper.getBoundingClientRect();
-    const boundary = wrapper.closest('.vyasa-main-shell') || wrapper.parentElement;
+    // The nearest height owner: an internals panel body, else the page shell.
+    const boundary = wrapper.closest('.vyasa-kg-internals-body, .vyasa-main-shell') || wrapper.parentElement;
     const boundaryBox = boundary?.getBoundingClientRect?.();
     const viewportBottom = window.visualViewport?.height || window.innerHeight || 0;
     const bottom = boundaryBox?.height ? Math.min(boundaryBox.bottom, viewportBottom) : viewportBottom;
@@ -1537,6 +1539,26 @@ async function renderTasksGraphs(rootElement = document) {
                     window.removeEventListener('blur', closeCodePreview);
                 };
             }, [currentGraphEdges, edgeNodesById, resolveEdgeRecord, widgetId]);
+            // Internals: tasks_internals.js. The ref keeps one controller for the
+            // widget's life, so a model change does not close an open panel.
+            const internalsSourceRef = React.useRef({ edgeNodesById, sourceModel });
+            internalsSourceRef.current = { edgeNodesById, sourceModel };
+            React.useEffect(() => createTasksInternals({
+                host: wrapper,
+                flowWrapper: () => flowWrapperRef.current,
+                schemaPath: () => String(internalsSourceRef.current.sourceModel?.kg_schema || ''),
+                hoveredRecord: () => internalsSourceRef.current.edgeNodesById.get(String(hoveredNodeIdRef.current || '')) || null,
+                nodeElement: (id) => flowWrapperRef.current?.querySelector(`.react-flow__node[data-id="${CSS.escape(id)}"]`),
+                worldOf: (id) => {
+                    const { edgeNodesById: records, sourceModel: source } = internalsSourceRef.current;
+                    const labelKey = String(source?.edge_label_from || '').trim();
+                    return tasksInternalsWorld(id, source?.dependency_edges, (nodeId) => records.get(nodeId)?.label,
+                        (edge) => (labelKey && edge[labelKey]) || edge.shape || edge.label);
+                },
+                mount: (root) => renderTasksGraphs(root),
+                setStatus: setEdgeStatus,
+                log: (event, payload) => logTasksDebug(event, { widgetId, ...payload }),
+            }), []);
             const selectGraphEdge = React.useCallback((event, edge) => {
                 event?.preventDefault?.();
                 event?.stopPropagation?.();
@@ -2778,7 +2800,7 @@ async function renderTasksGraphs(rootElement = document) {
                             style: {
                                 ...tasksTaskWrapperStyle({
                                     nodeColor, colorMix, useOverlay, look: nodeLook, dashed: tasksIsDashed(node), isChecked, stateAccent,
-                                    width: node.width, height: node.height, zIndex: TASKS_TASK_Z,
+                                    internals: tasksNodeHasInternals(node), width: node.width, height: node.height, zIndex: TASKS_TASK_Z,
                                 }),
                                 // A junction takes no pointer: clicks and hovers reach what lies under it.
                                 ...(interactive ? {} : { pointerEvents: 'none' }),
@@ -3014,7 +3036,7 @@ async function renderTasksGraphs(rootElement = document) {
                         } : {
                             ...tasksTaskWrapperStyle({
                                 nodeColor, colorMix, useOverlay, look: nodeLook, dashed: tasksIsDashed(n), isChecked, stateAccent,
-                                width: n.width, height: n.height, zIndex: nodeZ,
+                                internals: tasksNodeHasInternals(n), width: n.width, height: n.height, zIndex: nodeZ,
                             }),
                             opacity: branchOpacity,
                             ...(interactive ? {} : { pointerEvents: 'none' }),
@@ -3482,7 +3504,10 @@ async function renderTasksGraphs(rootElement = document) {
                         // shortcuts scroll the page under the graph on every repeat.
                         if (event.repeat && !TASKS_SHORTCUT_KEYS.has(key) && !isTasksHopCode(event.code)) return;
                         const flowWrapper = flowWrapperRef.current;
-                        const widgetFocused = wrapper.contains(document.activeElement) || wrapper.contains(target) || window.__vyasaTasksActiveWidgetId === widgetId;
+                        // A widget owns an element only when it is the nearest widget around
+                        // it, so keys inside an internals panel never reach the host widget.
+                        const ownsElement = (element) => element?.closest?.('.tasks-container[data-tasks-widget="true"]') === wrapper;
+                        const widgetFocused = ownsElement(document.activeElement) || ownsElement(target) || window.__vyasaTasksActiveWidgetId === widgetId;
                         if ((event.key === 'Escape' || key === 'g') && window.__vyasaTasksDebug.enabled) {
                             logTasksDebug('shortcutKeydown', {
                                 widgetId,
@@ -5004,7 +5029,11 @@ async function renderTasksGraphs(rootElement = document) {
                 )
             );
         };
-        if (window.ReactDOM.createRoot) window.ReactDOM.createRoot(mount).render(window.React.createElement(TasksGraphApp)); else window.ReactDOM.render(window.React.createElement(TasksGraphApp), mount);
+        // The root stays on the mount so an internals panel can unmount its widget.
+        if (window.ReactDOM.createRoot) {
+            mount.__vyasaTasksRoot = window.ReactDOM.createRoot(mount);
+            mount.__vyasaTasksRoot.render(window.React.createElement(TasksGraphApp));
+        } else window.ReactDOM.render(window.React.createElement(TasksGraphApp), mount);
         wrapper.dataset.tasksMounted = 'true';
     }
     if (needsRetry) window.requestAnimationFrame(() => { renderTasksGraphs(rootElement); });

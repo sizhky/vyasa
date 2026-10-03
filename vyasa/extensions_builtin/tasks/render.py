@@ -4,6 +4,7 @@ import html
 import json
 import re
 from itertools import count
+from pathlib import Path
 
 from ...markdown_fence import (
     content_url_for_slug,
@@ -196,6 +197,10 @@ def _tasks_stats_label(model: dict) -> str:
     if hierarchy_links:
         return f"{node_count} Nodes and {hierarchy_links} Hierarchy Links"
     return f"{node_count} Nodes and 0 Edges"
+
+
+def _kg_block(schema_path: Path) -> str:
+    return f"---\nitems_schema: {schema_path}\nstandalone: true\nwidth: 100%\ndefault_open_depth: -1\n---\n"
 
 
 def render_tasks_block(code: str, current_path: str | None = None, fence_name: str = "tasks") -> str:

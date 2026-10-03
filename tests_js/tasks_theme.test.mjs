@@ -91,19 +91,31 @@ test('a look sets a default role; a node_role attr overrides it; an authored rol
     assert.equal(theme.tasksStateShadow('hover', '#f00', 'none', 'thin'), '0 0 0 1px color-mix(in srgb, #f00 76%, transparent)');
 });
 
+// Split a box-shadow list on its top-level commas; colours nest parentheses.
+const splitShadows = (value) => {
+    const parts = [''];
+    let depth = 0;
+    for (const char of String(value)) {
+        depth += char === '(' ? 1 : (char === ')' ? -1 : 0);
+        if (char === ',' && depth === 0) parts.push('');
+        else parts[parts.length - 1] += char;
+    }
+    return parts.map((part) => part.trim());
+};
+
 test('lit paint never blurs or filters, for every look, state and band strength', () => {
     const states = ['endpoint', 'picked', 'selected', 'neighbor', 'neighborFocus', 'hover', 'hoverNeighbor'];
     const allowed = new Set(['--vyasa-tasks-active-border', 'boxShadow', 'color', 'textDecoration']);
     for (const look of theme.TASKS_NODE_LOOKS) {
         for (const state of states) {
             for (const bands of ['full', 'thin', 'none']) {
-                const style = theme.tasksLitStyle(look, state, '#f00', { bands, checkedShadow: theme.tasksCheckedShadow('#0f0') });
+                const style = theme.tasksLitStyle(look, state, '#f00', { bands, checkedShadow: theme.tasksCheckedShadow('#0f0'), stackShadow: theme.tasksStackShadow(look) });
                 const where = `${look} ${state} ${bands}`;
                 assert.deepEqual(Object.keys(style).filter((key) => !allowed.has(key)), [], where);
-                // Every shadow is `0 0 <blur> <spread>` or inset; the blur must be 0.
-                for (const shadow of String(style.boxShadow).split(/,\s*(?![^(]*\))/)) {
+                // Every shadow is `[inset] <x> <y> <blur> <spread> <colour>`; the blur must be 0.
+                for (const shadow of splitShadows(style.boxShadow)) {
                     if (shadow === 'none') continue;
-                    assert.match(shadow, /^(inset )?0 0 0 /, `${where}: ${shadow}`);
+                    assert.match(shadow, /^(inset )?-?[\d.]+(px)? -?[\d.]+(px)? 0 /, `${where}: ${shadow}`);
                 }
             }
         }
@@ -122,4 +134,17 @@ test('a look picks how its lit state draws: rings, bands only, or ink', () => {
     assert.equal(theme.tasksLitStyle('text', 'hover', '#f00', { bands: 'thin' }).textDecoration, 'underline solid #f00');
     assert.equal(theme.tasksLitStyle('text', 'neighbor', '#f00', { bands: 'thin' }).textDecoration, 'underline dotted #f00');
     assert.equal(theme.tasksLitStyle('card', 'hover', '#f00').boxShadow, '0 0 0 3px color-mix(in srgb, #f00 76%, transparent)');
+});
+
+test('a node with internals keeps a stacked frame at rest and in every lit state, on looks that stack', async () => {
+    const { tasksTaskWrapperStyle, tasksLitNodeStyle } = await import('../vyasa/extensions_builtin/tasks/static/tasks_paint.js');
+    const rest = tasksTaskWrapperStyle({ nodeColor: '#1f9e7a', colorMix: 0, useOverlay: false, look: 'outline', dashed: false, isChecked: false, stateAccent: '', internals: true, width: 100, height: 40, zIndex: 1 });
+    assert.equal(rest.boxShadow, theme.tasksStackShadow('outline'));
+    assert.equal(rest['--vyasa-tasks-stack-rim'], 'color-mix(in srgb, #1f9e7a 60%, transparent)');
+    const lit = tasksLitNodeStyle({ data: { __node_look__: 'outline', internals: '../mha.kg' } }, 'hover', '#f00');
+    assert.ok(lit.boxShadow.startsWith('0 0 0 3px'), 'the ring sits above the stack');
+    assert.ok(lit.boxShadow.endsWith(theme.tasksStackShadow('outline')));
+    assert.equal(theme.tasksStackShadow('text'), '');
+    const plain = tasksTaskWrapperStyle({ nodeColor: '', colorMix: 0, useOverlay: false, look: 'card', dashed: false, isChecked: false, stateAccent: '', width: 100, height: 40, zIndex: 1 });
+    assert.equal(plain.boxShadow, 'none');
 });
