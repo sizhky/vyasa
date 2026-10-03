@@ -18,4 +18,4 @@ handshake:
 	color_by=kind
 	edge_label_from=note
 	hover_attrs=description,example
-	caption="One round trip before any byte of the page moves. This pack is opened from two places: the page load's connection step and the DNS resolver's TCP fallback. The chips on the panel edges name which one you came from."
+	caption="One round trip before any byte of the page moves. This pack is opened from two places: the page load's connection step and the DNS resolver's TCP fallback."
