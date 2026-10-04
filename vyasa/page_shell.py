@@ -58,7 +58,7 @@ class StaticShellRenderer:
     @staticmethod
     def _theme_toggle() -> str:
         return '''
-    <button onclick="toggleTheme()" class="p-1 hover:scale-110 shadow-none" type="button">
+    <button onclick="toggleTheme()" class="vyasa-navbar-icon-button" type="button">
         <span uk-icon="moon" class="dark:hidden"></span>
         <span uk-icon="sun" class="hidden dark:block"></span>
     </button>
@@ -66,27 +66,27 @@ class StaticShellRenderer:
 
     def _navbar(self, blog_title: str, updated_label: str | None = None) -> str:
         return f'''
-    <div class="vyasa-navbar-card bg-slate-900 text-white px-4 py-3 dark:bg-slate-800">
+    <div class="vyasa-navbar-card px-4 py-2">
         <div class="flex items-center justify-between md:hidden">
-            <button id="mobile-posts-toggle" title="Toggle file tree" class="p-2 rounded transition-colors hover:bg-slate-800" type="button" onclick="window.__vyasaTogglePostsPanel && window.__vyasaTogglePostsPanel()">
-                <span uk-icon="menu" class="w-5 h-5"></span>
+            <button id="mobile-posts-toggle" title="Toggle file tree" class="vyasa-navbar-icon-button" type="button" onclick="window.__vyasaTogglePostsPanel && window.__vyasaTogglePostsPanel()">
+                <span uk-icon="menu" class="w-4 h-4"></span>
             </button>
             <div class="flex-1 px-4 flex flex-col items-center">
-                <a href="/index.html" class="text-center truncate">{blog_title}</a>
+                <a href="/index.html" class="vyasa-navbar-brand text-center truncate">{blog_title}</a>
             </div>
             <div class="flex items-center gap-1">
-                <button type="button" class="vyasa-navbar-search-trigger inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm" data-vyasa-command-trigger="true">
+                <button type="button" class="vyasa-navbar-search-trigger inline-flex items-center gap-2 rounded-md px-3 h-8" data-vyasa-command-trigger="true">
                     <span uk-icon="search" class="w-4 h-4"></span>
                 </button>
-                <button id="mobile-toc-toggle" title="Toggle table of contents" class="p-2 rounded transition-colors hover:bg-slate-800" type="button" onclick="window.__vyasaToggleTocPanel && window.__vyasaToggleTocPanel()">
-                    <span uk-icon="list" class="w-5 h-5"></span>
+                <button id="mobile-toc-toggle" title="Toggle table of contents" class="vyasa-navbar-icon-button" type="button" onclick="window.__vyasaToggleTocPanel && window.__vyasaToggleTocPanel()">
+                    <span uk-icon="list" class="w-4 h-4"></span>
                 </button>
                 {self._theme_toggle()}
             </div>
         </div>
         <div class="hidden md:flex items-center justify-between">
             <div class="flex items-center gap-3">
-                <a href="/index.html">{blog_title}</a>
+                <a href="/index.html" class="vyasa-navbar-brand">{blog_title}</a>
             </div>
             <div class="flex items-center gap-3">
                 <div class="vyasa-navbar-search-block relative hidden md:block w-[30rem] max-w-[44vw]">
