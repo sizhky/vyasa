@@ -225,6 +225,8 @@ code, pre { font-family: var(--vyasa-font-mono); }
     outline-offset: 2px;
 }
 :where(a, button, summary, [tabindex]):focus:not(:focus-visible) { outline: none; }
+/* Icons: Lucide at a 1.5 stroke everywhere. */
+:where(uk-icon, [uk-icon], .uk-icon) svg { stroke-width: var(--vyasa-icon-stroke); }
 .tabular-nums,
 time,
 .vyasa-read-time,
@@ -580,7 +582,6 @@ html[data-vyasa-hide-toc-sidebar] #toc-sidebar {
     font: var(--vyasa-weight-medium) var(--vyasa-text-sm)/1 var(--vyasa-font-ui);
     cursor: pointer;
 }
-.vyasa-navbar-card [uk-icon] svg { stroke-width: var(--vyasa-icon-stroke); }
 
 .vyasa-navbar-card a,
 .vyasa-navbar-card button,
