@@ -99,10 +99,10 @@ def test_floating_actions_park_on_screen_edge_and_reveal_together():
 
     assert ".vyasa-floating-actions::before" in source
     assert "transform: translateX(60%)" in source
-    assert "transform: translateX(-1.25rem)" in source
+    assert "transform: translateX(calc(-1 * var(--vyasa-space-5)))" in source
     assert ".vyasa-floating-actions:hover" in source
     assert ".vyasa-floating-actions:focus-within" in source
-    assert "cubic-bezier(.34, 1.56, .64, 1)" in source
+    assert "transition: transform var(--vyasa-duration-base) var(--vyasa-ease)" in source
     assert "prefers-reduced-motion: reduce" in source
 
 
@@ -346,9 +346,9 @@ def test_heading_level_indicator_stays_out_of_document_and_slide_layout():
     assert ".vyasa-doc-heading > .vyasa-heading-level {" in css
     assert "position: absolute;" in css
     assert "right: 100%;" in level_rule
-    assert "padding-right: 0.55rem;" in level_rule
-    assert "font: 600 0.875rem/1 var(--vyasa-font-ui);" in level_rule
-    assert "color: color-mix(in srgb, var(--vyasa-ink-soft) 72%, transparent);" in level_rule
+    assert "padding-right: var(--vyasa-space-2);" in level_rule
+    assert "font: var(--vyasa-weight-medium) var(--vyasa-text-xs)/1 var(--vyasa-font-mono);" in level_rule
+    assert "color: var(--vyasa-text-faint);" in level_rule
     assert "white-space: nowrap;" in level_rule
     assert "cursor: pointer;" in level_rule
     assert "@media (hover: hover) and (min-width: 768px)" in css
