@@ -790,10 +790,9 @@ class ContentRenderer(FrankenRenderer):
                 md_path = _current_content_path(md_slug)
                 if md_path and md_path.exists():
                     present_href = present_href_for_anchor(md_path.read_text(encoding="utf-8"), self.current_path, anchor)
-                    present_here = f'<a href="{present_href}" class="vyasa-heading-action vyasa-heading-launch no-underline text-vyasa-faint hover:text-vyasa-text" aria-label="Present from here" hx-boost="false">{to_xml(UkIcon("play-circle"))}</a>'
+                    present_here = f'<a href="{present_href}" class="vyasa-heading-action vyasa-heading-launch" aria-label="Present from here" hx-boost="false">{to_xml(UkIcon("play-circle"))}</a>'
         permalink = (
-            f'<a href="#{anchor}" class="vyasa-heading-permalink no-underline '
-            f'text-vyasa-faint hover:text-vyasa-text" '
+            f'<a href="#{anchor}" class="vyasa-heading-action vyasa-heading-permalink" '
             f'aria-label="Link to {html.escape(heading_text)}">'
             f'<span class="vyasa-heading-permalink-icon">{to_xml(UkIcon("link"))}</span>'
             f'<span class="vyasa-heading-permalink-copied">'
