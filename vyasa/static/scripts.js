@@ -1220,10 +1220,20 @@ function alignToCurrentHash() {
     requestAnimationFrame(() => target.scrollIntoView({ block: 'start' }));
 }
 
-function scheduleHashAlignment() {
-    alignToCurrentHash();
-    [80, 220, 500, 1200].forEach((delay) => setTimeout(alignToCurrentHash, delay));
+// Late re-alignments absorb layout shifts after load; user input cancels them
+// so they never pull the page back to the heading mid-scroll.
+let hashAlignmentTimers = [];
+function cancelHashAlignment() {
+    hashAlignmentTimers.forEach(clearTimeout);
+    hashAlignmentTimers = [];
 }
+function scheduleHashAlignment() {
+    cancelHashAlignment();
+    alignToCurrentHash();
+    hashAlignmentTimers = [80, 220, 500, 1200].map((delay) => setTimeout(alignToCurrentHash, delay));
+}
+['wheel', 'touchstart', 'pointerdown', 'keydown'].forEach((type) =>
+    window.addEventListener(type, cancelHashAlignment, { passive: true }));
 
 function initHeadingFolds(root = document) {
     const main = root.id === 'main-content' ? root : root.querySelector?.('#main-content');
@@ -1574,36 +1584,23 @@ function initMobileMenus() {
         });
     };
 
-    const sidebarState = (kind) => {
-        // closed: sidebar hidden.
-        // overlay: sidebar visible but floats over the main view.
-        // docked: sidebar visible and the main view reserves its width.
-        const state = document.documentElement.dataset[`vyasaSidebarState${kind[0].toUpperCase()}${kind.slice(1)}`];
-        if (state === 'closed' || state === 'overlay' || state === 'docked') return state;
-        return document.documentElement.hasAttribute(`data-vyasa-hide-${kind}-sidebar`) ? 'closed' : 'overlay';
-    };
+    // closed: sidebar hidden. open: sidebar visible and the main view reserves its width.
+    const sidebarState = (kind) => (
+        document.documentElement.hasAttribute(`data-vyasa-hide-${kind}-sidebar`) ? 'closed' : 'open'
+    );
 
     const applySidebarState = (kind, state) => {
-        const root = document.documentElement;
-        const attr = `data-vyasa-hide-${kind}-sidebar`;
-        const dataKey = `vyasaSidebarState${kind[0].toUpperCase()}${kind.slice(1)}`;
-        root.dataset[dataKey] = state;
-        root.toggleAttribute(attr, state === 'closed');
-        try {
-            localStorage.setItem(`vyasa-${kind}-sidebar-state`, state);
-            if (state === 'closed') localStorage.setItem(`vyasa-${kind}-sidebar-hidden`, '1');
-            else localStorage.setItem(`vyasa-${kind}-sidebar-hidden`, '0');
-        } catch (_) {}
+        const closed = state === 'closed';
+        document.documentElement.toggleAttribute(`data-vyasa-hide-${kind}-sidebar`, closed);
+        try { localStorage.setItem(`vyasa-${kind}-sidebar-hidden`, closed ? '1' : '0'); } catch (_) {}
         document.querySelectorAll(`#${kind}-sidebar details[data-sidebar="${kind}"]`).forEach((sidebar) => {
-            sidebar.open = state !== 'closed';
+            sidebar.open = !closed;
         });
-        if (state === 'closed') pulseNavbarToggle(kind);
+        if (closed) pulseNavbarToggle(kind);
     };
 
     const toggleDockedSidebar = (kind) => {
-        const current = sidebarState(kind);
-        const next = current === 'closed' ? 'overlay' : current === 'overlay' ? 'docked' : 'closed';
-        applySidebarState(kind, next);
+        applySidebarState(kind, sidebarState(kind) === 'closed' ? 'open' : 'closed');
         syncContentResize();
         return true;
     };

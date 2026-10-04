@@ -155,7 +155,7 @@ def test_toc_sidebar_defaults_closed_but_open_choice_persists():
     scripts = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
 
     assert "kind === 'toc' && stored !== '0'" in head_init
-    assert "localStorage.setItem(`vyasa-${kind}-sidebar-hidden`, '0')" in scripts
+    assert "closed ? '1' : '0'" in scripts
 
 
 def test_static_layout_hides_updated_label_in_navbar():
@@ -294,25 +294,23 @@ def test_sidebars_bound_main_content_width():
     assert "window.dispatchEvent(new Event('resize'));" in source
 
 
-def test_sidebar_controls_cycle_closed_overlay_and_docked_states():
+def test_sidebar_controls_toggle_closed_and_open_states():
     source = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
     css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
 
-    assert "current === 'closed' ? 'overlay' : current === 'overlay' ? 'docked' : 'closed'" in source
-    assert "data-vyasa-sidebar-state-posts=\"docked\"" in css
-    assert "data-vyasa-sidebar-state-toc=\"docked\"" in css
+    assert "sidebarState(kind) === 'closed' ? 'open' : 'closed'" in source
+    assert "overlay" not in source.split("const sidebarState")[1].split("const togglePostsPanel")[0]
+    assert "html:not([data-vyasa-hide-posts-sidebar])" in css
+    assert "html:not([data-vyasa-hide-toc-sidebar])" in css
 
 
-def test_docked_sidebar_mode_persists_across_a_refresh():
+def test_sidebar_open_state_persists_across_a_refresh():
     head_init = Path("vyasa/static/head-init.js").read_text(encoding="utf-8")
     scripts = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
 
-    assert "localStorage.setItem(`vyasa-${kind}-sidebar-state`, state)" in scripts
-    assert "const state = localStorage.getItem(`vyasa-${kind}-sidebar-state`);" in head_init
-    assert "root.dataset[dataKey] = state;" in head_init
-    assert "// closed: sidebar hidden." in scripts
-    assert "// overlay: sidebar visible but floats over the main view." in scripts
-    assert "// docked: sidebar visible and the main view reserves its width." in scripts
+    assert "localStorage.setItem(`vyasa-${kind}-sidebar-hidden`, closed ? '1' : '0')" in scripts
+    assert "localStorage.getItem(`vyasa-${kind}-sidebar-hidden`)" in head_init
+    assert "sidebar-state" not in scripts + head_init
 
 
 def test_scroll_progress_legacy_owners_are_removed():
