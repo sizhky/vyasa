@@ -67,7 +67,7 @@ def collapsible_sidebar(icon, title, items_list, is_open=False, data_sidebar=Non
     sidebar_kind = (data_sidebar or title or "sidebar").strip().lower().replace(" ", "-")
     summary_content = [Span(UkIcon(icon, cls="w-5 h-5 block"), cls="flex items-center justify-center w-5 h-5 shrink-0 leading-none"), Span(title, cls="leading-none")]
     if shortcut_key:
-        summary_content.append(Kbd(shortcut_key, cls="kbd-key px-2.5 py-1.5 text-xs font-mono font-semibold bg-gradient-to-b from-slate-50 to-slate-200 dark:from-slate-700 dark:to-slate-900 text-slate-800 dark:text-slate-200 rounded-md border-2 border-slate-300 dark:border-slate-600 shadow-[0_2px_0_0_rgba(0,0,0,0.1),inset_0_1px_0_0_rgba(255,255,255,0.5)] dark:shadow-[0_2px_0_0_rgba(0,0,0,0.5),inset_0_1px_0_0_rgba(255,255,255,0.1)]"))
+        summary_content.append(Kbd(shortcut_key, cls="kbd-key"))
     if sidebar_kind == "posts":
         action_nodes = [
             Button(

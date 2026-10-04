@@ -330,8 +330,8 @@ def test_scroll_progress_legacy_owners_are_removed():
 def test_document_heading_spacing_uses_shared_before_and_after_gaps():
     css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
 
-    assert "--vyasa-heading-before-gap: var(--vyasa-space-6);" in css
-    assert "--vyasa-heading-after-gap: var(--vyasa-space-3);" in css
+    assert "--vyasa-heading-before-gap: var(--vyasa-space-5);" in css
+    assert "--vyasa-heading-after-gap: var(--vyasa-space-2);" in css
     assert "#main-content .vyasa-doc-heading {" in css
     assert "#main-content .vyasa-heading-fold {" in css
     assert "#main-content .vyasa-heading-fold-body > :last-child {" in css

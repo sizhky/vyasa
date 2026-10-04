@@ -112,8 +112,7 @@ def _search_sidebar_section(context):
         body_cls="pt-1",
         title_suffix=context["kbd"](
             "⌘K",
-            cls="kbd-key ml-2 px-2.5 py-1 text-sm font-mono font-semibold normal-case tracking-normal leading-none",
-            style="font-size: 0.875rem; line-height: 1; letter-spacing: 0;",
+            cls="kbd-key ml-2",
         ),
     )
 
