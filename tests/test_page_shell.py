@@ -133,7 +133,7 @@ def test_theme_toggle_icon_keeps_ink_color_on_focus():
 
     assert "#theme-mode-toggle:focus" in css
     assert "--vyasa-emphasis-control-text: var(--vyasa-ink)" in css
-    assert "#theme-mode-toggle [uk-icon]" in css
+    assert "#theme-mode-toggle :is(uk-icon, [uk-icon])" in css
     assert "stroke: currentColor !important" in css
 
 

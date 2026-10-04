@@ -555,7 +555,7 @@ html[data-vyasa-hide-toc-sidebar] #toc-sidebar {
 /* Baseline ink for sidebar chrome. Zero specificity so row and control
    contracts (.vyasa-tree-row, .toc-link, actions) set their own colours. */
 :where(.vyasa-sidebar-toggle, .vyasa-sidebar-body, .vyasa-mobile-panel-body),
-:where(.vyasa-sidebar-toggle) :where(span, summary, [uk-icon]),
+:where(.vyasa-sidebar-toggle) :where(span, summary, uk-icon, [uk-icon]),
 :where(.vyasa-sidebar-body, .vyasa-mobile-panel-body) :where(a, span, div, li, summary) {
     color: var(--vyasa-ink);
 }
@@ -615,7 +615,7 @@ html[data-vyasa-hide-toc-sidebar] #toc-sidebar {
 .vyasa-navbar-card a,
 .vyasa-navbar-card button,
 .vyasa-navbar-card summary,
-.vyasa-navbar-card [uk-icon] {
+.vyasa-navbar-card :is(uk-icon, [uk-icon]) {
     color: var(--vyasa-text-muted) !important;
 }
 
@@ -628,8 +628,8 @@ html[data-vyasa-hide-toc-sidebar] #toc-sidebar {
     background: var(--vyasa-hover) !important;
     color: var(--vyasa-ink) !important;
 }
-.vyasa-navbar-card button:hover [uk-icon],
-.vyasa-navbar-card summary:hover [uk-icon],
+.vyasa-navbar-card button:hover :is(uk-icon, [uk-icon]),
+.vyasa-navbar-card summary:hover :is(uk-icon, [uk-icon]),
 .vyasa-navbar-card button:hover svg,
 .vyasa-navbar-card summary:hover svg {
     color: var(--vyasa-ink) !important;
@@ -809,7 +809,7 @@ html[data-vyasa-hide-toc-sidebar] #toc-sidebar {
     color: var(--vyasa-ink) !important;
 }
 
-#theme-mode-toggle [uk-icon],
+#theme-mode-toggle :is(uk-icon, [uk-icon]),
 #theme-mode-toggle svg {
     color: currentColor !important;
     stroke: currentColor !important;
@@ -989,7 +989,7 @@ html[data-theme-mode="system"] #theme-mode-toggle [data-theme-mode-icon="system"
 .vyasa-footer-card a:visited,
 .vyasa-footer-card button,
 .vyasa-footer-card summary,
-.vyasa-footer-card [uk-icon] {
+.vyasa-footer-card :is(uk-icon, [uk-icon]) {
     color: var(--vyasa-text-muted) !important;
 }
 
@@ -1086,7 +1086,7 @@ h1, h2, h3, h4, h5, h6 { scroll-margin-top: 7rem; }
     transition: background-color var(--vyasa-duration-fast) var(--vyasa-ease), color var(--vyasa-duration-fast) var(--vyasa-ease);
 }
 .vyasa-tree-row * { color: inherit !important; }
-.vyasa-tree-row svg, .vyasa-tree-row [uk-icon] { stroke: currentColor !important; fill: none !important; stroke-width: var(--vyasa-icon-stroke); }
+.vyasa-tree-row svg, .vyasa-tree-row :is(uk-icon, [uk-icon]) { stroke: currentColor !important; fill: none !important; stroke-width: var(--vyasa-icon-stroke); }
 .vyasa-tree-row:hover,
 .toc-link:hover { background: var(--vyasa-hover) !important; color: var(--vyasa-ink) !important; }
 .vyasa-tree-row.is-active,
@@ -1244,9 +1244,9 @@ details[open] > .vyasa-callout-summary .vyasa-callout-chevron { transform: rotat
     border-radius: 0 var(--vyasa-radius-sm) var(--vyasa-radius-sm) 0;
 }
 .vyasa-heading-permalink { opacity: 0; transition: opacity var(--vyasa-duration-fast) var(--vyasa-ease); }
-.vyasa-heading-action { opacity: 0; border: 0; border-radius: var(--vyasa-radius-sm); background: transparent; color: var(--vyasa-text-faint); width: 1.5rem; height: 1.5rem;\1transition: opacity var(--vyasa-duration-fast) var(--vyasa-ease), color var(--vyasa-duration-fast) var(--vyasa-ease), background-color var(--vyasa-duration-fast) var(--vyasa-ease); cursor: pointer; }
-.vyasa-heading-action [uk-icon], .vyasa-heading-permalink [uk-icon] { display: inline-flex; align-items: center; justify-content: center; width: var(--vyasa-icon-size); height: var(--vyasa-icon-size); }
-.vyasa-heading-action [uk-icon] svg, .vyasa-heading-permalink [uk-icon] svg { width: var(--vyasa-icon-size); height: var(--vyasa-icon-size); stroke-width: var(--vyasa-icon-stroke); }
+.vyasa-heading-action { opacity: 0; border: 0; border-radius: var(--vyasa-radius-sm); background: transparent; color: var(--vyasa-text-faint); width: 1.5rem; height: 1.5rem; flex: 0 0 1.5rem; display: inline-flex; align-items: center; justify-content: center; padding: 0; margin: 0; line-height: 1; text-decoration: none; transition: opacity var(--vyasa-duration-fast) var(--vyasa-ease), color var(--vyasa-duration-fast) var(--vyasa-ease), background-color var(--vyasa-duration-fast) var(--vyasa-ease); cursor: pointer; }
+.vyasa-heading-action :is(uk-icon, [uk-icon]), .vyasa-heading-permalink :is(uk-icon, [uk-icon]) { display: inline-flex; align-items: center; justify-content: center; width: var(--vyasa-icon-size); height: var(--vyasa-icon-size); }
+.vyasa-heading-action :is(uk-icon, [uk-icon]) svg, .vyasa-heading-permalink :is(uk-icon, [uk-icon]) svg { width: var(--vyasa-icon-size); height: var(--vyasa-icon-size); stroke-width: var(--vyasa-icon-stroke); }
 .vyasa-heading-permalink-icon, .vyasa-heading-permalink-copied { display: inline-flex; align-items: center; justify-content: center; }
 .vyasa-heading-permalink-copied {
     gap: var(--vyasa-space-1);
@@ -1258,8 +1258,8 @@ details[open] > .vyasa-callout-summary .vyasa-callout-chevron { transform: rotat
     font: var(--vyasa-weight-medium) var(--vyasa-text-xs)/1.75 var(--vyasa-font-ui);
     white-space: nowrap;
 }
-.vyasa-heading-permalink-copied [uk-icon] { width: var(--vyasa-text-sm); height: var(--vyasa-text-sm); }
-.vyasa-heading-permalink-copied [uk-icon] svg { width: var(--vyasa-text-sm); height: var(--vyasa-text-sm); }
+.vyasa-heading-permalink-copied :is(uk-icon, [uk-icon]) { width: var(--vyasa-text-sm); height: var(--vyasa-text-sm); }
+.vyasa-heading-permalink-copied :is(uk-icon, [uk-icon]) svg { width: var(--vyasa-text-sm); height: var(--vyasa-text-sm); }
 .vyasa-heading-permalink.is-copied {
     opacity: 1;
     width: auto;
@@ -1327,9 +1327,7 @@ details[open] > .vyasa-callout-summary .vyasa-callout-chevron { transform: rotat
     -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M4.25 2 8 6l-3.75 4' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
     mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M4.25 2 8 6l-3.75 4' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
-.vyasa-heading-action-children,
-.vyasa-heading-permalink { margin-left: 0 !important; flex: 0 0 1.5rem; width: 1.5rem; height: 1.5rem; border-radius: var(--vyasa-radius-sm); }
-.vyasa-heading-permalink { display: inline-flex; align-items: center; justify-content: center; line-height: 1; }
+.vyasa-heading-icon-expand { display: inline-flex; }
 .vyasa-heading-icon-collapse { display: none; }
 .vyasa-heading-action-children[data-subtree-state="collapse"] .vyasa-heading-icon-expand { display: none; }
 .vyasa-heading-action-children[data-subtree-state="collapse"] .vyasa-heading-icon-collapse { display: inline-flex; }
@@ -1513,7 +1511,7 @@ a.vyasa-code-link code { color: inherit; }
     font: var(--vyasa-weight-medium) var(--vyasa-text-sm)/var(--vyasa-leading-tight) var(--vyasa-font-ui);
 }
 
-.vyasa-table-scroll { --vyasa-edge-shadow: rgb(0 0 0 / calc(var(--vyasa-shadow-alpha) * 2)); width: 100%; max-width: 100%; position: static; left: auto; transform: none; margin: var(--vyasa-space-5) 0;\1transition: box-shadow var(--vyasa-duration-fast) var(--vyasa-ease); }
+.vyasa-table-scroll { --vyasa-edge-shadow: rgb(0 0 0 / calc(var(--vyasa-shadow-alpha) * 2)); width: 100%; max-width: 100%; position: static; left: auto; transform: none; margin: var(--vyasa-space-5) 0; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-gutter: stable both-edges; box-shadow: none; transition: box-shadow var(--vyasa-duration-fast) var(--vyasa-ease); }
 .vyasa-table-scroll.vyasa-table-breakout { width: min(var(--vyasa-breakout-width, 80vw), 80vw); max-width: 80vw; position: relative; left: 50%; transform: translateX(-50%); }
 .vyasa-table-scroll.has-right-overflow { box-shadow: inset -16px 0 12px -12px var(--vyasa-edge-shadow); }
 .vyasa-table-scroll.has-left-overflow { box-shadow: inset 16px 0 12px -12px var(--vyasa-edge-shadow); }
