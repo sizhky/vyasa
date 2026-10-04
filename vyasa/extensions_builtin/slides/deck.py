@@ -10,9 +10,9 @@ class SlideRevealConfig:
     unit: str = "paragraph-groups"
     style: str = "slide-right"
     policy: str = "step"
-    stagger_ms: int = 220
-    duration_ms: int = 420
-    distance: str = "1.75rem"
+    stagger_ms: int = 160
+    duration_ms: int = 240
+    distance: str = "0.5rem"
     easing: str = "cubic-bezier(0.22, 1, 0.36, 1)"
 
 
@@ -70,9 +70,9 @@ def resolve_slide_reveal_config(metadata):
         unit=unit,
         style=style,
         policy=policy,
-        stagger_ms=_coerce_int(metadata.get("slide_reveal_stagger"), 220),
-        duration_ms=_coerce_int(metadata.get("slide_reveal_duration"), 420),
-        distance=str(metadata.get("slide_reveal_distance", "1.75rem") or "1.75rem").strip(),
+        stagger_ms=_coerce_int(metadata.get("slide_reveal_stagger"), SlideRevealConfig.stagger_ms),
+        duration_ms=_coerce_int(metadata.get("slide_reveal_duration"), SlideRevealConfig.duration_ms),
+        distance=str(metadata.get("slide_reveal_distance", "") or SlideRevealConfig.distance).strip(),
         easing=str(metadata.get("slide_reveal_easing", "cubic-bezier(0.22, 1, 0.36, 1)") or "cubic-bezier(0.22, 1, 0.36, 1)").strip(),
     )
 
@@ -292,7 +292,7 @@ def count_slide_progress_segments(markdown_text, *, render_fragment, current_pat
         (index for index, unit in enumerate(step_units) if unit.get("kind") != "heading"),
         len(step_units),
     )
-    return len(step_units[first_content:])
+    return sum(1 for unit in step_units[first_content:] if unit.get("kind") != "heading")
 
 
 class ZenSlideDeck:

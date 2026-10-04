@@ -63,9 +63,11 @@ if (!window.__vyasaZenBound) {
     });
   };
 
+  const isHeadingUnit = (unit) => unit?.dataset.revealKind === 'heading';
+
   const getBaselineVisibleCount = (root = document) => {
     const units = getStepUnits(root);
-    const headingCount = units.filter((unit) => unit.dataset.revealKind === 'heading').length;
+    const headingCount = leadingHeadingCount(units);
     return headingCount > 0 ? headingCount : Math.min(1, units.length);
   };
 
@@ -79,7 +81,7 @@ if (!window.__vyasaZenBound) {
     const bar = body?.querySelector('.vyasa-zen-slide-progress');
     if (!bar) return;
     const units = getStepUnits(root);
-    const progressUnits = units.slice(leadingHeadingCount(units));
+    const progressUnits = units.slice(leadingHeadingCount(units)).filter((unit) => !isHeadingUnit(unit));
     const visible = progressUnits.filter((unit) => unit.dataset.revealState === 'visible').length;
     bar.style.setProperty('--vyasa-slide-progress', `${progressUnits.length ? visible / progressUnits.length * 100 : 100}%`);
     bar.setAttribute('aria-valuemax', String(progressUnits.length));
@@ -98,12 +100,17 @@ if (!window.__vyasaZenBound) {
   const revealNextUnit = (root = document) => {
     const body = getRevealBody(root);
     if (!body || (body.dataset.revealPolicy || 'step') !== 'step') return false;
-    const next = getStepUnits(root).find((unit) => unit.dataset.revealState !== 'visible');
-    if (!next) {
+    const units = getStepUnits(root);
+    const nextIndex = units.findIndex((unit) => unit.dataset.revealState !== 'visible');
+    if (nextIndex < 0) {
       revealLog('revealNextUnit: no hidden units remain');
       return false;
     }
-    showUnit(next);
+    // Headings reveal together with the block that follows them.
+    let lastIndex = nextIndex;
+    while (isHeadingUnit(units[lastIndex]) && lastIndex + 1 < units.length) lastIndex += 1;
+    units.slice(nextIndex, lastIndex + 1).forEach((unit) => showUnit(unit));
+    const next = units[lastIndex];
     revealLog('revealNextUnit: revealed unit', {
       index: next.dataset.revealIndex,
       text: (next.textContent || '').trim().slice(0, 140),
@@ -123,6 +130,11 @@ if (!window.__vyasaZenBound) {
     }
     const target = visible.at(-1);
     hideUnit(target);
+    let remaining = visible.slice(0, -1);
+    while (remaining.length > baseline && isHeadingUnit(remaining.at(-1))) {
+      hideUnit(remaining.at(-1));
+      remaining = remaining.slice(0, -1);
+    }
     revealLog('hidePreviousUnit: hid unit', {
       index: target.dataset.revealIndex,
       text: (target.textContent || '').trim().slice(0, 140),
@@ -277,7 +289,7 @@ if (!window.__vyasaZenBound) {
       String(
         unit.style.getPropertyValue('--vyasa-reveal-duration')
         || getComputedStyle(unit).getPropertyValue('--vyasa-reveal-duration')
-        || '420ms'
+        || '240ms'
       ).replace(/ms$/, ''),
       10,
     );
@@ -285,7 +297,7 @@ if (!window.__vyasaZenBound) {
     syncSlideProgressBar();
     window.setTimeout(() => {
       unit.dataset.revealState = 'hidden';
-    }, Number.isFinite(duration) ? duration : 420);
+    }, Number.isFinite(duration) ? duration : 240);
   };
 
   const initReveal = (root = document) => {
@@ -307,8 +319,8 @@ if (!window.__vyasaZenBound) {
     const policy = body.dataset.revealPolicy || 'step';
     const navDirection = pendingRevealDirection;
     pendingRevealDirection = null;
-    const stagger = readMs(body.style.getPropertyValue('--vyasa-reveal-stagger') || getComputedStyle(body).getPropertyValue('--vyasa-reveal-stagger'), 220);
-    const fallbackDuration = readMs(body.style.getPropertyValue('--vyasa-reveal-duration') || getComputedStyle(body).getPropertyValue('--vyasa-reveal-duration'), 420);
+    const stagger = readMs(body.style.getPropertyValue('--vyasa-reveal-stagger') || getComputedStyle(body).getPropertyValue('--vyasa-reveal-stagger'), 160);
+    const fallbackDuration = readMs(body.style.getPropertyValue('--vyasa-reveal-duration') || getComputedStyle(body).getPropertyValue('--vyasa-reveal-duration'), 240);
     const baseDelay = Math.max(120, Math.round(stagger * 0.6));
     units.forEach((unit, index) => {
       const style = unit.dataset.revealStyle || body.dataset.revealStyle || 'slide-right';
