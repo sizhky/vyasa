@@ -176,20 +176,20 @@ def render_search_preview_page(htmx, request: Request | None, q: str = ""):
     previewable = _filter_search_matches_by_roles(previewable, roles)
     query = (q or "").strip()
     if not query:
-        shell = Div(H1("Search previews", cls="vyasa-page-title text-4xl font-bold"), P("Type a search term in the sidebar to preview matching pages.", cls="mt-2 text-slate-500"))
+        shell = Div(H1("Search previews", cls="vyasa-page-title text-4xl font-bold"), P("Type a search term in the sidebar to preview matching pages.", cls="mt-2 text-vyasa-muted"))
         return layout(shell, htmx=htmx, title=f"Search previews - {get_blog_title()}", show_sidebar=True, current_path="search-previews", auth=auth)
     if not previewable:
         shell = Div(
             H1(f"Search previews: {query}", cls="vyasa-page-title text-4xl font-bold"),
             (P(regex_error, cls="text-amber-600 dark:text-amber-400 text-sm") if regex_error else None),
-            P("No previewable pages matched this search.", cls="mt-2 text-slate-500"),
+            P("No previewable pages matched this search.", cls="mt-2 text-vyasa-muted"),
         )
         return layout(shell, htmx=htmx, title=f"Search previews - {query} - {get_blog_title()}", show_sidebar=True, current_path="search-previews", auth=auth)
     feed = render_search_preview_feed(previewable, root)
     shell = Div(
         H1(f"Search previews: {query}", cls="vyasa-page-title text-4xl font-bold"),
         (P(regex_error, cls="text-amber-600 dark:text-amber-400 text-sm") if regex_error else None),
-        P(f"{len(previewable)} page preview{'s' if len(previewable) != 1 else ''}", cls="mt-2 text-slate-500"),
+        P(f"{len(previewable)} page preview{'s' if len(previewable) != 1 else ''}", cls="mt-2 text-vyasa-muted"),
         feed,
         cls="space-y-6",
     )
@@ -255,6 +255,7 @@ hdrs = (
         """
     ),
     *Theme.slate.headers(highlightjs=False),
+    Script(src=_asset_url("/static/tailwind-tokens.js")),
     Script(src="https://cdn.jsdelivr.net/npm/uikit@3.16.14/dist/js/uikit.min.js"),
     Script(src="https://cdn.jsdelivr.net/npm/uikit@3.16.14/dist/js/uikit-icons.min.js"),
     Meta(name="vyasa-code-theme-light", content=get_config().get_code_theme_light()),

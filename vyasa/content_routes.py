@@ -108,7 +108,7 @@ def _breadcrumbs(path, slug_to_title, abbreviations, *, disable_boost=False, inc
             alternate_text=copy_absolute_path, icon_only=True, extra_cls="vyasa-zen-breadcrumb-copy",
         )
         items.extend((copy_button, copy_toast, copy_target))
-    return Div(*items, cls="vyasa-breadcrumbs mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-500 dark:text-slate-400")
+    return Div(*items, cls="vyasa-breadcrumbs mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-vyasa-muted")
 
 
 def _ref_badge(name):

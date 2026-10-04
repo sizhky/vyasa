@@ -70,7 +70,7 @@ def render_tree_table_html(source: str | Path, *, include_heading: bool = True) 
     header_html = ""
     if include_heading:
         header_html = (
-            f'<div class="mb-4"><div class="text-xs font-medium uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Tree Table</div>'
-            f'<h1 class="mt-1 text-3xl font-semibold">{title}</h1><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{summary}</p></div>'
+            f'<div class="mb-4"><div class="text-xs font-medium uppercase tracking-[0.18em] text-vyasa-muted">Tree Table</div>'
+            f'<h1 class="mt-1 text-3xl font-semibold">{title}</h1><p class="mt-1 text-sm text-vyasa-muted">{summary}</p></div>'
         )
     return f'<section class="vyasa-tree-doc">{header_html}<div class="vyasa-tree-table-wrap"><table class="vyasa-tree-table"><thead><tr>{head_html}</tr></thead><tbody>{"".join(body_rows)}</tbody></table></div></section>'

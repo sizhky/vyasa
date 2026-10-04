@@ -6,7 +6,7 @@ from .search_views import navbar_search_block
 TREE_ROW_CLASSES = "vyasa-tree-row vyasa-tree-row-shell whitespace-nowrap"
 FOLDER_ROW_CLASSES = f"{TREE_ROW_CLASSES} font-medium cursor-pointer select-none list-none"
 FILE_ROW_CLASSES = f"{TREE_ROW_CLASSES} post-link"
-TREE_ACTION_BUTTON_CLASSES = "vyasa-sidebar-tree-action vyasa-row-action shrink-0 text-slate-400 transition-colors"
+TREE_ACTION_BUTTON_CLASSES = "vyasa-sidebar-tree-action vyasa-row-action shrink-0 text-vyasa-faint transition-colors"
 TREE_ACTION_ROW_BASE_CLASSES = {
     "search": "flex items-center gap-1 min-w-0",
     "tree-inline": "inline-flex items-center gap-1 w-max",

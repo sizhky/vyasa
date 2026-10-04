@@ -32,7 +32,7 @@ def bookmark_delete_button(path, title):
 
 def bookmarks_block():
     return Div(
-        Div("No bookmarks yet.", cls="vyasa-bookmarks-empty text-xs text-slate-500 dark:text-slate-400"),
+        Div("No bookmarks yet.", cls="vyasa-bookmarks-empty text-xs text-vyasa-muted"),
         Div(cls="vyasa-bookmarks-list space-y-1 overflow-x-auto"),
         cls="vyasa-bookmarks-block mb-3",
     )

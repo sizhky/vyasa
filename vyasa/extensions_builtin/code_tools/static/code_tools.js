@@ -41,7 +41,7 @@ function copyCodeText(text) {
         if (!toast) {
             toast = document.createElement('div');
             toast.id = 'code-copy-toast';
-            toast.className = 'fixed top-6 right-6 z-[10000] text-xs bg-slate-900 text-white px-3 py-2 rounded shadow-lg opacity-0 transition-opacity duration-300';
+            toast.className = 'fixed top-6 right-6 z-[10000] text-xs bg-vyasa-inverse text-vyasa-on-inverse px-3 py-2 rounded shadow-lg opacity-0 transition-opacity duration-300';
             toast.textContent = 'Copied';
             document.body.appendChild(toast);
         }

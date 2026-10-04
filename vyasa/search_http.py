@@ -11,6 +11,6 @@ def gather_search_page(htmx, q="", request=None, *, find_search_matches, get_rol
             if (slug := content_slug_for_path(item)) and is_allowed(f"/posts/{slug}", roles or [], rbac_rules)
         ]
     if not matches:
-        content = Div(H1("Search Results", cls="text-3xl font-bold mb-6"), P("No matching posts found.", cls="text-slate-600 dark:text-slate-400"), P(regex_error, cls="text-amber-600 dark:text-amber-400 text-sm") if regex_error else None)
+        content = Div(H1("Search Results", cls="text-3xl font-bold mb-6"), P("No matching posts found.", cls="text-vyasa-muted"), P(regex_error, cls="text-amber-600 dark:text-amber-400 text-sm") if regex_error else None)
         return layout(content, htmx=htmx, title="Search Results", show_sidebar=True, auth=request.scope.get("auth") if request else None)
     return layout(gather_search_content(q, matches, regex_error, get_root_folder()), htmx=htmx, title="Search Results", show_sidebar=True, auth=request.scope.get("auth") if request else None)

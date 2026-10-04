@@ -59,7 +59,7 @@ def docked_sidebar_classes(kind):
     return (
         "vyasa-sidebar vyasa-sidebar-docked hidden xl:flex flex-col shrink-0 self-start "
         "sticky top-[var(--vyasa-navbar-height,3.75rem)] h-[calc(100vh-var(--vyasa-navbar-height,3.75rem))] "
-        f"z-[1000] border-slate-200 dark:border-slate-800 {side} {width}"
+        f"z-[1000] border-vyasa-border {side} {width}"
     )
 
 
@@ -129,8 +129,8 @@ def extract_toc(content, strip_inline_markdown, text_to_anchor, unique_anchor):
 
 def build_toc_items(headings):
     if not headings:
-        return [Li("No headings found", cls="text-sm text-slate-500 dark:text-slate-400 py-1")]
-    return [Li(A(text, href=f"#{anchor}", cls=f"toc-link vyasa-ui-text block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors {'ml-0' if level == 1 else f'ml-{(level-1)*3}'}", data_anchor=anchor), cls="my-1") for level, text, anchor in headings]
+        return [Li("No headings found", cls="text-sm text-vyasa-muted py-1")]
+    return [Li(A(text, href=f"#{anchor}", cls=f"toc-link vyasa-ui-text block py-1 px-2 text-sm rounded hover:bg-vyasa-hover transition-colors {'ml-0' if level == 1 else f'ml-{(level-1)*3}'}", data_anchor=anchor), cls="my-1") for level, text, anchor in headings]
 
 
 def get_custom_css_links(root, current_path=None, section_class=None):

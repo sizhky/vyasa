@@ -22,7 +22,7 @@ def _title(path, abbreviations, slug_to_title):
 def _frame(**attrs):
     return Iframe(
         title="HTML document",
-        cls="w-full h-[calc(100vh-14rem)] rounded-lg border border-slate-200 dark:border-slate-700 bg-white",
+        cls="w-full h-[calc(100vh-14rem)] rounded-lg border border-vyasa-border bg-vyasa-surface",
         sandbox="allow-forms allow-modals allow-popups allow-presentation allow-same-origin allow-scripts",
         **attrs,
     )
