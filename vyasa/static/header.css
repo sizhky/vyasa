@@ -98,12 +98,7 @@ code, pre { font-family: var(--vyasa-font-mono); }
     --vyasa-heading-before-gap: var(--vyasa-space-5);
     --vyasa-heading-after-gap: var(--vyasa-space-2);
 
-    /* Code (light). */
-    --vyasa-code-bg: #f9f9fb;
-    --vyasa-code-fg: #1c2024;
-    --vyasa-code-border: #e0e1e6;
-    --vyasa-code-highlight-bg: rgba(62, 99, 221, 0.10);
-    --vyasa-code-highlight-accent: #3e63dd;
+    /* Syntax fallbacks; code surfaces are derived per theme below. */
     --vyasa-code-comment: #6e7781;
     --vyasa-code-keyword: #cf222e;
     --vyasa-code-string: #0a3069;
@@ -170,6 +165,12 @@ code, pre { font-family: var(--vyasa-font-mono); }
     --vyasa-shadow-sm: 0 1px 2px rgb(0 0 0 / var(--vyasa-shadow-alpha)), 0 4px 12px rgb(0 0 0 / var(--vyasa-shadow-alpha));
     --vyasa-shadow-lg: 0 2px 6px rgb(0 0 0 / var(--vyasa-shadow-alpha)), 0 16px 40px rgb(0 0 0 / calc(var(--vyasa-shadow-alpha) * 1.6));
 
+    /* Code surfaces follow the theme's own greys and accent. */
+    --vyasa-code-bg: var(--vyasa-gray-2);
+    --vyasa-code-fg: var(--vyasa-ink);
+    --vyasa-code-border: var(--vyasa-border);
+    --vyasa-code-highlight-bg: var(--vyasa-accent-3);
+    --vyasa-code-highlight-accent: var(--vyasa-primary);
     --vyasa-inline-code-bg: var(--vyasa-gray-3);
     --vyasa-inline-code-fg: var(--vyasa-code-fg);
     --vyasa-inline-code-border: var(--vyasa-gray-5);
@@ -195,10 +196,10 @@ code, pre { font-family: var(--vyasa-font-mono); }
     --vyasa-primary-text: var(--vyasa-dark-primary-text, var(--vyasa-primary-text)) !important;
     --vyasa-accent-11: color-mix(in srgb, var(--vyasa-primary) 62%, var(--vyasa-ink));
     --vyasa-shadow-alpha: 0.4;
-    --vyasa-code-bg: var(--vyasa-dark-code-bg, #18191b) !important;
-    --vyasa-code-fg: var(--vyasa-dark-code-fg, #edeef0) !important;
-    --vyasa-code-border: var(--vyasa-dark-code-border, #363a3f) !important;
-    --vyasa-code-highlight-bg: var(--vyasa-dark-code-highlight-bg, color-mix(in srgb, var(--vyasa-primary) 22%, transparent)) !important;
+    --vyasa-code-bg: var(--vyasa-dark-code-bg, var(--vyasa-gray-2)) !important;
+    --vyasa-code-fg: var(--vyasa-dark-code-fg, var(--vyasa-ink)) !important;
+    --vyasa-code-border: var(--vyasa-dark-code-border, var(--vyasa-border)) !important;
+    --vyasa-code-highlight-bg: var(--vyasa-dark-code-highlight-bg, var(--vyasa-accent-3)) !important;
     --vyasa-inline-code-bg: var(--vyasa-dark-inline-code-bg, var(--vyasa-gray-3)) !important;
     --vyasa-inline-code-fg: var(--vyasa-dark-inline-code-fg, var(--vyasa-code-fg)) !important;
     --vyasa-inline-code-border: var(--vyasa-dark-inline-code-border, var(--vyasa-gray-5)) !important;
@@ -218,6 +219,34 @@ code, pre { font-family: var(--vyasa-font-mono); }
     --vyasa-accent-3: color-mix(in srgb, var(--vyasa-primary) 16%, var(--vyasa-paper));
     --vyasa-accent-4: color-mix(in srgb, var(--vyasa-primary) 24%, var(--vyasa-paper));
     --vyasa-accent-7: color-mix(in srgb, var(--vyasa-primary) 48%, var(--vyasa-paper));
+}
+/* Franken UI / shadcn variables (used by MonsterUI, UIkit and the daisyUI
+   shim for tables, dividers, inputs, dropdowns, inline code, ...) are fixed
+   to the slate theme. Point them at Vyasa tokens so every library component
+   follows the active preset in light and dark. Franken reads them as
+   hsl(var(--x)), so each is an HSL channel list via relative colour syntax.
+   !important beats .uk-theme-* and .dark.uk-theme-* on <html>. */
+:root,
+#page-container {
+    --background: from var(--vyasa-bg) h s l !important;
+    --foreground: from var(--vyasa-ink) h s l !important;
+    --card: from var(--vyasa-surface) h s l !important;
+    --card-foreground: from var(--vyasa-ink) h s l !important;
+    --popover: from var(--vyasa-surface) h s l !important;
+    --popover-foreground: from var(--vyasa-ink) h s l !important;
+    --primary: from var(--vyasa-primary) h s l !important;
+    --primary-foreground: from var(--vyasa-accent-contrast) h s l !important;
+    --secondary: from var(--vyasa-gray-3) h s l !important;
+    --secondary-foreground: from var(--vyasa-ink) h s l !important;
+    --muted: from var(--vyasa-gray-3) h s l !important;
+    --muted-foreground: from var(--vyasa-text-muted) h s l !important;
+    --accent: from var(--vyasa-hover) h s l !important;
+    --accent-foreground: from var(--vyasa-ink) h s l !important;
+    --destructive: from var(--vyasa-danger) h s l !important;
+    --destructive-foreground: from var(--vyasa-gray-1) h s l !important;
+    --border: from var(--vyasa-border) h s l !important;
+    --input: from var(--vyasa-border) h s l !important;
+    --ring: from var(--vyasa-primary) h s l !important;
 }
 /* Focus: 2px accent ring, 2px offset, keyboard focus only. */
 :where(a, button, summary, input, select, textarea, [tabindex]):focus-visible {
