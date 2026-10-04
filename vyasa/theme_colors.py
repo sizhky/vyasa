@@ -110,3 +110,56 @@ def normalize_theme_primary(color: str) -> dict[str, str]:
         "theme_dark_primary_text": primary_text,
         **_dark_surfaces(hue, chroma),
     }
+
+
+def _mix_hex(color: str, base: str, amount: float) -> str | None:
+    """Mix `amount` of `color` into `base` in sRGB.
+
+    >>> _mix_hex("#000000", "#ffffff", 0.5)
+    '#808080'
+    >>> _mix_hex("oklch(0.5 0.1 120)", "#ffffff", 0.5) is None
+    True
+    """
+    top, bottom = _hex_to_rgb(color), _hex_to_rgb(base)
+    if top is None or bottom is None:
+        return None
+    r, g, b = (t * amount + base_ch * (1 - amount) for t, base_ch in zip(top, bottom))
+    return _rgb_to_hex((r, g, b))
+
+
+# Surfaces a preset may omit, derived from that preset's own colours so a
+# partial preset stays one coherent palette: (key, colour key, base key, amount).
+_LIGHT_PAPER_BASE = "#fcfcfc"
+_DERIVED_SURFACES = (
+    ("theme_paper_low", "theme_ink", "theme_paper", 0.025),
+    ("theme_paper_raised", "#ffffff", "theme_paper", 0.6),
+    ("theme_ink_soft", "theme_ink", "theme_paper", 0.68),
+    ("theme_dark_paper_low", "theme_dark_ink", "theme_dark_paper", 0.04),
+    ("theme_dark_paper_raised", "theme_dark_ink", "theme_dark_paper", 0.08),
+    ("theme_dark_paper_accent", "theme_dark_ink", "theme_dark_paper", 0.13),
+    ("theme_dark_ink_soft", "theme_dark_ink", "theme_dark_paper", 0.7),
+)
+
+
+def complete_theme_surfaces(theme: dict[str, str]) -> dict[str, str]:
+    """Fill surfaces a preset leaves out from the preset's own primary, paper and ink.
+
+    >>> out = complete_theme_surfaces({"theme_primary": "#00ff00", "theme_ink": "#000000"})
+    >>> out["theme_paper"], out["theme_ink_soft"]
+    ('#edfced', '#4c514c')
+    >>> complete_theme_surfaces({"theme_paper": "#ffffff", "theme_paper_low": "#eeeeee"})["theme_paper_low"]
+    '#eeeeee'
+    """
+    out = dict(theme)
+    if "theme_paper" not in out and out.get("theme_primary"):
+        paper = _mix_hex(out["theme_primary"], _LIGHT_PAPER_BASE, 0.06)
+        if paper:
+            out["theme_paper"] = paper
+    for key, colour_key, base_key, amount in _DERIVED_SURFACES:
+        if key in out:
+            continue
+        colour = colour_key if colour_key.startswith("#") else out.get(colour_key, "")
+        derived = _mix_hex(colour, out.get(base_key, ""), amount)
+        if derived:
+            out[key] = derived
+    return out
