@@ -378,8 +378,8 @@ export function showVyasaToast(message, tone = 'info') {
         document.body.appendChild(toast);
     }
     toast.textContent = message;
-    toast.classList.remove('bg-slate-900', 'bg-emerald-700', 'bg-red-700');
-    toast.classList.add(tone === 'error' ? 'bg-red-700' : tone === 'success' ? 'bg-emerald-700' : 'bg-slate-900');
+    toast.classList.remove('bg-vyasa-inverse', 'bg-emerald-700', 'bg-red-700');
+    toast.classList.add(tone === 'error' ? 'bg-red-700' : tone === 'success' ? 'bg-emerald-700' : 'bg-vyasa-inverse');
     toast.classList.remove('opacity-0');
     toast.classList.add('opacity-100');
     clearTimeout(toast._vyasaTimer);

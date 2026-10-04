@@ -91,7 +91,7 @@ def _build_branch_sidebar_items(path: str, folder, row_decorators=()):
                 show_icon=False,
             )
             summary = _folder_summary(_decorate_row(title_link, full_slug, entry.title, row_decorators, context="tree-inline"), branch_href=branch_href)
-            items.append(Li(Details(summary, Ul(cls="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800"), data_folder="true"), cls="my-1"))
+            items.append(Li(Details(summary, Ul(cls="ml-4 pl-2 space-y-1 border-l border-vyasa-border"), data_folder="true"), cls="my-1"))
             continue
         href = f"/posts/{quote(full_slug, safe='/')}"
         icon = document_icon_for_path(entry.path)
@@ -121,7 +121,7 @@ def _build_git_root_row(path: str, folder, row_decorators, services):
     title_node = _decorate_row(title_node, branch_prefix, title, row_decorators, context="tree-inline")
     branch_href = f"/_sidebar/posts/branch?path={quote(branch_prefix, safe='')}"
     children = _build_branch_sidebar_items(branch_prefix, snapshot_root, row_decorators)
-    return Li(Details(_folder_summary(title_node, branch_href=branch_href), Ul(*children, cls="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800"), data_folder="true", open=True), cls="my-1")
+    return Li(Details(_folder_summary(title_node, branch_href=branch_href), Ul(*children, cls="ml-4 pl-2 space-y-1 border-l border-vyasa-border"), data_folder="true", open=True), cls="my-1")
 
 
 EXTENSION = SidebarRoutesExtension(

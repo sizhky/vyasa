@@ -453,11 +453,11 @@ function initCommandPalette() {
     if (document.getElementById('vyasa-command-palette')) return;
     const palette = document.createElement('div');
     palette.id = 'vyasa-command-palette';
-    palette.className = 'fixed inset-0 z-[9999] hidden bg-slate-950/45 backdrop-blur-sm';
+    palette.className = 'fixed inset-0 z-[9999] hidden bg-vyasa-inverse backdrop-blur-sm';
     palette.innerHTML = `
-        <div class="mx-auto mt-[12vh] w-[min(42rem,calc(100vw-2rem))] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 shadow-2xl">
-            <div class="border-b border-slate-200 dark:border-slate-800 p-3">
-                <input type="search" name="q" autocomplete="off" placeholder="Search file names..." class="vyasa-command-palette-input w-full bg-transparent px-2 py-2 text-base text-slate-800 dark:text-slate-100 outline-none" />
+        <div class="mx-auto mt-[12vh] w-[min(42rem,calc(100vw-2rem))] rounded-lg border border-vyasa-border bg-vyasa-surface shadow-2xl">
+            <div class="border-b border-vyasa-border p-3">
+                <input type="search" name="q" autocomplete="off" placeholder="Search file names..." class="vyasa-command-palette-input w-full bg-transparent px-2 py-2 text-base text-vyasa-text outline-none" />
             </div>
             <div class="vyasa-command-palette-results max-h-[55vh] overflow-y-auto p-3"></div>
         </div>`;
@@ -483,7 +483,7 @@ function initCommandPalette() {
         palette.classList.remove('hidden');
         input.focus();
         input.select();
-        if (!results.innerHTML.trim()) results.innerHTML = '<div class="text-xs text-slate-500">Type to search file names.</div>';
+        if (!results.innerHTML.trim()) results.innerHTML = '<div class="text-xs text-vyasa-muted">Type to search file names.</div>';
     };
     const runSearch = () => {
         fetch(postsSearchUrl(input.value.trim()), { headers: { 'HX-Request': 'true' } }).then((response) => response.text()).then((html) => {

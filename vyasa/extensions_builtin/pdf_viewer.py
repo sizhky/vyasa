@@ -24,7 +24,7 @@ def render_pdf_document(context):
             H1(title, cls=PAGE_TITLE_CLS),
             Button(
                 "Focus PDF",
-                cls="pdf-focus-toggle inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors",
+                cls="pdf-focus-toggle inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md border border-vyasa-border bg-vyasa-surface hover:bg-vyasa-hover transition-colors",
                 type="button",
                 data_pdf_focus_toggle="true",
                 data_pdf_focus_label="Focus PDF",
@@ -34,7 +34,7 @@ def render_pdf_document(context):
             cls="flex items-center justify-between gap-4 flex-wrap mb-6",
         ),
         NotStr(
-            f'<object data="{pdf_src}" type="application/pdf" class="pdf-viewer w-full h-[calc(100vh-14rem)] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"><p class="p-4 text-sm text-slate-600 dark:text-slate-300">PDF preview not available. <a href="{pdf_src}" class="text-blue-600 hover:underline">Download PDF</a>.</p></object>'
+            f'<object data="{pdf_src}" type="application/pdf" class="pdf-viewer w-full h-[calc(100vh-14rem)] rounded-lg border border-vyasa-border bg-vyasa-surface"><p class="p-4 text-sm text-vyasa-muted">PDF preview not available. <a href="{pdf_src}" class="text-vyasa-link hover:underline">Download PDF</a>.</p></object>'
         ),
     )
     return DocumentPage(title, context.path, content, file_path=str(context.document.path), show_toc=False).render(
@@ -54,11 +54,11 @@ def render_static_pdf_document(context):
     content = Div(
         P(
             "PDF file: ",
-            A(context.relative_path.as_posix(), href=pdf_href, cls="text-blue-600 hover:underline"),
-            cls="text-sm text-slate-600 dark:text-slate-300 mb-4",
+            A(context.relative_path.as_posix(), href=pdf_href, cls="text-vyasa-link hover:underline"),
+            cls="text-sm text-vyasa-muted mb-4",
         ),
         NotStr(
-            f'<object data="{pdf_href}" type="application/pdf" class="pdf-viewer w-full h-[calc(100vh-14rem)] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"><p class="p-4 text-sm text-slate-600 dark:text-slate-300">PDF preview not available. <a href="{pdf_href}" class="text-blue-600 hover:underline">Download PDF</a>.</p></object>'
+            f'<object data="{pdf_href}" type="application/pdf" class="pdf-viewer w-full h-[calc(100vh-14rem)] rounded-lg border border-vyasa-border bg-vyasa-surface"><p class="p-4 text-sm text-vyasa-muted">PDF preview not available. <a href="{pdf_href}" class="text-vyasa-link hover:underline">Download PDF</a>.</p></object>'
         ),
     )
     return SimpleNamespace(title=title, raw_content="", toc_items=None, content_html=to_xml(content))

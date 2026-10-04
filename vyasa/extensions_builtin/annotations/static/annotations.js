@@ -537,7 +537,7 @@ function initAnnotations(root = document) {
         const canManage = (item.author || 'anonymous') === currentAuthor;
         const replyBtn = document.createElement('button');
         replyBtn.type = 'button';
-        replyBtn.className = 'ml-2 inline-flex h-5 items-center justify-center rounded px-1.5 text-xs font-semibold text-slate-400 opacity-0 transition-opacity hover:text-slate-700';
+        replyBtn.className = 'ml-2 inline-flex h-5 items-center justify-center rounded px-1.5 text-xs font-semibold text-vyasa-faint opacity-0 transition-opacity hover:text-vyasa-text';
         replyBtn.textContent = 'Reply';
         replyBtn.addEventListener('click', (event) => {
             event.stopPropagation();
@@ -557,7 +557,7 @@ function initAnnotations(root = document) {
         if (canManage) {
             const edit = document.createElement('button');
             edit.type = 'button';
-            edit.className = 'ml-2 inline-flex h-5 w-5 items-center justify-center rounded text-xs font-semibold text-slate-400 opacity-0 transition-opacity hover:text-slate-700';
+            edit.className = 'ml-2 inline-flex h-5 w-5 items-center justify-center rounded text-xs font-semibold text-vyasa-faint opacity-0 transition-opacity hover:text-vyasa-text';
             edit.setAttribute('aria-label', 'Edit annotation');
             edit.textContent = '✎';
             edit.addEventListener('click', (event) => { event.stopPropagation(); openEditor(); });
@@ -720,7 +720,7 @@ function initAnnotations(root = document) {
         actions.className = 'fixed z-[1400] flex gap-1.5';
         actions.style.top = `${Math.max(12, pending.rect.top - 6)}px`;
         actions.style.left = `${Math.min(window.innerWidth - 94, pending.rect.right + 10)}px`;
-        const bubbleClass = 'flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white/96 text-slate-700 shadow-lg backdrop-blur dark:border-slate-700 dark:bg-slate-950/96 dark:text-slate-200';
+        const bubbleClass = 'flex h-9 w-9 items-center justify-center rounded-full border border-vyasa-border bg-vyasa-surface text-vyasa-text shadow-lg backdrop-blur';
         const makeBubble = (id, label, icon) => {
             const button = document.createElement('button');
             button.id = id;
@@ -761,10 +761,10 @@ function initAnnotations(root = document) {
             document.getElementById('vyasa-annotation-composer')?.remove();
             const box = document.createElement('div');
             box.id = 'vyasa-annotation-composer';
-            box.className = 'fixed z-[1400] w-[20rem] rounded-xl border border-slate-200 bg-[var(--vyasa-paper,#fff)] p-3 shadow-2xl dark:border-slate-700';
+            box.className = 'fixed z-[1400] w-[20rem] rounded-xl border border-vyasa-border bg-[var(--vyasa-paper,#fff)] p-3 shadow-2xl';
             box.style.top = `${Math.min(window.innerHeight - 160, Math.max(12, pending.rect.top + 28))}px`;
             box.style.left = `${Math.min(window.innerWidth - 340, pending.rect.right + 10)}px`;
-            box.innerHTML = `<textarea class="h-24 w-full rounded-lg border border-slate-200 bg-transparent px-3 py-2 text-sm text-[var(--vyasa-ink,#2d3434)] dark:border-slate-700" placeholder="Write a comment"></textarea><div class="mt-2 flex justify-end gap-2"><button type="button" data-ann-cancel class="rounded-md px-3 py-1.5 text-sm text-slate-500">Cancel</button><button type="button" data-ann-save class="rounded-md bg-slate-900 px-3 py-1.5 text-sm text-white dark:bg-slate-100 dark:text-slate-900">Save</button></div>`;
+            box.innerHTML = `<textarea class="h-24 w-full rounded-lg border border-vyasa-border bg-transparent px-3 py-2 text-sm text-[var(--vyasa-ink,#2d3434)]" placeholder="Write a comment"></textarea><div class="mt-2 flex justify-end gap-2"><button type="button" data-ann-cancel class="rounded-md px-3 py-1.5 text-sm text-vyasa-muted">Cancel</button><button type="button" data-ann-save class="rounded-md bg-vyasa-inverse px-3 py-1.5 text-sm text-vyasa-on-inverse">Save</button></div>`;
             document.body.appendChild(box);
             box.querySelector('[data-ann-cancel]').addEventListener('click', clearUi);
             const textarea = box.querySelector('textarea');

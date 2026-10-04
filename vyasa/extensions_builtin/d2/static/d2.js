@@ -544,18 +544,18 @@ window.openD2Fullscreen = async function(id) {
     modal.style.animation = 'fadeIn 0.2s ease-in';
 
     const modalContent = document.createElement('div');
-    modalContent.className = 'relative bg-white dark:bg-slate-900 rounded-lg shadow-2xl w-full h-full max-w-[95vw] max-h-[95vh] flex flex-col';
+    modalContent.className = 'relative bg-vyasa-surface rounded-lg shadow-2xl w-full h-full max-w-[95vw] max-h-[95vh] flex flex-col';
 
     const header = document.createElement('div');
-    header.className = 'flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700';
+    header.className = 'flex items-center justify-between p-4 border-b border-vyasa-border';
 
     const title = document.createElement('h3');
-    title.className = 'text-lg font-semibold text-slate-800 dark:text-slate-200';
+    title.className = 'text-lg font-semibold text-vyasa-text';
     title.textContent = fullscreenTitle;
 
     const closeBtn = document.createElement('button');
     closeBtn.innerHTML = '✕';
-    closeBtn.className = 'px-3 py-1 text-xl text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors';
+    closeBtn.className = 'px-3 py-1 text-xl text-vyasa-muted hover:text-vyasa-text hover:bg-vyasa-hover rounded transition-colors';
     closeBtn.title = 'Close (Esc)';
     closeBtn.onclick = () => document.body.removeChild(modal);
 

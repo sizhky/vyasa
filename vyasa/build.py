@@ -354,6 +354,7 @@ def generate_static_html(title, body_content, blog_title, favicon_href, extra_he
     
     <!-- TailwindCSS and MonsterUI -->
     <script src="https://cdn.tailwindcss.com?plugins=forms,typography,aspect-ratio,container-queries"></script>
+    <script src="{_asset_url('/static/tailwind-tokens.js')}"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uikit@3.16.14/dist/css/uikit.min.css" />
     <script src="https://cdn.jsdelivr.net/npm/uikit@3.16.14/dist/js/uikit.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/uikit@3.16.14/dist/js/uikit-icons.min.js"></script>
@@ -376,6 +377,7 @@ def generate_static_html(title, body_content, blog_title, favicon_href, extra_he
     
     <!-- Static assets -->
     <link rel="icon" href="{favicon_href}">
+    <link rel="stylesheet" href="{_asset_url('/static/header.css')}">
     <link rel="stylesheet" href="{_asset_url('/static/sidenote.css')}">
     <link rel="stylesheet" href="{_asset_url('/static/markdown.css')}">
     <link rel="stylesheet" href="{_asset_url('/static/linux-libertine.css')}">
@@ -410,10 +412,10 @@ def build_post_tree_static(folder, root_folder, show_hidden=False):
             icon = document_icon_for_path(item)
             items.append(Li(A(
                 Span(cls="w-4 mr-2 shrink-0"),
-                Span(UkIcon(icon, cls="text-slate-400 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
+                Span(UkIcon(icon, cls="text-vyasa-faint w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
                 Span(title, cls="truncate min-w-0", title=title),
                 href=content_url_for_slug(slug, suffix=".html"),
-                cls="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0")))
+                cls="flex items-center py-1 px-2 rounded hover:bg-vyasa-hover text-vyasa-text hover:text-vyasa-text transition-colors min-w-0")))
         elif item.is_dir():
             if not show_hidden and item.name.startswith('.'): 
                 continue
@@ -435,19 +437,19 @@ def build_post_tree_static(folder, root_folder, show_hidden=False):
                 items.append(Li(Details(
                     Summary(
                         Span(Span(cls="folder-chevron"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
-                        Span(UkIcon("folder", cls="text-blue-500 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
+                        Span(UkIcon("folder", cls="text-vyasa-link w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
                         title_node,
-                        cls="flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-w-0"),
-                    Ul(*sub_items, cls="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800"),
+                        cls="flex items-center font-medium cursor-pointer py-1 px-2 hover:text-vyasa-text select-none list-none rounded hover:bg-vyasa-hover transition-colors min-w-0"),
+                    Ul(*sub_items, cls="ml-4 pl-2 space-y-1 border-l border-vyasa-border"),
                     data_folder="true"), cls="my-1"))
             elif note_file and note_slug:
                 title_text = Span(folder_title, cls="truncate min-w-0", title=folder_title)
                 items.append(Li(A(
                     Span(cls="w-4 mr-2 shrink-0"),
-                    Span(UkIcon("folder", cls="text-blue-500 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
+                    Span(UkIcon("folder", cls="text-vyasa-link w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
                     title_text,
                     href=content_url_for_slug(note_slug, suffix=".html"),
-                    cls="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0")))
+                    cls="flex items-center py-1 px-2 rounded hover:bg-vyasa-hover text-vyasa-text hover:text-vyasa-text transition-colors min-w-0")))
         elif item.suffix in enabled_document_suffixes() and item.suffix != ".pdf":
             slug = str(item.relative_to(root_folder).with_suffix(''))
             if item.suffix == ".md":
@@ -458,10 +460,10 @@ def build_post_tree_static(folder, root_folder, show_hidden=False):
             # Use .html extension for static links
             items.append(Li(A(
                 Span(cls="w-4 mr-2 shrink-0"),
-                Span(UkIcon(icon, cls="text-slate-400 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
+                Span(UkIcon(icon, cls="text-vyasa-faint w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
                 Span(title, cls="truncate min-w-0", title=title),
                 href=content_url_for_slug(slug, suffix=".html"),
-                cls="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0")))
+                cls="flex items-center py-1 px-2 rounded hover:bg-vyasa-hover text-vyasa-text hover:text-vyasa-text transition-colors min-w-0")))
     return items
 
 
@@ -616,7 +618,7 @@ def build_static_site(input_dir=None, output_dir=None):
         meta_text = f"{read_time}-min read"
         if last_modified:
             meta_text += f" • {last_modified}"
-        title_html = f'<div class="mb-8"><h1 class="text-4xl font-bold">{post_title}</h1><p class="vyasa-read-time text-sm text-slate-500 dark:text-slate-400 mt-2">{meta_text}</p></div>'
+        title_html = f'<div class="mb-8"><h1 class="text-4xl font-bold">{post_title}</h1><p class="vyasa-read-time text-sm text-vyasa-muted mt-2">{meta_text}</p></div>'
         content_html = title_html + content_html
 
         if prev_item or next_item:
@@ -693,15 +695,15 @@ def build_static_site(input_dir=None, output_dir=None):
         print("\nGenerating default index.html...")
         welcome_content = f'''
         <h1 class="text-4xl font-bold tracking-tight mb-8">Welcome to {blog_title}!</h1>
-        <h2 class="text-lg font-medium text-slate-700 dark:text-slate-300 mb-4">Quick start tutorial</h2>
-        <ul class="list-disc pl-6 space-y-2 text-base text-slate-600 dark:text-slate-400 mb-4">
+        <h2 class="text-lg font-medium text-vyasa-text mb-4">Quick start tutorial</h2>
+        <ul class="list-disc pl-6 space-y-2 text-base text-vyasa-muted mb-4">
             <li>Use the left sidebar to browse the files and folders in your blog. Use <kbd>Z</kbd> to toggle the sidebar.</li>
             <li>Use the right sidebar to browse the table of contents of the current file. Use <kbd>X</kbd> to toggle the sidebar.</li>
             <li>Open a markdown file to preview it instantly.</li>
         </ul>
-        <p class="text-base text-slate-600 dark:text-slate-400">
+        <p class="text-base text-vyasa-muted">
             More guides, examples, and documentation are available at
-            <a href="https://vyasa.yeshwanth.dev" class="text-slate-900 dark:text-slate-100 underline underline-offset-4">vyasa.yeshwanth.dev</a>.
+            <a href="https://vyasa.yeshwanth.dev" class="text-vyasa-text underline underline-offset-4">vyasa.yeshwanth.dev</a>.
         </p>
         '''
         

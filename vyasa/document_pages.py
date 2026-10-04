@@ -139,7 +139,7 @@ def meta_line(source_text: str, file_path=None, meta_extra=None):
         items.extend([Span("•", aria_hidden="true"), Span(label)])
     if meta_extra is not None:
         items.extend([Span("•", aria_hidden="true"), meta_extra])
-    return P(*items, cls="vyasa-read-time text-sm text-slate-500 dark:text-slate-400 mt-2 flex flex-wrap items-center gap-2")
+    return P(*items, cls="vyasa-read-time text-sm text-vyasa-muted mt-2 flex flex-wrap items-center gap-2")
 
 
 def _encoded_copy_payload(text: str) -> str:
@@ -176,7 +176,7 @@ def copy_text_button(label: str, text: str, target_id: str, toast_id: str, *, al
             data_copy_alternate_payload=_encoded_copy_payload(alternate_text) if alternate_text is not None else None,
             data_tooltip="Click: relative path. Shift-click: absolute path." if alternate_text is not None else None,
         ),
-        Div(f"Copied {label.lower()}!", id=toast_id, cls="fixed top-6 right-6 bg-slate-900 text-white text-sm px-4 py-2 rounded shadow-lg opacity-0 transition-opacity duration-300"),
+        Div(f"Copied {label.lower()}!", id=toast_id, cls="fixed top-6 right-6 bg-vyasa-inverse text-vyasa-on-inverse text-sm px-4 py-2 rounded shadow-lg opacity-0 transition-opacity duration-300"),
         Textarea(text, id=target_id, cls="absolute left-[-9999px] top-0 opacity-0 pointer-events-none"),
     )
 
@@ -238,7 +238,7 @@ def copy_raw_nodes(raw_content: str, *, kind: str = "md"):
     title = "Copied Raw Markdown!"
     toast_id = f"raw-{kind}-toast"
     return (
-        Div(title, id=toast_id, cls="fixed top-6 right-6 bg-slate-900 text-white text-sm px-4 py-2 rounded shadow-lg opacity-0 transition-opacity duration-300"),
+        Div(title, id=toast_id, cls="fixed top-6 right-6 bg-vyasa-inverse text-vyasa-on-inverse text-sm px-4 py-2 rounded shadow-lg opacity-0 transition-opacity duration-300"),
     )
 
 
@@ -250,7 +250,7 @@ def frontmatter_metadata_block(metadata: dict):
         '<details class="vyasa-frontmatter-block mb-8 overflow-hidden rounded-2xl px-4 py-3">'
         '<summary class="vyasa-frontmatter-summary cursor-pointer text-xs font-medium uppercase tracking-[0.18em]">Front Matter</summary>'
         + "".join(
-            f'<div class="space-y-1 pt-6 first:pt-4"><div class="border-t border-[rgba(126,154,144,0.16)] pb-6 first:border-t-0 first:pb-0"></div><div class="text-[11px] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{html.escape(k.replace("_", " "))}</div><p class="m-0 text-sm leading-relaxed text-slate-700 dark:text-slate-200">{html.escape(v)}</p></div>'
+            f'<div class="space-y-1 pt-6 first:pt-4"><div class="border-t border-[rgba(126,154,144,0.16)] pb-6 first:border-t-0 first:pb-0"></div><div class="text-[11px] uppercase tracking-[0.18em] text-vyasa-muted">{html.escape(k.replace("_", " "))}</div><p class="m-0 text-sm leading-relaxed text-vyasa-text">{html.escape(v)}</p></div>'
             for k, v in items[:4]
         )
         + "</details>"

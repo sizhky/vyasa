@@ -23,7 +23,7 @@ def render_cryptograph_block(code: str) -> str:
     }
     attr_text = " ".join(f'{key}="{html.escape(value)}"' for key, value in attrs.items())
     return (
-        f'<div class="cryptograph-container my-6 rounded-xl border border-slate-200 dark:border-slate-800 p-4" {attr_text}>'
+        f'<div class="cryptograph-container my-6 rounded-xl border border-vyasa-border p-4" {attr_text}>'
         f'<pre class="cryptograph-ciphertext whitespace-pre-wrap">{html.escape(ciphertext)}</pre>'
         f'</div>'
     )
