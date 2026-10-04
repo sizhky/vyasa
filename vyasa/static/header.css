@@ -4,8 +4,6 @@ body {
     font-size: var(--vyasa-text-md);
     margin: 0;
     padding: 0;
-    background: var(--vyasa-paper) !important;
-    color: inherit !important;
     line-height: var(--vyasa-leading-prose);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -195,8 +193,8 @@ code, pre { font-family: var(--vyasa-font-mono); }
     --vyasa-ink: var(--vyasa-dark-ink, #edeef0) !important;
     --vyasa-ink-soft: var(--vyasa-dark-ink-soft, #b0b4ba) !important;
     --vyasa-primary-text: var(--vyasa-dark-primary-text, var(--vyasa-primary-text)) !important;
-    --vyasa-accent-11: color-mix(in srgb, var(--vyasa-primary) 62%, var(--vyasa-ink)) !important;
-    --vyasa-shadow-alpha: 0.4 !important;
+    --vyasa-accent-11: color-mix(in srgb, var(--vyasa-primary) 62%, var(--vyasa-ink));
+    --vyasa-shadow-alpha: 0.4;
     --vyasa-code-bg: var(--vyasa-dark-code-bg, #18191b) !important;
     --vyasa-code-fg: var(--vyasa-dark-code-fg, #edeef0) !important;
     --vyasa-code-border: var(--vyasa-dark-code-border, #363a3f) !important;
@@ -256,10 +254,9 @@ a:hover { color: var(--vyasa-link-hover); text-decoration-color: currentColor; }
 .dark .vyasa-mark {
     background: color-mix(in srgb, var(--vyasa-highlight) 28%, transparent);
 }
-html, body { background: var(--vyasa-paper) !important; color: var(--vyasa-ink) !important; }
-body.bg-background, body.text-foreground { background: var(--vyasa-paper) !important; color: var(--vyasa-ink) !important; }
-#page-container { background: var(--vyasa-paper) !important; color: var(--vyasa-ink) !important; min-height: 100vh; }
-.dark #page-container { background: var(--vyasa-paper) !important; color: var(--vyasa-ink) !important; }
+/* Page surface. !important beats MonsterUI's body bg-background/text-foreground. */
+html, body, #page-container { background: var(--vyasa-paper) !important; color: var(--vyasa-ink) !important; }
+#page-container { min-height: 100vh; }
 /* Dim raster media in dark mode so bright images don't glare; opt out with .vyasa-no-dim. */
 .dark img:not(.vyasa-no-dim):not([src$=".svg"]),
 .dark video:not(.vyasa-no-dim) { filter: brightness(0.86) contrast(1.04); transition: filter var(--vyasa-duration-base) var(--vyasa-ease); }
@@ -439,14 +436,13 @@ html[data-vyasa-sidebar-state-toc="docked"] #content-with-sidebars {
 .vyasa-sidebar-docked .vyasa-sidebar-toggle,
 .vyasa-sidebar-docked .vyasa-sidebar-body,
 .vyasa-sidebar-docked .vyasa-sidebar-card {
-    background: transparent !important;
-    border: 0 !important;
-    box-shadow: none !important;
-    backdrop-filter: none !important;
-    border-radius: 0 !important;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    border-radius: 0;
 }
 .vyasa-sidebar-docked .vyasa-sidebar-toggle {
-    margin: 0 !important;
+    margin: 0;
     border-bottom: 1px solid var(--vyasa-border);
 }
 .vyasa-sidebar-docked .vyasa-sidebar-body {
@@ -542,10 +538,10 @@ html[data-vyasa-hide-toc-sidebar] #toc-sidebar {
 .vyasa-footer-shell {
     display: block;
     width: 100%;
-    margin: auto 0 0 0 !important;
-    padding: 0 !important;
-    background: var(--vyasa-bg) !important;
-    color: var(--vyasa-text-muted) !important;
+    margin: auto 0 0 0;
+    padding: 0;
+    background: var(--vyasa-bg);
+    color: var(--vyasa-text-muted);
     border-top: 1px solid var(--vyasa-border);
     box-sizing: border-box;
 }
@@ -554,19 +550,15 @@ html[data-vyasa-hide-toc-sidebar] #toc-sidebar {
     /* Local override: navbar text/controls follow ink so they track light/dark.
        Cascades to descendants (search trigger, input, icons) that reference it. */
     --vyasa-primary-text: var(--vyasa-ink);
-    background: color-mix(in srgb, var(--vyasa-bg) 88%, transparent) !important;
+    background: color-mix(in srgb, var(--vyasa-bg) 88%, transparent);
     -webkit-backdrop-filter: saturate(1.8) blur(12px);
     backdrop-filter: saturate(1.8) blur(12px);
-    color: var(--vyasa-ink) !important;
-    border-radius: 0 !important;
+    color: var(--vyasa-ink);
+    border-radius: 0;
     box-shadow: none;
     border-bottom: 1px solid var(--vyasa-border);
 }
 
-.vyasa-footer-card {
-    border-radius: 0 !important;
-    box-shadow: none;
-}
 
 /* Navbar: brand text and borderless icon buttons with grey hover. */
 .vyasa-navbar-card a.vyasa-navbar-brand {
@@ -820,20 +812,21 @@ html[data-theme-mode="system"] #theme-mode-toggle [data-theme-mode-icon="system"
 }
 
 .vyasa-sidebar-body,
-.vyasa-sidebar-toggle,
-.vyasa-footer-card,
-.vyasa-mobile-panel-header,
-.vyasa-mobile-panel-body {
-    background: var(--vyasa-bg-subtle) !important;
-    color: var(--vyasa-ink) !important;
-    border-color: var(--vyasa-border) !important;
+.vyasa-sidebar-toggle {
+    background: var(--vyasa-bg-subtle);
+    color: var(--vyasa-ink);
+    border-color: var(--vyasa-border);
     box-shadow: none;
 }
 
 .vyasa-mobile-panel,
 .vyasa-mobile-panel-header,
 .vyasa-mobile-panel-body {
+    /* !important beats the bg/border utility classes the mobile panel markup still carries. */
     background: var(--vyasa-bg) !important;
+    color: var(--vyasa-ink);
+    border-color: var(--vyasa-border) !important;
+    box-shadow: none !important;
 }
 
 .vyasa-mobile-panel {
@@ -885,11 +878,11 @@ html[data-theme-mode="system"] #theme-mode-toggle [data-theme-mode-icon="system"
 
 .vyasa-sidebar-toggle,
 .vyasa-sidebar-body {
-    border-radius: var(--vyasa-radius-lg) !important;
+    border-radius: var(--vyasa-radius-lg);
 }
 
 .vyasa-sidebar-toggle {
-    margin-bottom: var(--vyasa-space-3) !important;
+    margin-bottom: var(--vyasa-space-3);
 }
 .vyasa-sidebar-toggle {
     font: var(--vyasa-weight-semibold) var(--vyasa-text-sm)/var(--vyasa-leading-tight) var(--vyasa-font-ui);
@@ -939,16 +932,16 @@ html[data-theme-mode="system"] #theme-mode-toggle [data-theme-mode-icon="system"
 }
 
 .vyasa-footer-card {
-    background: var(--vyasa-bg) !important;
-    color: var(--vyasa-text-muted) !important;
+    background: var(--vyasa-bg);
+    color: var(--vyasa-text-muted);
     font-size: var(--vyasa-text-sm);
     display: block;
     width: 100%;
     box-sizing: border-box;
-    border-radius: 0 !important;
-    box-shadow: none !important;
-    border-top: 0 !important;
-    margin: 0 !important;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    margin: 0;
 }
 
 .vyasa-footer-card a,
@@ -1601,17 +1594,18 @@ a.vyasa-code-link code { color: inherit; }
     color: var(--vyasa-ink) !important;
     background: var(--vyasa-active) !important;
 }
-.posts-search-block { background: transparent !important; margin-bottom: var(--vyasa-space-3); }
+.posts-search-block { background: transparent; margin-bottom: var(--vyasa-space-3); }
 .posts-search-label { color: var(--vyasa-text-muted) !important; font: var(--vyasa-weight-medium) var(--vyasa-text-xs)/var(--vyasa-leading-tight) var(--vyasa-font-ui); }
 .posts-search-input {
-    background: var(--vyasa-surface) !important;
-    border: 1px solid var(--vyasa-border) !important;
-    border-radius: var(--vyasa-radius-md) !important;
-    padding: var(--vyasa-space-2) 4.4rem var(--vyasa-space-2) var(--vyasa-space-3) !important;
-    font-size: var(--vyasa-text-base) !important;
-    box-shadow: none !important;
+    background: var(--vyasa-surface);
+    color: var(--vyasa-ink);
+    border: 1px solid var(--vyasa-border);
+    border-radius: var(--vyasa-radius-md);
+    padding: var(--vyasa-space-2) 4.4rem var(--vyasa-space-2) var(--vyasa-space-3);
+    font-size: var(--vyasa-text-base);
+    box-shadow: none;
 }
-.posts-search-input:focus { border-color: transparent !important; outline: 2px solid var(--vyasa-focus-ring); outline-offset: -1px; box-shadow: none !important; }
+.posts-search-input:focus { border-color: transparent; outline: 2px solid var(--vyasa-focus-ring); outline-offset: -1px; }
 .posts-search-input::placeholder { color: var(--vyasa-text-faint); }
 .posts-search-preview-button,
 .posts-search-clear-button { background: transparent !important; color: var(--vyasa-text-muted) !important; border-radius: var(--vyasa-radius-sm) !important; }

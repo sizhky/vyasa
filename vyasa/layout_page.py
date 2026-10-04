@@ -243,12 +243,12 @@ def render_page_frame(frame: PageFrame, *, htmx, deps: PageFrameDeps):
             Div(logout_button, cls="flex items-center") if logout_button else Div(),
             Div(
                 Div(*extra_links, cls="flex items-center gap-3") if extra_links else Div(),
-                Div(NotStr('Powered by <a href="https://github.com/sizhky/vyasa" class="underline hover:text-white/80" target="_blank" rel="noopener noreferrer">Vyasa</a> and ❤️')),
+                Div(NotStr('Powered by <a href="https://github.com/sizhky/vyasa" class="underline" target="_blank" rel="noopener noreferrer">Vyasa</a> and ❤️')),
                 cls="flex items-center gap-4",
             ),
             cls="flex items-center justify-between w-full",
         )
-        return Footer(Div(footer_inner, cls="vyasa-footer-card bg-slate-900 text-white p-4 dark:bg-slate-800"), cls=f"{outer_cls} vyasa-footer-shell".strip(), id="site-footer", **outer_style)
+        return Footer(Div(footer_inner, cls="vyasa-footer-card px-4 py-3"), cls=f"{outer_cls} vyasa-footer-shell".strip(), id="site-footer", **outer_style)
 
     # History-restore requests (back/swipe with a cache miss) must return the full
     # page; htmx writes the response into <body>, so a partial would wipe the navbar

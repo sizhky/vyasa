@@ -94,7 +94,7 @@ def collapsible_sidebar(icon, title, items_list, is_open=False, data_sidebar=Non
         summary_content.append(Span(*action_nodes, cls="vyasa-sidebar-action-rail ml-auto inline-flex items-center gap-1"))
     panel_border_cls = "border"
     summary_classes = f"vyasa-sidebar-toggle vyasa-sidebar-toggle-{sidebar_kind} vyasa-ui-text flex items-center gap-2 cursor-pointer py-2 px-3 select-none list-none {panel_border_cls} min-h-[44px]"
-    content_classes = f"vyasa-sidebar-body vyasa-sidebar-body-{sidebar_kind} p-3 {panel_border_cls} rounded-lg max-h-[calc(100vh-18rem)] flex flex-col overflow-hidden min-h-0" if scroll_target == "list" else f"vyasa-sidebar-body vyasa-sidebar-body-{sidebar_kind} p-3 {panel_border_cls} rounded-lg overflow-x-auto overflow-y-auto max-h-[calc(100vh-18rem)] sidebar-scroll-container"
+    content_classes = f"vyasa-sidebar-body vyasa-sidebar-body-{sidebar_kind} p-3 {panel_border_cls} max-h-[calc(100vh-18rem)] flex flex-col overflow-hidden min-h-0" if scroll_target == "list" else f"vyasa-sidebar-body vyasa-sidebar-body-{sidebar_kind} p-3 {panel_border_cls} overflow-x-auto overflow-y-auto max-h-[calc(100vh-18rem)] sidebar-scroll-container"
     list_classes = "list-none pt-2 sidebar-scroll-container" if scroll_target == "list" else "list-none pt-4"
     extra_content = extra_content or []
     content_id = "sidebar-scroll-container" if scroll_target != "list" else None

@@ -105,11 +105,11 @@ class StaticShellRenderer:
         return f'''
     <aside id="posts-sidebar" class="vyasa-sidebar vyasa-posts-sidebar hidden md:block w-64 shrink-0 sticky top-24 self-start mt-4 max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]">
         <details open class="vyasa-sidebar-card vyasa-sidebar-card-posts">
-            <summary class="vyasa-sidebar-toggle vyasa-sidebar-toggle-posts flex items-center font-semibold cursor-pointer py-2 px-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg select-none list-none bg-white dark:bg-slate-950 z-10">
-                <span uk-icon="menu" class="w-5 h-5 mr-2"></span>
+            <summary class="vyasa-sidebar-toggle vyasa-sidebar-toggle-posts flex items-center cursor-pointer py-2 px-3 border select-none list-none z-10">
+                <span uk-icon="menu" class="w-4 h-4 mr-2"></span>
                 Posts
             </summary>
-            <div class="vyasa-sidebar-body vyasa-sidebar-body-posts mt-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-y-auto max-h-[calc(100vh-16rem)]">
+            <div class="vyasa-sidebar-body vyasa-sidebar-body-posts mt-2 p-3 border overflow-y-auto max-h-[calc(100vh-16rem)]">
                 {nav_html}
             </div>
         </details>
@@ -124,7 +124,7 @@ class StaticShellRenderer:
     def _footer() -> str:
         return '''
     <footer class="vyasa-footer-shell w-full mt-auto">
-        <div class="vyasa-footer-card bg-slate-900 text-white p-4 dark:bg-slate-800 text-right">
+        <div class="vyasa-footer-card p-4 text-right">
             Powered by Vyasa
         </div>
     </footer>
