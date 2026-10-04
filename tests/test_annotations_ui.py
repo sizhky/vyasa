@@ -51,6 +51,6 @@ def test_annotations_render_bottom_comments_with_bidirectional_anchors():
 def test_popup_controls_use_theme_ink_color():
     css = ANNOTATIONS_CSS.read_text(encoding="utf-8")
     assert ".vyasa-comment-popup-bar button" in css
-    assert "color: var(--vyasa-ink, #2d3434) !important" in css
+    assert "color: var(--vyasa-text) !important" in css
     assert "--vyasa-comment-glow-rgb: 245 158 11" in css
-    assert "rgb(var(--vyasa-comment-glow-rgb) / .18)" in css
+    assert "box-shadow: var(--vyasa-shadow-sm)" in css

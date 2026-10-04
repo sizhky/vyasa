@@ -6,7 +6,7 @@
 .vyasa-document-editor {
     display: flex;
     flex-direction: column;
-    gap: 0.85rem;
+    gap: var(--vyasa-space-3);
     width: max(100%, min(72rem, calc(100vw - 3rem)));
     margin-inline: min(0px, calc(50% - 36rem));
 }
@@ -14,7 +14,7 @@
 .vyasa-document-editor-panes {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 1.25rem;
+    gap: var(--vyasa-space-5);
     align-items: stretch;
     height: max(24rem, calc(100vh - 16rem));
 }
@@ -44,19 +44,17 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 1rem;
-    color: var(--vyasa-ink-soft);
-    font: 500 0.75rem/1.2 var(--vyasa-font-ui);
-    letter-spacing: 0.04em;
+    gap: var(--vyasa-space-4);
+    color: var(--vyasa-text-muted);
+    font: var(--vyasa-weight-medium) var(--vyasa-text-xs)/var(--vyasa-leading-tight) var(--vyasa-font-ui);
 }
 
-.vyasa-document-editor-bar [data-kind="dirty"] { color: color-mix(in srgb, var(--vyasa-ink) 60%, #b45309 40%); }
-.vyasa-document-editor-bar [data-kind="ok"] { color: color-mix(in srgb, var(--vyasa-ink) 55%, #15803d 45%); }
-.vyasa-document-editor-bar [data-kind="error"] { color: color-mix(in srgb, var(--vyasa-ink) 45%, #b91c1c 55%); }
+.vyasa-document-editor-bar [data-kind="dirty"] { color: var(--vyasa-warning); }
+.vyasa-document-editor-bar [data-kind="ok"] { color: var(--vyasa-success); }
+.vyasa-document-editor-bar [data-kind="error"] { color: var(--vyasa-danger); }
 
 .vyasa-document-editor-hint {
-    opacity: 0.62;
-    text-transform: uppercase;
+    color: var(--vyasa-text-faint);
 }
 
 .vyasa-document-editor-input {
@@ -64,36 +62,36 @@
     height: 100%;
     min-height: 18rem;
     box-sizing: border-box;
-    padding: 1.1rem 1.15rem;
-    border: 1px solid color-mix(in srgb, var(--vyasa-ink) 18%, transparent);
-    border-radius: var(--vyasa-rect-radius);
-    background: color-mix(in srgb, var(--vyasa-paper-low) 86%, var(--vyasa-ink) 4%);
-    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--vyasa-ink) 6%, transparent);
-    color: var(--vyasa-ink);
+    padding: var(--vyasa-space-4);
+    border: 1px solid var(--vyasa-border);
+    border-radius: var(--vyasa-radius-md);
+    background: var(--vyasa-bg-subtle);
+    color: var(--vyasa-text);
     font-family: var(--vyasa-font-mono);
-    font-size: 0.9rem;
-    line-height: 1.7;
+    font-size: var(--vyasa-text-base);
+    line-height: var(--vyasa-leading-prose);
     resize: none;
     overflow-y: auto;
     outline: none;
     tab-size: 2;
     white-space: pre-wrap;
     overflow-wrap: break-word;
+    transition: border-color var(--vyasa-duration-fast) var(--vyasa-ease), background-color var(--vyasa-duration-fast) var(--vyasa-ease);
 }
 
 .vyasa-document-editor-input:focus {
-    border-color: color-mix(in srgb, var(--vyasa-primary) 60%, transparent);
-    background: color-mix(in srgb, var(--vyasa-paper-low) 92%, var(--vyasa-primary) 4%);
+    border-color: var(--vyasa-accent-7);
+    background: var(--vyasa-surface);
 }
 
-.vyasa-document-editor-input::placeholder { color: var(--vyasa-ink-soft); }
+.vyasa-document-editor-input::placeholder { color: var(--vyasa-text-faint); }
 
 /* The preview is the reading view, so it keeps the reading font and needs no
    box of its own -- only a rule to divide it from the editor beside it. */
 .vyasa-document-editor-preview {
     box-sizing: border-box;
-    padding: 0 1.35rem 0 3rem;
-    border-right: 1px solid color-mix(in srgb, var(--vyasa-ink) 12%, transparent);
+    padding: 0 var(--vyasa-space-5) 0 var(--vyasa-space-7);
+    border-right: 1px solid var(--vyasa-border);
 }
 
 @media (max-width: 60rem) {
@@ -103,15 +101,15 @@
     }
 
     .vyasa-document-editor-preview {
-        padding: 1.25rem 0 0 3rem;
+        padding: var(--vyasa-space-5) 0 0 var(--vyasa-space-7);
         border-right: 0;
-        border-top: 1px solid color-mix(in srgb, var(--vyasa-ink) 12%, transparent);
+        border-top: 1px solid var(--vyasa-border);
     }
 }
 
 .vyasa-page-action-button-active {
-    background: var(--vyasa-primary-dim);
-    border-color: color-mix(in srgb, var(--vyasa-primary) 88%, black 12%);
+    background: var(--vyasa-accent-10);
+    border-color: var(--vyasa-accent-10);
 }
 
 /* Off-screen twin of the editor, used only to measure where a heading line sits.
