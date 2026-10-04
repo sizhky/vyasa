@@ -361,7 +361,7 @@ def generate_static_html(title, body_content, blog_title, favicon_href, extra_he
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     
     <meta name="vyasa-code-theme-light" content="{get_config().get_code_theme_light()}">
     <meta name="vyasa-code-theme-dark" content="{get_config().get_code_theme_dark()}">

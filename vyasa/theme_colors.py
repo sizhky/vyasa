@@ -68,14 +68,14 @@ def _contrast_ratio(l1: float, l2: float) -> float:
     return (hi + 0.05) / (lo + 0.05)
 
 
-# Dark surfaces clamped to fixed OKLch lightness + low chroma, so every theme lands
-# at the same comfortable darkness regardless of how bright its primary is.
+# Dark surfaces clamped to fixed OKLch lightness + near-zero chroma, so every theme
+# lands on the same neutral greys regardless of how bright its primary is.
 # (name, target lightness, max chroma)
 _DARK_SURFACES = (
-    ("theme_dark_paper", 0.165, 0.020),
-    ("theme_dark_paper_low", 0.205, 0.026),
-    ("theme_dark_paper_raised", 0.240, 0.032),
-    ("theme_dark_paper_accent", 0.290, 0.040),
+    ("theme_dark_paper", 0.180, 0.004),
+    ("theme_dark_paper_low", 0.205, 0.005),
+    ("theme_dark_paper_raised", 0.235, 0.006),
+    ("theme_dark_paper_accent", 0.270, 0.007),
 )
 
 

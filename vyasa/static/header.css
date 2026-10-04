@@ -1,17 +1,21 @@
 
 body {
     font-family: var(--vyasa-font-body);
-    font-size: 18px;
+    font-size: var(--vyasa-text-md);
     margin: 0;
     padding: 0;
     background: var(--vyasa-paper) !important;
     color: inherit !important;
-    line-height: 1.6;
+    line-height: var(--vyasa-leading-prose);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "cv11", "ss01";
 }
 ::highlight(vyasa-text-fragment),
 ::target-text {
     color: var(--vyasa-ink);
-    background: color-mix(in srgb, var(--vyasa-primary) 30%, transparent);
+    background: var(--vyasa-accent-4);
     text-decoration: underline;
     text-decoration-color: var(--vyasa-primary);
 }
@@ -20,79 +24,222 @@ body {
     min-height: 100%;
 }
 code, pre { font-family: var(--vyasa-font-mono); }
+/* ==========================================================================
+   Design tokens. Components use these names only; no raw values in rules.
+   Base anchors (paper, ink, primary, fonts, button-radius) are what theme
+   presets override. Everything else is derived from them, so it is declared
+   on #page-container as well: preset values are inline on that element.
+   ========================================================================== */
 :root {
-    --vyasa-font-body: 'Newsreader', Georgia, serif;
-    --vyasa-font-heading: 'Manrope', 'Inter', sans-serif;
-    --vyasa-font-ui: 'Inter', sans-serif;
-    --vyasa-font-mono: 'IBM Plex Mono', monospace;
-    --vyasa-paper: color-mix(in srgb, white 90%, var(--vyasa-primary) 10%);
-    --vyasa-paper-low: color-mix(in srgb, white 84%, var(--vyasa-primary) 16%);
-    --vyasa-paper-raised: color-mix(in srgb, white 95%, var(--vyasa-primary) 5%);
-    --vyasa-paper-accent: color-mix(in srgb, white 72%, var(--vyasa-primary) 28%);
-    --vyasa-ink: #2d3434;
-    --vyasa-ink-soft: #5a6060;
-    --vyasa-primary: #45655b;
-    --vyasa-primary-dim: #39584f;
-    --vyasa-primary-text: var(--vyasa-selection-fg);
-    --vyasa-button-radius: 0.375rem;
-    --vyasa-rect-radius: var(--vyasa-button-radius);
-    --vyasa-tree-row-px: 0.42rem;
-    --vyasa-tree-row-py: 0.16rem;
-    --vyasa-tree-row-gap: 0.02rem;
-    --vyasa-tree-row-icon-gap: 0.24rem;
-    --vyasa-tree-row-action-gap: 0rem;
-    --vyasa-tree-row-action-pad: 0.12rem;
-    --vyasa-tree-row-state-gap: 0.1rem;
-    --vyasa-tree-item-gap: 0rem;
-    --vyasa-heading-before-gap: 1rem;
-    --vyasa-heading-after-gap: 0.7rem;
-    --vyasa-link: color-mix(in srgb, var(--vyasa-primary) 68%, var(--vyasa-ink) 32%);
-    --vyasa-link-hover: color-mix(in srgb, var(--vyasa-primary-dim) 58%, var(--vyasa-ink) 42%);
-    --vyasa-emphasis-control-text: var(--vyasa-primary-text);
-    --vyasa-emphasis-control-bg: color-mix(in srgb, var(--vyasa-primary-text) 18%, transparent);
-    --vyasa-emphasis-control-bg-hover: color-mix(in srgb, var(--vyasa-primary-text) 26%, transparent);
-    --vyasa-emphasis-control-border: color-mix(in srgb, var(--vyasa-primary-text) 20%, transparent);
-    --vyasa-emphasis-control-menu-text: var(--vyasa-ink);
-    --vyasa-emphasis-control-menu-bg: color-mix(in srgb, var(--vyasa-paper-raised) 94%, var(--vyasa-primary) 6%);
-    --vyasa-emphasis-control-menu-border: color-mix(in srgb, var(--vyasa-ink) 12%, transparent);
-    --vyasa-emphasis-control-menu-option-hover: color-mix(in srgb, var(--vyasa-primary) 12%, transparent);
-    --vyasa-selection-bg: var(--vyasa-primary);
-    --vyasa-selection-fg: #f2f4f3;
-    --vyasa-outline-ghost: rgba(90, 96, 96, 0.2);
-    --vyasa-code-bg: #f6f8fa;
-    --vyasa-code-fg: #24292f;
-    --vyasa-code-border: rgba(45, 52, 52, 0.12);
-    --vyasa-code-highlight-bg: rgba(9, 105, 218, 0.12);
-    --vyasa-code-highlight-accent: #0969da;
-    --vyasa-inline-code-bg: color-mix(in srgb, var(--vyasa-code-bg) 82%, var(--vyasa-paper-raised) 18%);
-    --vyasa-inline-code-fg: var(--vyasa-code-fg);
-    --vyasa-inline-code-border: color-mix(in srgb, var(--vyasa-code-border) 78%, transparent);
+    /* Type families: one sans for UI and prose, one mono. */
+    --vyasa-font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --vyasa-font-body: var(--vyasa-font-sans);
+    --vyasa-font-heading: var(--vyasa-font-sans);
+    --vyasa-font-ui: var(--vyasa-font-sans);
+    --vyasa-font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+    /* Base anchors, light. Neutral greys (Radix slate 1/2/12/11). */
+    --vyasa-paper: #fcfcfd;
+    --vyasa-paper-raised: #ffffff;
+    --vyasa-ink: #1c2024;
+    --vyasa-ink-soft: #60646c;
+    --vyasa-primary: #3e63dd;
+    --vyasa-primary-dim: #3358d4;
+    --vyasa-primary-text: #ffffff;
+    --vyasa-selection-fg: #ffffff;
+    --vyasa-button-radius: 6px;
+    --vyasa-shadow-alpha: 0.08;
+
+    /* Type scale (px): 12 13 14 16 20 24 32. */
+    --vyasa-text-xs: 0.75rem;
+    --vyasa-text-sm: 0.8125rem;
+    --vyasa-text-base: 0.875rem;
+    --vyasa-text-md: 1rem;
+    --vyasa-text-lg: 1.25rem;
+    --vyasa-text-xl: 1.5rem;
+    --vyasa-text-2xl: 2rem;
+    --vyasa-leading-tight: 1.25;
+    --vyasa-leading-snug: 1.4;
+    --vyasa-leading-prose: 1.65;
+    --vyasa-weight-regular: 400;
+    --vyasa-weight-medium: 500;
+    --vyasa-weight-semibold: 600;
+
+    /* Space scale (px): 4 8 12 16 24 32 48. */
+    --vyasa-space-1: 0.25rem;
+    --vyasa-space-2: 0.5rem;
+    --vyasa-space-3: 0.75rem;
+    --vyasa-space-4: 1rem;
+    --vyasa-space-5: 1.5rem;
+    --vyasa-space-6: 2rem;
+    --vyasa-space-7: 3rem;
+
+    /* Radii: 4 6 10, pill only for pills and avatars. */
+    --vyasa-radius-sm: 4px;
+    --vyasa-radius-lg: 10px;
+    --vyasa-radius-pill: 999px;
+
+    /* Motion. */
+    --vyasa-duration-fast: 120ms;
+    --vyasa-duration-base: 180ms;
+    --vyasa-ease: cubic-bezier(0.2, 0, 0, 1);
+
+    /* Icons. */
+    --vyasa-icon-size: 16px;
+    --vyasa-icon-stroke: 1.5;
+
+    /* Sidebar tree rows (on the space scale). */
+    --vyasa-tree-row-px: var(--vyasa-space-2);
+    --vyasa-tree-row-py: var(--vyasa-space-1);
+    --vyasa-tree-row-gap: 0px;
+    --vyasa-tree-row-icon-gap: var(--vyasa-space-2);
+    --vyasa-tree-row-action-gap: 0px;
+    --vyasa-tree-row-action-pad: 2px;
+    --vyasa-tree-row-state-gap: var(--vyasa-space-1);
+    --vyasa-tree-item-gap: 1px;
+    --vyasa-heading-before-gap: var(--vyasa-space-6);
+    --vyasa-heading-after-gap: var(--vyasa-space-3);
+
+    /* Code (light). */
+    --vyasa-code-bg: #f9f9fb;
+    --vyasa-code-fg: #1c2024;
+    --vyasa-code-border: #e0e1e6;
+    --vyasa-code-highlight-bg: rgba(62, 99, 221, 0.10);
+    --vyasa-code-highlight-accent: #3e63dd;
     --vyasa-code-comment: #6e7781;
     --vyasa-code-keyword: #cf222e;
     --vyasa-code-string: #0a3069;
     --vyasa-code-title: #8250df;
     --vyasa-code-number: #0550ae;
+
+    /* Status hues (used sparingly: success, warning, danger, highlight). */
+    --vyasa-success: #18794e;
+    --vyasa-warning: #ab6400;
+    --vyasa-danger: #ce2c31;
+    --vyasa-highlight: #ffe629;
+}
+:root,
+#page-container {
+    /* Neutral 12-step scale (Radix roles), mixed from paper and ink.
+       1-2 app bg, 3-5 component bg (rest/hover/pressed), 6-8 borders,
+       9-10 solid, 11-12 text. */
+    --vyasa-paper-low: color-mix(in srgb, var(--vyasa-ink) 2%, var(--vyasa-paper));
+    --vyasa-gray-1: var(--vyasa-paper);
+    --vyasa-gray-2: var(--vyasa-paper-low);
+    --vyasa-gray-3: color-mix(in srgb, var(--vyasa-ink) 5%, var(--vyasa-paper));
+    --vyasa-gray-4: color-mix(in srgb, var(--vyasa-ink) 8%, var(--vyasa-paper));
+    --vyasa-gray-5: color-mix(in srgb, var(--vyasa-ink) 11%, var(--vyasa-paper));
+    --vyasa-gray-6: color-mix(in srgb, var(--vyasa-ink) 14%, var(--vyasa-paper));
+    --vyasa-gray-7: color-mix(in srgb, var(--vyasa-ink) 19%, var(--vyasa-paper));
+    --vyasa-gray-8: color-mix(in srgb, var(--vyasa-ink) 28%, var(--vyasa-paper));
+    --vyasa-gray-9: color-mix(in srgb, var(--vyasa-ink) 46%, var(--vyasa-paper));
+    --vyasa-gray-10: color-mix(in srgb, var(--vyasa-ink) 52%, var(--vyasa-paper));
+    --vyasa-gray-11: var(--vyasa-ink-soft);
+    --vyasa-gray-12: var(--vyasa-ink);
+
+    /* Accent scale from the one primary hue. */
+    --vyasa-accent-3: color-mix(in srgb, var(--vyasa-primary) 10%, var(--vyasa-paper));
+    --vyasa-accent-4: color-mix(in srgb, var(--vyasa-primary) 16%, var(--vyasa-paper));
+    --vyasa-accent-7: color-mix(in srgb, var(--vyasa-primary) 40%, var(--vyasa-paper));
+    --vyasa-accent-9: var(--vyasa-primary);
+    --vyasa-accent-10: var(--vyasa-primary-dim);
+    --vyasa-accent-11: color-mix(in srgb, var(--vyasa-primary) 78%, var(--vyasa-ink));
+    --vyasa-accent-contrast: var(--vyasa-primary-text);
+
+    /* Semantic roles. */
+    --vyasa-bg: var(--vyasa-gray-1);
+    --vyasa-bg-subtle: var(--vyasa-gray-2);
+    --vyasa-surface: var(--vyasa-paper-raised);
+    --vyasa-hover: var(--vyasa-gray-3);
+    --vyasa-active: var(--vyasa-gray-4);
+    --vyasa-border: var(--vyasa-gray-6);
+    --vyasa-border-strong: var(--vyasa-gray-7);
+    --vyasa-text: var(--vyasa-gray-12);
+    --vyasa-text-muted: var(--vyasa-gray-11);
+    --vyasa-text-faint: var(--vyasa-gray-9);
+    --vyasa-paper-accent: var(--vyasa-gray-4);
+    --vyasa-outline-ghost: var(--vyasa-border);
+    --vyasa-outline: var(--vyasa-gray-8);
+    --vyasa-link: var(--vyasa-accent-11);
+    --vyasa-link-hover: var(--vyasa-ink);
+    --vyasa-selection-bg: var(--vyasa-accent-4);
+    --vyasa-focus-ring: var(--vyasa-primary);
+
+    --vyasa-radius-md: var(--vyasa-button-radius);
+    --vyasa-rect-radius: var(--vyasa-radius-md);
+
+    --vyasa-shadow-none: none;
+    --vyasa-shadow-sm: 0 1px 2px rgb(0 0 0 / var(--vyasa-shadow-alpha)), 0 4px 12px rgb(0 0 0 / var(--vyasa-shadow-alpha));
+    --vyasa-shadow-lg: 0 2px 6px rgb(0 0 0 / var(--vyasa-shadow-alpha)), 0 16px 40px rgb(0 0 0 / calc(var(--vyasa-shadow-alpha) * 1.6));
+
+    --vyasa-inline-code-bg: var(--vyasa-gray-3);
+    --vyasa-inline-code-fg: var(--vyasa-code-fg);
+    --vyasa-inline-code-border: var(--vyasa-gray-5);
+
+    --vyasa-emphasis-control-text: var(--vyasa-ink);
+    --vyasa-emphasis-control-bg: transparent;
+    --vyasa-emphasis-control-bg-hover: var(--vyasa-hover);
+    --vyasa-emphasis-control-border: transparent;
+    --vyasa-emphasis-control-menu-text: var(--vyasa-ink);
+    --vyasa-emphasis-control-menu-bg: var(--vyasa-surface);
+    --vyasa-emphasis-control-menu-border: var(--vyasa-border);
+    --vyasa-emphasis-control-menu-option-hover: var(--vyasa-hover);
 }
 .dark,
 .dark #page-container {
-    /* Dark surfaces: keep them dark and calm. Only a hint of primary so the canvas
-       reads near-#121212, not a bright saturated wash. Raised > paper = inverted elevation. */
-    --vyasa-paper: var(--vyasa-dark-paper, color-mix(in srgb, #0e1513 86%, var(--vyasa-primary) 14%)) !important;
-    --vyasa-paper-low: var(--vyasa-dark-paper-low, color-mix(in srgb, #121b18 82%, var(--vyasa-primary) 18%)) !important;
-    --vyasa-paper-raised: var(--vyasa-dark-paper-raised, color-mix(in srgb, #16211d 78%, var(--vyasa-primary) 22%)) !important;
-    --vyasa-paper-accent: var(--vyasa-dark-paper-accent, color-mix(in srgb, #1b2823 72%, var(--vyasa-primary) 28%)) !important;
-    /* Lift dark text toward white for legibility (keeps a faint theme tint, avoids pure #fff halation). */
-    --vyasa-ink: color-mix(in srgb, var(--vyasa-dark-ink, #edf2f1) 55%, #ffffff 45%) !important;
-    --vyasa-ink-soft: color-mix(in srgb, var(--vyasa-dark-ink-soft, #b5c3bf) 60%, #ffffff 40%) !important;
-    --vyasa-outline-ghost: var(--vyasa-dark-outline-ghost, rgba(181, 195, 191, 0.2)) !important;
-    --vyasa-code-fg: var(--vyasa-dark-code-fg, #edf2f1) !important;
-    --vyasa-code-bg: var(--vyasa-dark-code-bg, color-mix(in srgb, #17202a 82%, var(--vyasa-primary) 18%)) !important;
-    --vyasa-code-border: var(--vyasa-dark-code-border, color-mix(in srgb, rgba(181, 195, 191, 0.18) 70%, var(--vyasa-primary) 30%)) !important;
-    --vyasa-code-highlight-bg: var(--vyasa-dark-code-highlight-bg, color-mix(in srgb, rgba(255,255,255,0.1) 55%, var(--vyasa-primary) 45%)) !important;
-    --vyasa-inline-code-bg: var(--vyasa-dark-inline-code-bg, color-mix(in srgb, var(--vyasa-code-bg) 80%, var(--vyasa-paper-raised) 20%)) !important;
-    --vyasa-inline-code-fg: var(--vyasa-dark-inline-code-fg, var(--vyasa-code-fg)) !important;
-    --vyasa-inline-code-border: var(--vyasa-dark-inline-code-border, color-mix(in srgb, var(--vyasa-code-border) 76%, transparent)) !important;
+    /* Dark mode from neutral greys (Radix slate dark 1/2/3/12/11). Presets
+       keep their own surfaces through the --vyasa-dark-* anchors. */
+    --vyasa-paper: var(--vyasa-dark-paper, #111113) !important;
+    --vyasa-paper-low: var(--vyasa-dark-paper-low, #18191b) !important;
+    --vyasa-paper-raised: var(--vyasa-dark-paper-raised, #212225) !important;
+    --vyasa-ink: var(--vyasa-dark-ink, #edeef0) !important;
+    --vyasa-ink-soft: var(--vyasa-dark-ink-soft, #b0b4ba) !important;
     --vyasa-primary-text: var(--vyasa-dark-primary-text, var(--vyasa-primary-text)) !important;
+    --vyasa-accent-11: color-mix(in srgb, var(--vyasa-primary) 62%, var(--vyasa-ink)) !important;
+    --vyasa-shadow-alpha: 0.4 !important;
+    --vyasa-code-bg: var(--vyasa-dark-code-bg, #18191b) !important;
+    --vyasa-code-fg: var(--vyasa-dark-code-fg, #edeef0) !important;
+    --vyasa-code-border: var(--vyasa-dark-code-border, #363a3f) !important;
+    --vyasa-code-highlight-bg: var(--vyasa-dark-code-highlight-bg, color-mix(in srgb, var(--vyasa-primary) 22%, transparent)) !important;
+    --vyasa-inline-code-bg: var(--vyasa-dark-inline-code-bg, var(--vyasa-gray-3)) !important;
+    --vyasa-inline-code-fg: var(--vyasa-dark-inline-code-fg, var(--vyasa-code-fg)) !important;
+    --vyasa-inline-code-border: var(--vyasa-dark-inline-code-border, var(--vyasa-gray-5)) !important;
+    --vyasa-outline-ghost: var(--vyasa-dark-outline-ghost, var(--vyasa-border)) !important;
+    --vyasa-success: #3dd68c;
+    --vyasa-warning: #ffca16;
+    --vyasa-danger: #ff9592;
+    /* Dark steps need wider gaps to read as distinct. */
+    --vyasa-gray-3: color-mix(in srgb, var(--vyasa-ink) 7%, var(--vyasa-paper));
+    --vyasa-gray-4: color-mix(in srgb, var(--vyasa-ink) 11%, var(--vyasa-paper));
+    --vyasa-gray-5: color-mix(in srgb, var(--vyasa-ink) 15%, var(--vyasa-paper));
+    --vyasa-gray-6: color-mix(in srgb, var(--vyasa-ink) 19%, var(--vyasa-paper));
+    --vyasa-gray-7: color-mix(in srgb, var(--vyasa-ink) 25%, var(--vyasa-paper));
+    --vyasa-gray-8: color-mix(in srgb, var(--vyasa-ink) 35%, var(--vyasa-paper));
+    --vyasa-gray-9: color-mix(in srgb, var(--vyasa-ink) 50%, var(--vyasa-paper));
+    --vyasa-gray-10: color-mix(in srgb, var(--vyasa-ink) 56%, var(--vyasa-paper));
+    --vyasa-accent-3: color-mix(in srgb, var(--vyasa-primary) 16%, var(--vyasa-paper));
+    --vyasa-accent-4: color-mix(in srgb, var(--vyasa-primary) 24%, var(--vyasa-paper));
+    --vyasa-accent-7: color-mix(in srgb, var(--vyasa-primary) 48%, var(--vyasa-paper));
+}
+/* Focus: 2px accent ring, 2px offset, keyboard focus only. */
+:where(a, button, summary, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--vyasa-focus-ring);
+    outline-offset: 2px;
+}
+:where(a, button, summary, [tabindex]):focus:not(:focus-visible) { outline: none; }
+.tabular-nums,
+time,
+.vyasa-read-time,
+table td,
+table th { font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) {
+    :root { --vyasa-duration-fast: 0ms; --vyasa-duration-base: 0ms; }
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
 }
 
 body { color: var(--vyasa-ink); }

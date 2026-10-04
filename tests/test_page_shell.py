@@ -145,7 +145,7 @@ def test_git_ref_select_resets_control_alignment():
     assert "appearance: none" in css
     assert "font: inherit" in css
     assert "--vyasa-emphasis-control-menu-text: var(--vyasa-ink)" in css
-    assert "--vyasa-emphasis-control-menu-bg: color-mix(in srgb, var(--vyasa-paper-raised) 94%, var(--vyasa-primary) 6%)" in css
+    assert "--vyasa-emphasis-control-menu-bg: var(--vyasa-surface)" in css
     assert "--vyasa-emphasis-control-text: var(--vyasa-emphasis-control-menu-text)" in css
     assert "--vyasa-emphasis-control-bg-hover: var(--vyasa-emphasis-control-menu-option-hover)" in css
 
@@ -330,8 +330,8 @@ def test_scroll_progress_legacy_owners_are_removed():
 def test_document_heading_spacing_uses_shared_before_and_after_gaps():
     css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
 
-    assert "--vyasa-heading-before-gap: 1rem;" in css
-    assert "--vyasa-heading-after-gap: 0.7rem;" in css
+    assert "--vyasa-heading-before-gap: var(--vyasa-space-6);" in css
+    assert "--vyasa-heading-after-gap: var(--vyasa-space-3);" in css
     assert "#main-content .vyasa-doc-heading {" in css
     assert "#main-content .vyasa-heading-fold {" in css
     assert "#main-content .vyasa-heading-fold-body > :last-child {" in css

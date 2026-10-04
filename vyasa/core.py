@@ -236,16 +236,16 @@ hdrs = (
     Script(src=_asset_url("/static/head-init.js")),
     Style(
         """
-        :root { --vyasa-paper: #f9f9f9; --vyasa-ink: #2d3434; --vyasa-paper-low: #f2f4f3; }
+        :root { --vyasa-paper: #fcfcfd; --vyasa-ink: #1c2024; --vyasa-paper-low: #f9f9fb; }
         html, body { background: var(--vyasa-paper) !important; color: var(--vyasa-ink) !important; }
         body.bg-background, body.text-foreground { background: var(--vyasa-paper) !important; color: var(--vyasa-ink) !important; }
         #page-container, #main-content, #posts-sidebar, #toc-sidebar, .vyasa-sidebar-toggle, .vyasa-sidebar-body {
             color: var(--vyasa-ink) !important;
         }
         .dark, .dark #page-container {
-            --vyasa-paper: color-mix(in srgb, #0b0e0d 82%, #45655b 18%) !important;
-            --vyasa-ink: #edf2f1 !important;
-            --vyasa-paper-low: color-mix(in srgb, #121716 76%, #45655b 24%) !important;
+            --vyasa-paper: var(--vyasa-dark-paper, #111113) !important;
+            --vyasa-ink: var(--vyasa-dark-ink, #edeef0) !important;
+            --vyasa-paper-low: var(--vyasa-dark-paper-low, #18191b) !important;
         }
         @keyframes vyasaAnnotationBloom {
             0% { background: rgba(245, 158, 11, 0); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
@@ -344,7 +344,7 @@ hdrs = (
     Link(rel="preconnect", href="https://fonts.gstatic.com", crossorigin=""),
     Link(
         rel="stylesheet",
-        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono&display=swap",
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap",
     ),
 )
 
