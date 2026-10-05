@@ -506,7 +506,7 @@ if (!window.__vyasaZenBound) {
   const retainDebugQuery = (href) => {
     const current = new URLSearchParams(location.search);
     const target = new URL(href, location.href);
-    ['tasks_debug', 'tasks_perf'].forEach((key) => {
+    ['tasks_debug', 'tasks_perf', 'slides_debug'].forEach((key) => {
       if (current.has(key)) target.searchParams.set(key, current.get(key) || '');
     });
     return `${target.pathname}${target.search}${target.hash}`;
@@ -551,6 +551,92 @@ if (!window.__vyasaZenBound) {
   });
   initReveal();
   window.addEventListener('resize', () => recenterRevealedUnits());
+
+  // Debug rulers (?slides_debug): gaps between the revealed ink box and the slide area
+  // (navbar bottom, window bottom, window edges), redrawn whenever a value changes.
+  if (new URLSearchParams(location.search).has('slides_debug')) {
+    const overlay = document.createElement('div');
+    overlay.className = 'vyasa-zen-ruler';
+    overlay.setAttribute('aria-hidden', 'true');
+    const inkBox = document.createElement('div');
+    inkBox.className = 'vyasa-zen-ruler-ink';
+    const sides = ['top', 'right', 'bottom', 'left'];
+    const lines = Object.fromEntries(sides.map((side) => {
+      const line = document.createElement('div');
+      line.className = `vyasa-zen-ruler-line vyasa-zen-ruler-${side}`;
+      return [side, line];
+    }));
+    overlay.append(inkBox, ...Object.values(lines));
+    document.body.append(overlay);
+    const unionRect = (rects) => rects.reduce((box, r) => ({
+      top: Math.min(box.top, r.top), left: Math.min(box.left, r.left),
+      bottom: Math.max(box.bottom, r.bottom), right: Math.max(box.right, r.right),
+    }), { top: Infinity, left: Infinity, bottom: -Infinity, right: -Infinity });
+    // Ink: text line boxes and replaced elements, so short lines show their real right edge.
+    const inkRects = (unit) => {
+      const rects = Array.from(unit.querySelectorAll('img, svg, canvas, video, iframe'), (el) => el.getBoundingClientRect());
+      const walker = document.createTreeWalker(unit, NodeFilter.SHOW_TEXT);
+      const range = document.createRange();
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (!node.data.trim() || node.parentElement.closest('svg')) continue;
+        range.selectNodeContents(node);
+        rects.push(...range.getClientRects());
+      }
+      return rects.filter((r) => r.width && r.height);
+    };
+    const measure = () => {
+      const units = Array.from(getRevealBody(document)?.querySelectorAll('.vyasa-reveal-unit') || [])
+        .filter((unit) => unit.dataset.revealState === 'visible' || unit.dataset.revealState === 'entering');
+      const ink = unionRect(units.flatMap(inkRects));
+      if (!Number.isFinite(ink.top)) return null;
+      const frame = {
+        top: Math.round(document.getElementById('site-navbar')?.getBoundingClientRect().bottom || 0),
+        width: document.documentElement.clientWidth,
+        height: window.innerHeight,
+      };
+      const gaps = (r) => ({
+        top: Math.round(r.top - frame.top), right: Math.round(frame.width - r.right),
+        bottom: Math.round(frame.height - r.bottom), left: Math.round(r.left),
+      });
+      const box = unionRect(units.map((unit) => unit.getBoundingClientRect()));
+      return { ink, frame, inkGaps: gaps(ink), boxGaps: gaps(box), revealed: units.length };
+    };
+    const place = (el, left, top, width, height) => Object.assign(el.style, {
+      left: `${left}px`, top: `${top}px`, width: `${Math.max(0, width)}px`, height: `${Math.max(0, height)}px`,
+    });
+    const draw = ({ ink, frame, inkGaps }) => {
+      const midX = (ink.left + ink.right) / 2;
+      const midY = (ink.top + ink.bottom) / 2;
+      place(inkBox, ink.left, ink.top, ink.right - ink.left, ink.bottom - ink.top);
+      place(lines.top, midX, frame.top, 0, inkGaps.top);
+      place(lines.bottom, midX, ink.bottom, 0, inkGaps.bottom);
+      place(lines.left, 0, midY, inkGaps.left, 0);
+      place(lines.right, ink.right, midY, inkGaps.right, 0);
+      sides.forEach((side) => { lines[side].dataset.px = inkGaps[side]; });
+    };
+    let lastKey = '';
+    let logTimer = 0;
+    const tick = () => {
+      const m = measure();
+      overlay.hidden = !m;
+      const key = m ? JSON.stringify([m.inkGaps, m.boxGaps, m.frame]) : '';
+      if (m && key !== lastKey) {
+        draw(m);
+        window.clearTimeout(logTimer);
+        logTimer = window.setTimeout(() => {
+          const payload = {
+            path: location.pathname, revealed: m.revealed, ink: m.inkGaps, box: m.boxGaps,
+            yDiff: m.inkGaps.top - m.inkGaps.bottom, xDiff: m.inkGaps.left - m.inkGaps.right,
+          };
+          console.info('[vyasa:margins]', payload);
+          slideDebug('margins', payload);
+        }, 300);
+      }
+      lastKey = key;
+      window.requestAnimationFrame(tick);
+    };
+    window.requestAnimationFrame(tick);
+  }
 
   const toggleOverview = () => {
     const panel = document.getElementById('slide-overview');
