@@ -206,6 +206,8 @@
   --vyasa-zen-block-gap: 0.75em;
   --vyasa-zen-heading-gap: 1.75em;
   --vyasa-zen-list-gap: 0.35em;
+  /* header.css #main-content .uk-list > li + li reads this; one list gap at every depth. */
+  --vyasa-list-item-gap: var(--vyasa-zen-list-gap);
 }
 .vyasa-zen-slide-body :is(h1, h2, h3, h4, h5, h6) {
   display: block;
@@ -256,6 +258,8 @@
 .vyasa-zen-slide-body > * + :is(h1, h2, h3, h4, h5, h6, [data-reveal-kind="heading"]) { margin-top: var(--vyasa-zen-heading-gap) !important; }
 .vyasa-zen-slide-body > :is(h1, h2, h3, h4, h5, h6, [data-reveal-kind="heading"]) + * { margin-top: 0.6em !important; }
 .vyasa-zen-slide-body > :is(h1, h2, h3, h4, h5, h6, [data-reveal-kind="heading"]) + :is(h1, h2, h3, h4, h5, h6, [data-reveal-kind="heading"]) { margin-top: 0.75em !important; }
+/* Adjacent list units are one list split into reveal steps (deck.py paragraph groups), so they keep the list gap. */
+.vyasa-zen-slide-body > [data-reveal-kind="list"] + [data-reveal-kind="list"] { margin-top: var(--vyasa-zen-list-gap) !important; }
 
 .vyasa-zen-slide-body ul,
 .vyasa-zen-slide-body ol { padding-left: 1.75em !important; margin-left: 0 !important; }
@@ -267,7 +271,7 @@
 .vyasa-zen-slide-body li::marker { color: var(--vyasa-text-faint); }
 .vyasa-zen-slide-body ol > li::marker { font-variant-numeric: tabular-nums; }
 .vyasa-zen-slide-body li + li,
-.vyasa-zen-slide-body li > :is(ul, ol) { margin-top: var(--vyasa-zen-list-gap) !important; }
+.vyasa-zen-slide-body .vyasa-reveal-unit li > :is(ul, ol) { margin-top: var(--vyasa-zen-list-gap) !important; }
 
 /* Wide blocks keep the column's left edge and may extend into the right margin. */
 .vyasa-zen-slide-body .code-block,
@@ -655,3 +659,7 @@
   pointer-events: auto;
   transform: translate(0, -50%);
 }
+/* Debug line-gap rulers (?slides_debug): one per gap between consecutive text lines, labelled to the left. */
+.vyasa-zen-ruler-gap { border-left-width: 1px; border-color: rgb(229 72 77 / 0.35); }
+.vyasa-zen-ruler-gap[hidden] { display: none; }
+.vyasa-zen-ruler-line.vyasa-zen-ruler-gap::after { top: 50%; right: 4px; left: auto; transform: translateY(-50%); font-size: 10px; background: transparent; }

@@ -366,10 +366,10 @@ if (!window.__vyasaZenBound) {
       return clips.get(el);
     };
     const items = [];
-    const add = (r, el) => {
+    const add = (r, el, kind) => {
       const clip = clipOf(el.parentElement === unit ? null : el.parentElement);
       const box = clip ? intersectRect(r, clip) : r;
-      if (box.right - box.left > 0 && box.bottom - box.top > 0) items.push({ r: box, el });
+      if (box.right - box.left > 0 && box.bottom - box.top > 0) items.push({ r: box, el, kind });
     };
     // Painted boxes (a callout or code background, a diagram frame) are ink as a whole.
     const painted = (cs) => !/^(transparent|rgba\(.*,\s*0\))$/.test(cs.backgroundColor) || cs.backgroundImage !== 'none'
@@ -378,7 +378,7 @@ if (!window.__vyasaZenBound) {
     unit.querySelectorAll('*').forEach((el) => {
       if (el.closest('svg') && el.tagName.toLowerCase() !== 'svg') return;
       if (isHidden(el)) return;
-      if (/^(img|svg|canvas|video|iframe)$/i.test(el.tagName) || painted(getComputedStyle(el))) add(el.getBoundingClientRect(), el);
+      if (/^(img|svg|canvas|video|iframe)$/i.test(el.tagName) || painted(getComputedStyle(el))) add(el.getBoundingClientRect(), el, 'box');
     });
     const walker = document.createTreeWalker(unit, NodeFilter.SHOW_TEXT);
     const range = document.createRange();
@@ -386,7 +386,7 @@ if (!window.__vyasaZenBound) {
       const el = node.parentElement;
       if (!node.data.trim() || el.closest('svg') || isHidden(el)) continue;
       range.selectNodeContents(node);
-      for (const r of range.getClientRects()) add(r, el);
+      for (const r of range.getClientRects()) add(r, el, 'text');
     }
     return items;
   };
@@ -787,6 +787,17 @@ if (!window.__vyasaZenBound) {
       return [side, line];
     }));
     overlay.append(inkBox, ...Object.values(lines));
+    // Line gaps: text rects grouped into visual lines; one ruler per gap between consecutive lines.
+    const gapRulers = [];
+    const textLines = (items) => items.filter((item) => item.kind === 'text').map(({ r }) => r)
+      .sort((a, b) => a.top - b.top)
+      .reduce((rows, r) => {
+        const row = rows.at(-1);
+        const middle = (r.top + r.bottom) / 2;
+        if (row && middle >= row.top && middle <= row.bottom) Object.assign(row, unionRect([row, r]));
+        else rows.push(unionRect([r]));
+        return rows;
+      }, []);
     document.body.append(overlay);
     const describe = (el) => [el.tagName.toLowerCase(), ...(el.getAttribute('class') || '').split(/\s+/).filter(Boolean)].join('.');
     const edgeSources = (items) => Object.fromEntries([['top', 1], ['right', -1], ['bottom', -1], ['left', 1]].map(([side, sign]) => {
@@ -811,12 +822,14 @@ if (!window.__vyasaZenBound) {
         bottom: tenth(frame.height - r.bottom), left: tenth(r.left),
       });
       const box = unionRect(units.map((unit) => unit.getBoundingClientRect()));
-      return { ink, frame, inkGaps: gaps(ink), boxGaps: gaps(box), revealed: units.length, edges: edgeSources(items) };
+      const rows = textLines(items);
+      const lineGaps = rows.slice(1).map((row, i) => ({ top: rows[i].bottom, bottom: row.top, px: tenth(row.top - rows[i].bottom) }));
+      return { ink, frame, inkGaps: gaps(ink), boxGaps: gaps(box), revealed: units.length, edges: edgeSources(items), lineGaps };
     };
     const place = (el, left, top, width, height) => Object.assign(el.style, {
       left: `${left}px`, top: `${top}px`, width: `${Math.max(0, width)}px`, height: `${Math.max(0, height)}px`,
     });
-    const draw = ({ ink, frame, inkGaps }) => {
+    const draw = ({ ink, frame, inkGaps, lineGaps }) => {
       const midX = (ink.left + ink.right) / 2;
       const midY = (ink.top + ink.bottom) / 2;
       place(inkBox, ink.left, ink.top, ink.right - ink.left, ink.bottom - ink.top);
@@ -825,19 +838,32 @@ if (!window.__vyasaZenBound) {
       place(lines.left, 0, midY, inkGaps.left, 0);
       place(lines.right, ink.right, midY, inkGaps.right, 0);
       sides.forEach((side) => { lines[side].dataset.px = inkGaps[side]; });
+      while (gapRulers.length < lineGaps.length) {
+        const ruler = document.createElement('div');
+        ruler.className = 'vyasa-zen-ruler-line vyasa-zen-ruler-gap';
+        overlay.append(ruler);
+        gapRulers.push(ruler);
+      }
+      gapRulers.forEach((ruler, i) => {
+        const gap = lineGaps[i];
+        ruler.hidden = !gap;
+        if (!gap) return;
+        place(ruler, ink.left - 10, gap.top, 0, gap.bottom - gap.top);
+        ruler.dataset.px = gap.px;
+      });
     };
     let lastKey = '';
     let logTimer = 0;
     const tick = () => {
       const m = measure();
       overlay.hidden = !m;
-      const key = m ? JSON.stringify([m.inkGaps, m.boxGaps, m.frame]) : '';
+      const key = m ? JSON.stringify([m.inkGaps, m.boxGaps, m.frame, m.lineGaps]) : '';
       if (m && key !== lastKey) {
         draw(m);
         window.clearTimeout(logTimer);
         logTimer = window.setTimeout(() => {
           const payload = {
-            path: location.pathname, revealed: m.revealed, ink: m.inkGaps, box: m.boxGaps, edges: m.edges,
+            path: location.pathname, revealed: m.revealed, ink: m.inkGaps, box: m.boxGaps, edges: m.edges, lineGaps: m.lineGaps.map((gap) => gap.px),
             yDiff: Math.round((m.inkGaps.top - m.inkGaps.bottom) * 10) / 10, xDiff: Math.round((m.inkGaps.left - m.inkGaps.right) * 10) / 10,
           };
           console.info('[vyasa:margins]', payload);
