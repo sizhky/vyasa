@@ -11,6 +11,8 @@ if (!window.__vyasaSlideCaptureLogBound) {
     target: event.target?.tagName || '', active: document.activeElement?.tagName || '',
   }), true);
 }
+// Experiment (?slides_levels): heading level badges stay visible instead of showing on hover.
+document.documentElement.toggleAttribute('data-slides-levels', new URLSearchParams(location.search).has('slides_levels'));
 if (!window.__vyasaZenBound) {
   window.__vyasaZenBound = true;
   const slideShortcutHelp = ensureShortcutHelp({
@@ -724,7 +726,7 @@ if (!window.__vyasaZenBound) {
   const retainDebugQuery = (href) => {
     const current = new URLSearchParams(location.search);
     const target = new URL(href, location.href);
-    ['tasks_debug', 'tasks_perf', 'slides_debug', 'slides_center'].forEach((key) => {
+    ['tasks_debug', 'tasks_perf', 'slides_debug', 'slides_center', 'slides_levels'].forEach((key) => {
       if (current.has(key)) target.searchParams.set(key, current.get(key) || '');
     });
     return `${target.pathname}${target.search}${target.hash}`;

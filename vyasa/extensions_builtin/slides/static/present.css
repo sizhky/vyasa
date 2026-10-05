@@ -648,3 +648,10 @@
 @media (prefers-reduced-motion: reduce) {
   .vyasa-zen-slide-body [data-nested-reveal] { animation: none !important; }
 }
+/* Experiment (?slides_levels, present.js): heading level badges stay visible in slides. */
+[data-slides-levels] .vyasa-zen-content .vyasa-doc-heading > .vyasa-heading-level {
+  display: block;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(0, -50%);
+}
