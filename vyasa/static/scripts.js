@@ -1173,6 +1173,24 @@ document.addEventListener('click', (event) => {
     }
 });
 
+let hoveredPlainDetails = null;
+let metaChorded = false;
+document.addEventListener('mouseover', (event) => {
+    hoveredPlainDetails = event.target.closest?.('#main-content details:not(.vyasa-heading-fold)') || null;
+});
+document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Meta') metaChorded = true;
+});
+document.addEventListener('keyup', (event) => {
+    if (event.key !== 'Meta') return;
+    const chorded = metaChorded;
+    metaChorded = false;
+    if (chorded || !hoveredPlainDetails?.isConnected) return;
+    const shouldOpen = !hoveredPlainDetails.open;
+    hoveredPlainDetails.open = shouldOpen;
+    hoveredPlainDetails.querySelectorAll('details').forEach((nested) => { nested.open = shouldOpen; });
+});
+
 function syncHeadingActionStates(root = document) {
     (root.querySelectorAll?.('.vyasa-heading-action-children') || []).forEach((button) => {
         const details = button.closest('.vyasa-heading-fold');
