@@ -1004,6 +1004,7 @@ if (!window.__vyasaZenBound) {
     }
   });
 
+  const ARROW_AS_VIM = { ArrowLeft: 'h', ArrowDown: 'j', ArrowUp: 'k', ArrowRight: 'l' };
   document.addEventListener('keydown', (event) => {
     slideDebug('keydown', {
       key: event.key, code: event.code, defaultPrevented: event.defaultPrevented,
@@ -1018,7 +1019,7 @@ if (!window.__vyasaZenBound) {
     }
     if (event.metaKey || event.ctrlKey || event.altKey
       || event.target?.matches?.('input, textarea, select') || event.target?.isContentEditable) return;
-    const key = event.key.toLowerCase();
+    const key = ARROW_AS_VIM[event.key] || event.key.toLowerCase();
     if (overviewIsOpen() && (key === 'h' || key === 'l')) {
       if (moveOverviewBranch(key)) event.preventDefault();
       return;
@@ -1035,14 +1036,6 @@ if (!window.__vyasaZenBound) {
     if (key === 'j' && (scrollLastVisibleUnit('down') || revealNextUnit() || follow('right'))) event.preventDefault();
     if (key === 'k' && (scrollLastVisibleUnit('up') || hidePreviousUnit() || follow('left'))) event.preventDefault();
     if (key === 'l' && follow('right', true)) event.preventDefault();
-    if (event.key === 'ArrowLeft' && (hidePreviousUnit() || follow('left'))) {
-      revealLog('keydown ArrowLeft handled');
-      event.preventDefault();
-    }
-    if (event.key === 'ArrowRight' && (revealNextUnit() || follow('right'))) {
-      revealLog('keydown ArrowRight handled');
-      event.preventDefault();
-    }
   });
 
   let touchStartX = null;
