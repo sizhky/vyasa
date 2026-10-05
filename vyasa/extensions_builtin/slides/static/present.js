@@ -347,7 +347,9 @@ if (!window.__vyasaZenBound) {
       if (!el || el === unit) return false;
       if (!hidden.has(el)) {
         const cs = getComputedStyle(el);
-        hidden.set(el, cs.visibility === 'hidden' || cs.opacity === '0' || isHidden(el.parentElement));
+        // A nested bullet's opacity is its stagger animation, not hiding (markNestedBullets).
+        const transparent = cs.opacity === '0' && !el.hasAttribute('data-nested-reveal');
+        hidden.set(el, cs.visibility === 'hidden' || transparent || isHidden(el.parentElement));
       }
       return hidden.get(el);
     };
@@ -402,8 +404,9 @@ if (!window.__vyasaZenBound) {
   const setVar = (el, name, value) => {
     if (el.style.getPropertyValue(name) !== value) el.style.setProperty(name, value);
   };
-  // Prototype (?slides_center=step): centre on the units shown so far, gliding at each reveal.
-  const centerPerStep = new URLSearchParams(location.search).get('slides_center') === 'step';
+  // Default: centre on the units shown so far, gliding at each reveal.
+  // ?slides_center=slide keeps one offset per slide from the ink of all its units.
+  const centerPerStep = new URLSearchParams(location.search).get('slides_center') !== 'slide';
   // Step mode moves in an L. Forward: glide sideways for the incoming units, then reveal
   // them and recentre vertically. Backward: hide and recentre vertically, then glide back.
   let incomingUnits = [];
@@ -605,6 +608,14 @@ if (!window.__vyasaZenBound) {
   };
   document.fonts?.ready.then(scheduleRecenter);
 
+  // Nested bullets fade in one by one after their unit reveals; CSS reads the index.
+  const markNestedBullets = (units) => units.forEach((unit) => {
+    unit.querySelectorAll('li li').forEach((item, index) => {
+      item.dataset.nestedReveal = '';
+      item.style.setProperty('--vyasa-nested-index', String(index + 1));
+    });
+  });
+
   const initReveal = (root = document) => {
     const body = root.querySelector('.vyasa-zen-slide-body[data-reveal-mode="stagger"]');
     if (!body) {
@@ -655,8 +666,10 @@ if (!window.__vyasaZenBound) {
         }, delay));
       }
     });
+    markNestedBullets(units);
     const backNavMode = navDirection === 'back';
     if (backNavMode) {
+      body.dataset.revealRestored = '1';
       getStepUnits(root).forEach((unit) => {
         unit.dataset.revealState = 'visible';
       });
