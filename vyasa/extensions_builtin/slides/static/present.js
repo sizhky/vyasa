@@ -76,11 +76,26 @@ if (!window.__vyasaZenBound) {
     return firstContent < 0 ? units.length : firstContent;
   };
 
+  // Focus: the last revealed unit, with the headings revealed alongside it, is current;
+  // earlier units are past and dim. The slide's leading headings never dim.
+  const markRevealFocus = (units) => {
+    const shown = units.filter((unit) => unit.dataset.revealState === 'entering' || unit.dataset.revealState === 'visible');
+    const leading = leadingHeadingCount(units);
+    let firstCurrent = shown.length - 1;
+    while (firstCurrent > 0 && isHeadingUnit(shown[firstCurrent - 1])) firstCurrent -= 1;
+    units.forEach((unit) => { delete unit.dataset.revealFocus; });
+    shown.forEach((unit, index) => {
+      if (units.indexOf(unit) < leading) return;
+      unit.dataset.revealFocus = index >= firstCurrent ? 'current' : 'past';
+    });
+  };
+
   const syncSlideProgressBar = (root = document) => {
     const body = getRevealBody(root);
     const bar = body?.querySelector('.vyasa-zen-slide-progress');
     if (!bar) return;
     const units = getStepUnits(root);
+    markRevealFocus(units);
     const progressUnits = units.slice(leadingHeadingCount(units)).filter((unit) => !isHeadingUnit(unit));
     const visible = progressUnits.filter((unit) => unit.dataset.revealState === 'visible').length;
     bar.style.setProperty('--vyasa-slide-progress', `${progressUnits.length ? visible / progressUnits.length * 100 : 100}%`);

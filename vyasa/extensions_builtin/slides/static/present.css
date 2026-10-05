@@ -380,6 +380,8 @@
   will-change: opacity, transform;
 }
 .vyasa-reveal-unit[data-reveal-state="hidden"] { display: none; }
+/* Focus: units revealed before the current one recede so the speaker's place is clear. */
+.vyasa-reveal-unit[data-reveal-state="visible"][data-reveal-focus="past"] { opacity: 0.75; }
 .vyasa-reveal-unit[data-reveal-state="entering"],
 .vyasa-reveal-unit[data-reveal-state="leaving"] { display: block; opacity: 0; }
 .vyasa-reveal-unit[data-reveal-state="visible"] {
