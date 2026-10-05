@@ -8,7 +8,8 @@ class SlidesExtension(VyasaExtensionBase):
         app.assets.bundle(
             AssetBundle(
                 "slides.runtime",
-                css=("/static/extensions/slides/present.css",),
+                # Slides render document markdown, so they carry the document stylesheets (markdown/renderer.py from_md).
+                css=("/static/sidenote.css", "/static/markdown.css", "/static/extensions/slides/present.css"),
                 js=("/static/extensions/slides/present.js",),
             )
         )
