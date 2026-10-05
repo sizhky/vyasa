@@ -496,7 +496,9 @@
   pointer-events: none;
 }
 #slide-overview .vyasa-zen-overview-card {
-  width: min(44rem, calc(100vw - 2rem));
+  width: fit-content;
+  min-width: min(24rem, calc(100vw - 2rem));
+  max-width: min(44rem, calc(100vw - 2rem));
   max-height: 72vh;
   overflow-y: auto;
   padding: var(--vyasa-space-2);
@@ -535,6 +537,7 @@
   height: calc(35vh - 3rem);
   pointer-events: none;
 }
+#slide-overview .is-compact .vyasa-zen-overview-margin { height: auto; }
 #slide-overview .vyasa-zen-overview-margin > td {
   padding: 0 var(--vyasa-space-3) var(--vyasa-space-3);
   border: 0;

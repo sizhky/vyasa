@@ -784,9 +784,17 @@ if (!window.__vyasaZenBound) {
     if (!panel) return;
     slideShortcutHelp.close();
     panel.classList.toggle('hidden');
+    fitOverview();
   };
   const overviewIsOpen = () =>
     !document.getElementById('slide-overview')?.classList.contains('hidden');
+  // The spacer rows only let a scrolling list centre its selection; a list that fits drops them.
+  const fitOverview = () => {
+    const card = document.querySelector('#slide-overview .vyasa-zen-overview-card');
+    if (!card || !overviewIsOpen()) return;
+    card.classList.add('is-compact');
+    card.classList.toggle('is-compact', card.scrollHeight <= card.clientHeight);
+  };
   const overviewRows = () =>
     Array.from(document.querySelectorAll('#slide-overview [data-zen-overview-node]'));
   const refreshOverviewVisibility = () => {
@@ -797,6 +805,7 @@ if (!window.__vyasaZenBound) {
       row.hidden = collapsedDepths.length > 0;
       if (!row.hidden && row.dataset.collapsed === 'true') collapsedDepths.push(depth);
     });
+    fitOverview();
   };
   const moveOverviewSelection = (delta) => {
     const links = overviewRows()
