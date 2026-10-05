@@ -631,3 +631,11 @@
 .vyasa-zen-slide-body :is(.d2-container, .mermaid-container) { width: 100% !important; left: 0 !important; transform: none !important; }
 .vyasa-zen-slide-body :is(.d2-wrapper, .mermaid-wrapper) { height: auto !important; min-height: 0 !important; }
 .vyasa-zen-slide-body :is(.d2-wrapper, .mermaid-wrapper) svg { max-height: calc(var(--vyasa-zen-band-h, 60vh) * 0.7); width: auto; }
+/* Prototype (?slides_center=step): the block glides sideways as each reveal changes its width. */
+.vyasa-zen-slide-body[data-center-x="step"][data-x-placed="1"] > .vyasa-reveal-unit {
+  transition:
+    opacity var(--vyasa-reveal-duration) var(--vyasa-reveal-easing),
+    transform var(--vyasa-reveal-duration) var(--vyasa-reveal-easing),
+    left var(--vyasa-reveal-duration) cubic-bezier(0.65, 0, 0.35, 1);
+}
+.vyasa-zen-slide-body > .vyasa-reveal-unit[data-measuring] { display: block !important; opacity: 0 !important; transform: none !important; }

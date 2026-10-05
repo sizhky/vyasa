@@ -22,6 +22,8 @@ if (!window.__vyasaZenBound) {
     ],
   });
   let revealTimers = [];
+  // Step mode: a reveal waiting for its sideways glide to finish (glideSidewaysThen).
+  let pendingStep = null;
   const slideDebug = window.__vyasaSlideDebug;
   const revealLog = (label, payload = {}) => {
     console.info('[vyasa:reveal]', label, payload);
@@ -115,6 +117,7 @@ if (!window.__vyasaZenBound) {
   const revealNextUnit = (root = document) => {
     const body = getRevealBody(root);
     if (!body || (body.dataset.revealPolicy || 'step') !== 'step') return false;
+    if (flushPendingStep()) return true;
     const units = getStepUnits(root);
     const nextIndex = units.findIndex((unit) => unit.dataset.revealState !== 'visible');
     if (nextIndex < 0) {
@@ -124,7 +127,8 @@ if (!window.__vyasaZenBound) {
     // Headings reveal together with the block that follows them.
     let lastIndex = nextIndex;
     while (isHeadingUnit(units[lastIndex]) && lastIndex + 1 < units.length) lastIndex += 1;
-    units.slice(nextIndex, lastIndex + 1).forEach((unit) => showUnit(unit));
+    const group = units.slice(nextIndex, lastIndex + 1);
+    glideSidewaysThen(body, group, () => group.forEach((unit) => showUnit(unit)));
     const next = units[lastIndex];
     revealLog('revealNextUnit: revealed unit', {
       index: next.dataset.revealIndex,
@@ -160,6 +164,7 @@ if (!window.__vyasaZenBound) {
   const clearRevealTimers = () => {
     revealTimers.forEach((timer) => window.clearTimeout(timer));
     revealTimers = [];
+    pendingStep = null;
   };
 
   // Slide area: the window below the navbar minus equal reserves at top and bottom.
@@ -385,23 +390,61 @@ if (!window.__vyasaZenBound) {
   const setVar = (el, name, value) => {
     if (el.style.getPropertyValue(name) !== value) el.style.setProperty(name, value);
   };
-  const recenterSlideX = (body) => {
-    body.classList.add(MEASURING);
-    const units = Array.from(body.querySelectorAll('.vyasa-reveal-unit'));
+  // Prototype (?slides_center=step): centre on the units shown so far, gliding at each reveal.
+  const centerPerStep = new URLSearchParams(location.search).get('slides_center') === 'step';
+  // Step mode moves in an L. Forward: glide sideways for the incoming units, then reveal
+  // them and recentre vertically. Backward: hide and recentre vertically, then glide back.
+  let incomingUnits = [];
+  let holdXUntil = 0;
+  const recenterSlideX = (body, { force = false } = {}) => {
+    if (centerPerStep && !force && performance.now() < holdXUntil) return;
+    if (centerPerStep) body.dataset.centerX = 'step';
+    else body.classList.add(MEASURING);
+    const incoming = centerPerStep ? incomingUnits.filter((unit) => unit.isConnected && unit.dataset.revealState === 'hidden') : [];
+    incoming.forEach((unit) => { unit.dataset.measuring = ''; });
+    const units = centerPerStep ? [...shownUnits(body), ...incoming] : Array.from(body.querySelectorAll('.vyasa-reveal-unit'));
     const width = document.documentElement.clientWidth;
     const viewport = { top: -Infinity, bottom: Infinity, left: 0, right: width };
-    // An entering unit is mid-slide; remove its current translateX from its ink.
+    // Remove each unit's current offset (an entering unit's translateX, a gliding left) from its ink.
     const rects = units.flatMap((unit) => {
-      const dx = new DOMMatrixReadOnly(getComputedStyle(unit).transform === 'none' ? undefined : getComputedStyle(unit).transform).m41;
+      const cs = getComputedStyle(unit);
+      const dx = new DOMMatrixReadOnly(cs.transform === 'none' ? undefined : cs.transform).m41 + (parseFloat(cs.left) || 0);
       return inkItems(unit).map(({ r }) => intersectRect({ ...r, left: r.left - dx, right: r.right - dx, top: r.top, bottom: r.bottom }, viewport));
     });
     const ink = unionRect(rects);
     const rule = body.querySelector('.vyasa-zen-slide-end-rule')?.getBoundingClientRect();
     body.classList.remove(MEASURING);
+    incoming.forEach((unit) => { delete unit.dataset.measuring; });
     if (!Number.isFinite(ink.left)) return;
     const shift = ((width - ink.right) - ink.left) / 2;
     setVar(body, '--vyasa-zen-center-x', `${shift.toFixed(2)}px`);
+    // The first placement jumps; only later changes glide (CSS keys on data-x-placed).
+    if (centerPerStep && body.dataset.xPlaced !== '1') {
+      void body.offsetHeight;
+      body.dataset.xPlaced = '1';
+    }
     if (rule) setVar(body, '--vyasa-zen-rule-x', `${(width / 2 - (rule.left + rule.right) / 2).toFixed(2)}px`);
+  };
+
+  const flushPendingStep = () => {
+    if (!pendingStep) return false;
+    const { timer, run } = pendingStep;
+    pendingStep = null;
+    window.clearTimeout(timer);
+    run();
+    return true;
+  };
+  const glideSidewaysThen = (body, group, reveal) => {
+    if (!centerPerStep) return reveal();
+    const before = parseFloat(body.style.getPropertyValue('--vyasa-zen-center-x')) || 0;
+    incomingUnits = group;
+    recenterSlideX(body, { force: true });
+    const after = parseFloat(body.style.getPropertyValue('--vyasa-zen-center-x')) || 0;
+    const run = () => { incomingUnits = []; reveal(); };
+    if (Math.abs(after - before) < 0.5) return run();
+    const timer = window.setTimeout(() => { pendingStep = null; run(); }, revealShiftMs());
+    revealTimers.push(timer);
+    pendingStep = { timer, run };
   };
 
   // Cover and closing cards have no reveal units; their ink centres in the chrome band.
@@ -426,6 +469,7 @@ if (!window.__vyasaZenBound) {
   const recenterRevealedUnits = (root = document) => {
     const body = getRevealBody(root);
     if (!body) return false;
+    if (centerPerStep) recenterSlideX(body);
     const ink = unionRect(shownInk(body).map(({ r }) => r));
     const hasInk = Number.isFinite(ink.top);
     const contentHeight = hasInk ? ink.bottom - ink.top : 0;
@@ -512,9 +556,12 @@ if (!window.__vyasaZenBound) {
     );
     unit.dataset.revealState = 'leaving';
     syncSlideProgressBar();
+    if (centerPerStep) holdXUntil = performance.now() + (Number.isFinite(duration) ? duration : 240) + revealShiftMs();
     window.setTimeout(() => {
       unit.dataset.revealState = 'hidden';
       recenterRevealedUnits();
+      const body = getRevealBody(document);
+      if (centerPerStep && body) window.setTimeout(() => recenterSlideX(body, { force: true }), revealShiftMs());
     }, Number.isFinite(duration) ? duration : 240);
   };
 
@@ -654,7 +701,7 @@ if (!window.__vyasaZenBound) {
   const retainDebugQuery = (href) => {
     const current = new URLSearchParams(location.search);
     const target = new URL(href, location.href);
-    ['tasks_debug', 'tasks_perf', 'slides_debug'].forEach((key) => {
+    ['tasks_debug', 'tasks_perf', 'slides_debug', 'slides_center'].forEach((key) => {
       if (current.has(key)) target.searchParams.set(key, current.get(key) || '');
     });
     return `${target.pathname}${target.search}${target.hash}`;
