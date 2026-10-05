@@ -25,8 +25,8 @@
 .vyasa-zen-content .vyasa-heading-launch,
 .vyasa-zen-content .vyasa-heading-permalink { display: none !important; }
 
-/* The stage is centered; content inside starts at the stage's left margin and
-   prose stops at a readable measure, leaving the remaining width empty on the right. */
+/* The stage is centered. present.js shifts the slide's ink block so its left and right
+   margins match; text inside the block stays left-aligned. */
 .vyasa-zen-content {
   display: flex;
   flex-direction: column;
@@ -146,7 +146,7 @@
 .vyasa-zen-nav-tools .vyasa-page-action-button.vyasa-zen-nav-copy:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--vyasa-ring) !important; }
 .vyasa-zen-nav-tools .vyasa-zen-nav-copy .vyasa-page-action-icon { width: var(--vyasa-icon-size); height: var(--vyasa-icon-size); }
 
-/* Cover and closing cards: same column and left edge as content slides. */
+/* Cover and closing cards: present.js centres their ink in the chrome band. */
 .vyasa-zen-cover {
   display: flex;
   flex-direction: column;
@@ -154,6 +154,7 @@
   justify-content: center;
   gap: 0.6em;
   min-height: calc(var(--vyasa-zen-stage-h) * 0.6);
+  translate: var(--vyasa-zen-cover-x, 0px) var(--vyasa-zen-cover-y, 0px);
 }
 .vyasa-zen-title {
   margin: 0;
@@ -616,3 +617,14 @@
 }
 .vyasa-zen-ruler-top::after, .vyasa-zen-ruler-bottom::after { top: 50%; left: 4px; transform: translateY(-50%); }
 .vyasa-zen-ruler-left::after, .vyasa-zen-ruler-right::after { top: 4px; left: 50%; transform: translateX(-50%); }
+
+/* Horizontal centre (present.js recenterSlideX): units and the end rule shift as one block. */
+.vyasa-zen-slide-body > .vyasa-reveal-unit { position: relative; left: var(--vyasa-zen-center-x, 0px); }
+.vyasa-zen-slide-body > .vyasa-zen-slide-end-rule { left: var(--vyasa-zen-rule-x, 0px); }
+.vyasa-zen-measuring > .vyasa-reveal-unit { left: 0 !important; }
+.vyasa-zen-measuring > .vyasa-reveal-unit[data-reveal-state="hidden"] { display: block !important; opacity: 0 !important; transform: none !important; }
+.vyasa-zen-measuring > .vyasa-zen-slide-end-rule { left: 0 !important; }
+/* Diagrams fit the slide band (present.js sets --vyasa-zen-band-h), leaving room for the title. */
+.vyasa-zen-slide-body :is(.d2-container, .mermaid-container) { width: 100% !important; left: 0 !important; transform: none !important; }
+.vyasa-zen-slide-body :is(.d2-wrapper, .mermaid-wrapper) { height: auto !important; min-height: 0 !important; }
+.vyasa-zen-slide-body :is(.d2-wrapper, .mermaid-wrapper) svg { max-height: calc(var(--vyasa-zen-band-h, 60vh) * 0.7); width: auto; }

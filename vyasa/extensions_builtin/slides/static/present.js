@@ -166,6 +166,8 @@ if (!window.__vyasaZenBound) {
   // The top reserve holds the nav chrome (its natural height above the slide body);
   // the bottom reserve mirrors it and holds the two progress bars.
   const REVEAL_MIN_RESERVE = 48;
+  // The reserve of the band the current slide is centred in (recenterRevealedUnits).
+  let activeReserve = REVEAL_MIN_RESERVE;
   const navbarBottomInDocument = () => {
     const navbar = document.getElementById('site-navbar');
     return navbar ? navbar.offsetTop + navbar.offsetHeight : 0;
@@ -218,7 +220,7 @@ if (!window.__vyasaZenBound) {
     const navbarBottom = document.getElementById('site-navbar')?.getBoundingClientRect().bottom || 0;
     return {
       top: Math.max(24, Math.ceil(navbarBottom + 16)),
-      bottom: slideReserve(),
+      bottom: activeReserve,
     };
   };
 
@@ -309,25 +311,140 @@ if (!window.__vyasaZenBound) {
     };
   });
 
+  // Ink: the visible text line boxes and replaced elements of a unit, clipped to any
+  // scroll box. Centring uses ink, not unit boxes, so line-height and empty block
+  // space cannot make one margin larger than its opposite.
+  const unionRect = (rects) => rects.reduce((box, r) => ({
+    top: Math.min(box.top, r.top), left: Math.min(box.left, r.left),
+    bottom: Math.max(box.bottom, r.bottom), right: Math.max(box.right, r.right),
+  }), { top: Infinity, left: Infinity, bottom: -Infinity, right: -Infinity });
+  const intersectRect = (a, b) => ({
+    top: Math.max(a.top, b.top), left: Math.max(a.left, b.left),
+    bottom: Math.min(a.bottom, b.bottom), right: Math.min(a.right, b.right),
+  });
+  const inkItems = (unit) => {
+    const hidden = new Map();
+    const clips = new Map();
+    // The unit's own opacity is excluded: an entering unit is still transparent.
+    const isHidden = (el) => {
+      if (!el || el === unit) return false;
+      if (!hidden.has(el)) {
+        const cs = getComputedStyle(el);
+        hidden.set(el, cs.visibility === 'hidden' || cs.opacity === '0' || isHidden(el.parentElement));
+      }
+      return hidden.get(el);
+    };
+    const clipOf = (el) => {
+      if (!el || el === unit) return null;
+      if (!clips.has(el)) {
+        const cs = getComputedStyle(el);
+        const own = cs.overflowX !== 'visible' || cs.overflowY !== 'visible' ? el.getBoundingClientRect() : null;
+        const up = clipOf(el.parentElement);
+        clips.set(el, own && up ? intersectRect(own, up) : own || up);
+      }
+      return clips.get(el);
+    };
+    const items = [];
+    const add = (r, el) => {
+      const clip = clipOf(el.parentElement === unit ? null : el.parentElement);
+      const box = clip ? intersectRect(r, clip) : r;
+      if (box.right - box.left > 0 && box.bottom - box.top > 0) items.push({ r: box, el });
+    };
+    // Painted boxes (a callout or code background, a diagram frame) are ink as a whole.
+    const painted = (cs) => !/^(transparent|rgba\(.*,\s*0\))$/.test(cs.backgroundColor) || cs.backgroundImage !== 'none'
+      || ['Top', 'Right', 'Bottom', 'Left'].some((side) => parseFloat(cs[`border${side}Width`]) > 0
+        && cs[`border${side}Style`] !== 'none' && !/^(transparent|rgba\(.*,\s*0\))$/.test(cs[`border${side}Color`]));
+    unit.querySelectorAll('*').forEach((el) => {
+      if (el.closest('svg') && el.tagName.toLowerCase() !== 'svg') return;
+      if (isHidden(el)) return;
+      if (/^(img|svg|canvas|video|iframe)$/i.test(el.tagName) || painted(getComputedStyle(el))) add(el.getBoundingClientRect(), el);
+    });
+    const walker = document.createTreeWalker(unit, NodeFilter.SHOW_TEXT);
+    const range = document.createRange();
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const el = node.parentElement;
+      if (!node.data.trim() || el.closest('svg') || isHidden(el)) continue;
+      range.selectNodeContents(node);
+      for (const r of range.getClientRects()) add(r, el);
+    }
+    return items;
+  };
+  const shownUnits = (body) => Array.from(body.querySelectorAll('.vyasa-reveal-unit'))
+    .filter((unit) => unit.dataset.revealState === 'entering' || unit.dataset.revealState === 'visible');
+  // The end rule closes the slide, so once it shows it belongs to the centred group.
+  const shownInk = (body) => {
+    const items = shownUnits(body).flatMap(inkItems);
+    const rule = body.querySelector('.vyasa-zen-slide-end-rule[data-reveal-state="visible"]');
+    if (rule) items.push({ r: rule.getBoundingClientRect(), el: rule });
+    return items;
+  };
+
+  // Horizontal centre: one offset per slide, from the ink of every unit including the
+  // ones not yet revealed, so reveals never move content sideways.
+  const MEASURING = 'vyasa-zen-measuring';
+  const setVar = (el, name, value) => {
+    if (el.style.getPropertyValue(name) !== value) el.style.setProperty(name, value);
+  };
+  const recenterSlideX = (body) => {
+    body.classList.add(MEASURING);
+    const units = Array.from(body.querySelectorAll('.vyasa-reveal-unit'));
+    const width = document.documentElement.clientWidth;
+    const viewport = { top: -Infinity, bottom: Infinity, left: 0, right: width };
+    // An entering unit is mid-slide; remove its current translateX from its ink.
+    const rects = units.flatMap((unit) => {
+      const dx = new DOMMatrixReadOnly(getComputedStyle(unit).transform === 'none' ? undefined : getComputedStyle(unit).transform).m41;
+      return inkItems(unit).map(({ r }) => intersectRect({ ...r, left: r.left - dx, right: r.right - dx, top: r.top, bottom: r.bottom }, viewport));
+    });
+    const ink = unionRect(rects);
+    const rule = body.querySelector('.vyasa-zen-slide-end-rule')?.getBoundingClientRect();
+    body.classList.remove(MEASURING);
+    if (!Number.isFinite(ink.left)) return;
+    const shift = ((width - ink.right) - ink.left) / 2;
+    setVar(body, '--vyasa-zen-center-x', `${shift.toFixed(2)}px`);
+    if (rule) setVar(body, '--vyasa-zen-rule-x', `${(width / 2 - (rule.left + rule.right) / 2).toFixed(2)}px`);
+  };
+
+  // Cover and closing cards have no reveal units; their ink centres in the chrome band.
+  const recenterCover = () => {
+    const card = document.querySelector('.vyasa-zen-cover');
+    if (!card) return;
+    const ink = unionRect(inkItems(card).map(({ r }) => r));
+    if (!Number.isFinite(ink.top)) return;
+    const [dx0, dy0] = ['--vyasa-zen-cover-x', '--vyasa-zen-cover-y'].map((name) => parseFloat(card.style.getPropertyValue(name)) || 0);
+    const navBottom = document.getElementById('site-navbar')?.getBoundingClientRect().bottom || 0;
+    const reserve = Math.max(REVEAL_MIN_RESERVE, card.getBoundingClientRect().top - dy0 + window.scrollY - navbarBottomInDocument());
+    const bandHeight = window.innerHeight - 2 * reserve - navBottom;
+    const width = document.documentElement.clientWidth;
+    const dx = dx0 + ((width - ink.right) - ink.left) / 2;
+    const dy = dy0 + navBottom + reserve + (bandHeight - (ink.bottom - ink.top)) / 2 - ink.top;
+    setVar(card, '--vyasa-zen-cover-x', `${dx.toFixed(2)}px`);
+    setVar(card, '--vyasa-zen-cover-y', `${dy.toFixed(2)}px`);
+  };
+
   // Revealed units sit at the vertical centre of the slide area; once they outgrow it
   // the offset is 0 and keepUnitInView scrolls instead.
   const recenterRevealedUnits = (root = document) => {
     const body = getRevealBody(root);
     if (!body) return false;
-    const shown = Array.from(body.querySelectorAll('.vyasa-reveal-unit'))
-      .filter((unit) => unit.dataset.revealState === 'entering' || unit.dataset.revealState === 'visible');
-    const contentHeight = shown.length
-      ? shown.at(-1).getBoundingClientRect().bottom - shown[0].getBoundingClientRect().top
-      : 0;
-    const naturalTop = naturalBodyTop(body);
-    const reserve = slideReserve();
-    const bandTop = (document.getElementById('site-navbar')?.getBoundingClientRect().bottom || 0) + reserve;
-    const bandHeight = window.innerHeight - reserve - bandTop;
+    const ink = unionRect(shownInk(body).map(({ r }) => r));
+    const hasInk = Number.isFinite(ink.top);
+    const contentHeight = hasInk ? ink.bottom - ink.top : 0;
+    const marginTop = parseFloat(getComputedStyle(body).marginTop) || 0;
+    const naturalTop = hasInk ? ink.top + window.scrollY - marginTop : naturalBodyTop(body);
+    // Reserves, widest first: the nav chrome height, then the progress-bar minimum.
+    // Content too tall for the chrome band still centres in the minimum band.
+    const navBottom = document.getElementById('site-navbar')?.getBoundingClientRect().bottom || 0;
+    const bandFor = (reserve) => ({ reserve, top: navBottom + reserve, height: window.innerHeight - 2 * reserve - navBottom });
+    const chromeBand = bandFor(slideReserve());
+    const band = contentHeight <= chromeBand.height ? chromeBand : bandFor(REVEAL_MIN_RESERVE);
+    setVar(body, '--vyasa-zen-band-h', `${Math.round(chromeBand.height)}px`);
+    const { reserve, top: bandTop, height: bandHeight } = band;
+    activeReserve = reserve;
     const desiredTop = bandTop + (bandHeight - contentHeight) / 2;
     const fits = contentHeight <= bandHeight;
     // Content below its centre gets a top margin; content that would need to rise
     // above the nav chrome scrolls instead, with enough room below to allow it.
-    const shift = Math.round(desiredTop - naturalTop);
+    const shift = desiredTop - naturalTop;
     const offset = fits ? Math.max(0, shift) : 0;
     const scrollTarget = fits ? Math.max(0, -shift) : null;
     const firstPlacement = body.dataset.centerPlaced !== '1';
@@ -401,10 +518,39 @@ if (!window.__vyasaZenBound) {
     }, Number.isFinite(duration) ? duration : 240);
   };
 
+  // Late layout (images, diagrams, fonts, tab switches) recentres on the next frame.
+  let layoutObservers = [];
+  let layoutFrame = 0;
+  const scheduleRecenter = () => {
+    window.cancelAnimationFrame(layoutFrame);
+    layoutFrame = window.requestAnimationFrame(() => {
+      const body = getRevealBody(document);
+      if (!body) {
+        recenterCover();
+        return;
+      }
+      recenterSlideX(body);
+      recenterRevealedUnits();
+    });
+  };
+  const watchSlideLayout = (body) => {
+    layoutObservers.forEach((observer) => observer.disconnect());
+    const resize = new ResizeObserver(scheduleRecenter);
+    body.querySelectorAll('.vyasa-reveal-unit').forEach((unit) => resize.observe(unit));
+    // Style changes are left out: diagram pan and zoom write inline styles every frame.
+    const mutation = new MutationObserver((records) => {
+      if (records.some((r) => r.target !== body)) scheduleRecenter();
+    });
+    mutation.observe(body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'hidden', 'open', 'src'] });
+    layoutObservers = [resize, mutation];
+  };
+  document.fonts?.ready.then(scheduleRecenter);
+
   const initReveal = (root = document) => {
     const body = root.querySelector('.vyasa-zen-slide-body[data-reveal-mode="stagger"]');
     if (!body) {
       revealLog('initReveal: no reveal body on page', { url: location.href });
+      recenterCover();
       return;
     }
     if (body.dataset.revealInitialized === '1') {
@@ -492,7 +638,9 @@ if (!window.__vyasaZenBound) {
     };
     revealLog('initReveal complete', window.__vyasaRevealDebug);
     syncSlideProgressBar(root);
+    recenterSlideX(body);
     recenterRevealedUnits(root);
+    watchSlideLayout(body);
     slideDebug('table-snapshot', { reason: 'init', tables: tableSnapshot(root) });
   };
 
@@ -550,7 +698,7 @@ if (!window.__vyasaZenBound) {
     initReveal();
   });
   initReveal();
-  window.addEventListener('resize', () => recenterRevealedUnits());
+  window.addEventListener('resize', scheduleRecenter);
 
   // Debug rulers (?slides_debug): gaps between the revealed ink box and the slide area
   // (navbar bottom, window bottom, window edges), redrawn whenever a value changes.
@@ -568,38 +716,30 @@ if (!window.__vyasaZenBound) {
     }));
     overlay.append(inkBox, ...Object.values(lines));
     document.body.append(overlay);
-    const unionRect = (rects) => rects.reduce((box, r) => ({
-      top: Math.min(box.top, r.top), left: Math.min(box.left, r.left),
-      bottom: Math.max(box.bottom, r.bottom), right: Math.max(box.right, r.right),
-    }), { top: Infinity, left: Infinity, bottom: -Infinity, right: -Infinity });
-    // Ink: text line boxes and replaced elements, so short lines show their real right edge.
-    const inkRects = (unit) => {
-      const rects = Array.from(unit.querySelectorAll('img, svg, canvas, video, iframe'), (el) => el.getBoundingClientRect());
-      const walker = document.createTreeWalker(unit, NodeFilter.SHOW_TEXT);
-      const range = document.createRange();
-      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-        if (!node.data.trim() || node.parentElement.closest('svg')) continue;
-        range.selectNodeContents(node);
-        rects.push(...range.getClientRects());
-      }
-      return rects.filter((r) => r.width && r.height);
-    };
+    const describe = (el) => [el.tagName.toLowerCase(), ...(el.getAttribute('class') || '').split(/\s+/).filter(Boolean)].join('.');
+    const edgeSources = (items) => Object.fromEntries([['top', 1], ['right', -1], ['bottom', -1], ['left', 1]].map(([side, sign]) => {
+      const pick = items.reduce((best, item) => (sign * (item.r[side] - best.r[side]) < 0 ? item : best));
+      return [side, describe(pick.el)];
+    }));
     const measure = () => {
-      const units = Array.from(getRevealBody(document)?.querySelectorAll('.vyasa-reveal-unit') || [])
-        .filter((unit) => unit.dataset.revealState === 'visible' || unit.dataset.revealState === 'entering');
-      const ink = unionRect(units.flatMap(inkRects));
-      if (!Number.isFinite(ink.top)) return null;
+      const body = getRevealBody(document);
+      const card = document.querySelector('.vyasa-zen-cover');
+      const units = body ? shownUnits(body) : [];
+      const items = body ? shownInk(body) : card ? inkItems(card) : [];
+      if (!items.length) return null;
+      const ink = unionRect(items.map(({ r }) => r));
       const frame = {
         top: Math.round(document.getElementById('site-navbar')?.getBoundingClientRect().bottom || 0),
         width: document.documentElement.clientWidth,
         height: window.innerHeight,
       };
+      const tenth = (value) => Math.round(value * 10) / 10;
       const gaps = (r) => ({
-        top: Math.round(r.top - frame.top), right: Math.round(frame.width - r.right),
-        bottom: Math.round(frame.height - r.bottom), left: Math.round(r.left),
+        top: tenth(r.top - frame.top), right: tenth(frame.width - r.right),
+        bottom: tenth(frame.height - r.bottom), left: tenth(r.left),
       });
       const box = unionRect(units.map((unit) => unit.getBoundingClientRect()));
-      return { ink, frame, inkGaps: gaps(ink), boxGaps: gaps(box), revealed: units.length };
+      return { ink, frame, inkGaps: gaps(ink), boxGaps: gaps(box), revealed: units.length, edges: edgeSources(items) };
     };
     const place = (el, left, top, width, height) => Object.assign(el.style, {
       left: `${left}px`, top: `${top}px`, width: `${Math.max(0, width)}px`, height: `${Math.max(0, height)}px`,
@@ -625,8 +765,8 @@ if (!window.__vyasaZenBound) {
         window.clearTimeout(logTimer);
         logTimer = window.setTimeout(() => {
           const payload = {
-            path: location.pathname, revealed: m.revealed, ink: m.inkGaps, box: m.boxGaps,
-            yDiff: m.inkGaps.top - m.inkGaps.bottom, xDiff: m.inkGaps.left - m.inkGaps.right,
+            path: location.pathname, revealed: m.revealed, ink: m.inkGaps, box: m.boxGaps, edges: m.edges,
+            yDiff: Math.round((m.inkGaps.top - m.inkGaps.bottom) * 10) / 10, xDiff: Math.round((m.inkGaps.left - m.inkGaps.right) * 10) / 10,
           };
           console.info('[vyasa:margins]', payload);
           slideDebug('margins', payload);
@@ -635,6 +775,7 @@ if (!window.__vyasaZenBound) {
       lastKey = key;
       window.requestAnimationFrame(tick);
     };
+    window.__vyasaMargins = measure;
     window.requestAnimationFrame(tick);
   }
 
