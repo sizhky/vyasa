@@ -19,7 +19,7 @@ if (!window.__vyasaZenBound) {
     title: 'Slide shortcuts',
     groups: [
       ['Exit', [['Shift+Esc', 'Document']]],
-      ['Slides', [['M / Esc', 'Overview'], ['?', 'Shortcuts'], ['J / K', 'Scroll / Reveal / Rewind'], ['H / L', 'Previous / Next']]],
+      ['Slides', [['M / Esc', 'Overview'], ['?', 'Shortcuts'], ['J / K / Arrows', 'Scroll / Reveal / Rewind'], ['H / L', 'Skip to previous / next slide']]],
       ['Overview', [['J / K', 'Move Selection'], ['H / L', 'Collapse / Expand'], ['Enter', 'Open Slide'], ['Esc', 'Close']]],
     ],
   });
@@ -1021,7 +1021,8 @@ if (!window.__vyasaZenBound) {
     }
   });
 
-  const ARROW_AS_VIM = { ArrowLeft: 'h', ArrowDown: 'j', ArrowUp: 'k', ArrowRight: 'l' };
+  // Arrows step through units like j/k, as the on-screen chevrons do; h/l skip whole slides.
+  const ARROW_AS_VIM = { ArrowLeft: 'k', ArrowDown: 'j', ArrowUp: 'k', ArrowRight: 'j' };
   document.addEventListener('keydown', (event) => {
     slideDebug('keydown', {
       key: event.key, code: event.code, defaultPrevented: event.defaultPrevented,
