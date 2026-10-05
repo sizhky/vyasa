@@ -1,4 +1,4 @@
-.PHONY: clean build test test-all install dev fetch fetch-once typecheck
+.PHONY: clean build test test-all install dev fetch fetch-once typecheck vendor
 
 # Python used for type resolution. Override in CI: make typecheck PY=.venv/bin/python
 PY ?= /Users/yeshwanth/.venv/bin/python
@@ -36,6 +36,10 @@ preview:
 	# kill any existing process on port 21212
 	@lsof -ti:21212 | xargs -r kill -9
 	vyasa --port 21212 --reload-source > /dev/null 2>&1 &
+
+# Mirror every CDN library into ~/.cache/vyasa/vendor for offline use; restart the server after.
+vendor:
+	$(PY) -m vyasa.vendor
 
 fetch:
 	vyasa-fetch --interval 30

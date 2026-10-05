@@ -1,8 +1,12 @@
 // Excalidraw 0.17 injects its own styles via the JS bundle; there is no standalone CSS file.
-const JS_URL = 'https://unpkg.com/@excalidraw/excalidraw@0.17.6/dist/excalidraw.production.min.js';
+import { vendorUrl } from '../../../static/page_shell.js';
+
+const JS_URL = vendorUrl('https://unpkg.com/@excalidraw/excalidraw@0.17.6/dist/excalidraw.production.min.js');
 
 function loadAsset() {
   if (window.ExcalidrawLib) return Promise.resolve();
+  // Excalidraw fetches its fonts and lazy chunks from this path; default is unpkg.
+  window.EXCALIDRAW_ASSET_PATH ||= vendorUrl('https://unpkg.com/@excalidraw/excalidraw@0.17.6/dist/');
   return new Promise((resolve, reject) => {
     const found = document.querySelector(`script[src="${JS_URL}"]`);
     if (found) return found.addEventListener('load', resolve, { once: true });

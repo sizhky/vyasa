@@ -176,20 +176,20 @@ def render_search_preview_page(htmx, request: Request | None, q: str = ""):
     previewable = _filter_search_matches_by_roles(previewable, roles)
     query = (q or "").strip()
     if not query:
-        shell = Div(H1("Search previews", cls="vyasa-page-title text-4xl font-bold"), P("Type a search term in the sidebar to preview matching pages.", cls="mt-2 text-slate-500"))
+        shell = Div(H1("Search previews", cls="vyasa-page-title text-4xl font-bold"), P("Type a search term in the sidebar to preview matching pages.", cls="mt-2 text-vyasa-muted"))
         return layout(shell, htmx=htmx, title=f"Search previews - {get_blog_title()}", show_sidebar=True, current_path="search-previews", auth=auth)
     if not previewable:
         shell = Div(
             H1(f"Search previews: {query}", cls="vyasa-page-title text-4xl font-bold"),
             (P(regex_error, cls="text-amber-600 dark:text-amber-400 text-sm") if regex_error else None),
-            P("No previewable pages matched this search.", cls="mt-2 text-slate-500"),
+            P("No previewable pages matched this search.", cls="mt-2 text-vyasa-muted"),
         )
         return layout(shell, htmx=htmx, title=f"Search previews - {query} - {get_blog_title()}", show_sidebar=True, current_path="search-previews", auth=auth)
     feed = render_search_preview_feed(previewable, root)
     shell = Div(
         H1(f"Search previews: {query}", cls="vyasa-page-title text-4xl font-bold"),
         (P(regex_error, cls="text-amber-600 dark:text-amber-400 text-sm") if regex_error else None),
-        P(f"{len(previewable)} page preview{'s' if len(previewable) != 1 else ''}", cls="mt-2 text-slate-500"),
+        P(f"{len(previewable)} page preview{'s' if len(previewable) != 1 else ''}", cls="mt-2 text-vyasa-muted"),
         feed,
         cls="space-y-6",
     )
@@ -236,16 +236,16 @@ hdrs = (
     Script(src=_asset_url("/static/head-init.js")),
     Style(
         """
-        :root { --vyasa-paper: #f9f9f9; --vyasa-ink: #2d3434; --vyasa-paper-low: #f2f4f3; }
+        :root { --vyasa-paper: #fcfcfd; --vyasa-ink: #1c2024; --vyasa-paper-low: #f9f9fb; }
         html, body { background: var(--vyasa-paper) !important; color: var(--vyasa-ink) !important; }
         body.bg-background, body.text-foreground { background: var(--vyasa-paper) !important; color: var(--vyasa-ink) !important; }
         #page-container, #main-content, #posts-sidebar, #toc-sidebar, .vyasa-sidebar-toggle, .vyasa-sidebar-body {
             color: var(--vyasa-ink) !important;
         }
         .dark, .dark #page-container {
-            --vyasa-paper: color-mix(in srgb, #0b0e0d 82%, #45655b 18%) !important;
-            --vyasa-ink: #edf2f1 !important;
-            --vyasa-paper-low: color-mix(in srgb, #121716 76%, #45655b 24%) !important;
+            --vyasa-paper: var(--vyasa-dark-paper, #111113) !important;
+            --vyasa-ink: var(--vyasa-dark-ink, #edeef0) !important;
+            --vyasa-paper-low: var(--vyasa-dark-paper-low, #18191b) !important;
         }
         @keyframes vyasaAnnotationBloom {
             0% { background: rgba(245, 158, 11, 0); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
@@ -255,6 +255,7 @@ hdrs = (
         """
     ),
     *Theme.slate.headers(highlightjs=False),
+    Script(src=_asset_url("/static/tailwind-tokens.js")),
     Script(src="https://cdn.jsdelivr.net/npm/uikit@3.16.14/dist/js/uikit.min.js"),
     Script(src="https://cdn.jsdelivr.net/npm/uikit@3.16.14/dist/js/uikit-icons.min.js"),
     Meta(name="vyasa-code-theme-light", content=get_config().get_code_theme_light()),
@@ -318,20 +319,6 @@ hdrs = (
     Link(rel="stylesheet", href=_asset_url("/static/header.css")),
     Link(rel="stylesheet", href=_asset_url("/static/kbd.css")),
     Link(rel="stylesheet", href=_asset_url("/static/linux-libertine.css")),
-    Style(
-        """
-        .vyasa-table-scroll { width: 100%; max-width: 100%; position: static; left: auto; transform: none; margin: 1.5rem 0; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-gutter: stable both-edges; box-shadow: none; transition: box-shadow 160ms ease; }
-        .vyasa-table-scroll.vyasa-table-breakout { width: min(var(--vyasa-breakout-width, 80vw), 80vw); max-width: 80vw; position: relative; left: 50%; transform: translateX(-50%); }
-        .vyasa-table-scroll.has-right-overflow { box-shadow: inset -18px 0 16px -14px rgba(15, 23, 42, 0.32); }
-        .vyasa-table-scroll.has-left-overflow { box-shadow: inset 18px 0 16px -14px rgba(15, 23, 42, 0.32); }
-        .vyasa-table-scroll.has-left-overflow.has-right-overflow { box-shadow: inset 18px 0 16px -14px rgba(15, 23, 42, 0.32), inset -18px 0 16px -14px rgba(15, 23, 42, 0.32); }
-        .dark .vyasa-table-scroll.has-right-overflow { box-shadow: inset -18px 0 16px -14px rgba(2, 6, 23, 0.62); }
-        .dark .vyasa-table-scroll.has-left-overflow { box-shadow: inset 18px 0 16px -14px rgba(2, 6, 23, 0.62); }
-        .dark .vyasa-table-scroll.has-left-overflow.has-right-overflow { box-shadow: inset 18px 0 16px -14px rgba(2, 6, 23, 0.62), inset -18px 0 16px -14px rgba(2, 6, 23, 0.62); }
-        .vyasa-table-scroll > table, .vyasa-table-scroll > .uk-table { width: max-content !important; min-width: 0; table-layout: auto; margin: 0 auto; }
-        .vyasa-table-scroll th, .vyasa-table-scroll td { max-width: var(--vyasa-table-col-max, 45vw); white-space: normal; overflow-wrap: anywhere; word-break: normal; }
-        """
-    ),
     Link(
         rel="stylesheet",
         href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css",
@@ -344,7 +331,7 @@ hdrs = (
     Link(rel="preconnect", href="https://fonts.gstatic.com", crossorigin=""),
     Link(
         rel="stylesheet",
-        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono&display=swap",
+        href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap",
     ),
 )
 

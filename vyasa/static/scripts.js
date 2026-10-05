@@ -509,11 +509,11 @@ function initCommandPalette() {
     if (document.getElementById('vyasa-command-palette')) return;
     const palette = document.createElement('div');
     palette.id = 'vyasa-command-palette';
-    palette.className = 'fixed inset-0 z-[9999] hidden bg-slate-950/45 backdrop-blur-sm';
+    palette.className = 'fixed inset-0 z-[9999] hidden bg-vyasa-inverse backdrop-blur-sm';
     palette.innerHTML = `
-        <div class="mx-auto mt-[12vh] w-[min(42rem,calc(100vw-2rem))] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 shadow-2xl">
-            <div class="border-b border-slate-200 dark:border-slate-800 p-3">
-                <input type="search" name="q" autocomplete="off" placeholder="Search file names..." class="vyasa-command-palette-input w-full bg-transparent px-2 py-2 text-base text-slate-800 dark:text-slate-100 outline-none" />
+        <div class="mx-auto mt-[12vh] w-[min(42rem,calc(100vw-2rem))] rounded-lg border border-vyasa-border bg-vyasa-surface shadow-2xl">
+            <div class="border-b border-vyasa-border p-3">
+                <input type="search" name="q" autocomplete="off" placeholder="Search file names..." class="vyasa-command-palette-input w-full bg-transparent px-2 py-2 text-base text-vyasa-text outline-none" />
             </div>
             <div class="vyasa-command-palette-results max-h-[55vh] overflow-y-auto p-3"></div>
         </div>`;
@@ -539,7 +539,7 @@ function initCommandPalette() {
         palette.classList.remove('hidden');
         input.focus();
         input.select();
-        if (!results.innerHTML.trim()) results.innerHTML = '<div class="text-xs text-slate-500">Type to search file names.</div>';
+        if (!results.innerHTML.trim()) results.innerHTML = '<div class="text-xs text-vyasa-muted">Type to search file names.</div>';
     };
     const runSearch = () => {
         fetch(postsSearchUrl(input.value.trim()), { headers: { 'HX-Request': 'true' } }).then((response) => response.text()).then((html) => {
@@ -1220,10 +1220,20 @@ function alignToCurrentHash() {
     requestAnimationFrame(() => target.scrollIntoView({ block: 'start' }));
 }
 
-function scheduleHashAlignment() {
-    alignToCurrentHash();
-    [80, 220, 500, 1200].forEach((delay) => setTimeout(alignToCurrentHash, delay));
+// Late re-alignments absorb layout shifts after load; user input cancels them
+// so they never pull the page back to the heading mid-scroll.
+let hashAlignmentTimers = [];
+function cancelHashAlignment() {
+    hashAlignmentTimers.forEach(clearTimeout);
+    hashAlignmentTimers = [];
 }
+function scheduleHashAlignment() {
+    cancelHashAlignment();
+    alignToCurrentHash();
+    hashAlignmentTimers = [80, 220, 500, 1200].map((delay) => setTimeout(alignToCurrentHash, delay));
+}
+['wheel', 'touchstart', 'pointerdown', 'keydown'].forEach((type) =>
+    window.addEventListener(type, cancelHashAlignment, { passive: true }));
 
 function initHeadingFolds(root = document) {
     const main = root.id === 'main-content' ? root : root.querySelector?.('#main-content');
@@ -1574,36 +1584,23 @@ function initMobileMenus() {
         });
     };
 
-    const sidebarState = (kind) => {
-        // closed: sidebar hidden.
-        // overlay: sidebar visible but floats over the main view.
-        // docked: sidebar visible and the main view reserves its width.
-        const state = document.documentElement.dataset[`vyasaSidebarState${kind[0].toUpperCase()}${kind.slice(1)}`];
-        if (state === 'closed' || state === 'overlay' || state === 'docked') return state;
-        return document.documentElement.hasAttribute(`data-vyasa-hide-${kind}-sidebar`) ? 'closed' : 'overlay';
-    };
+    // closed: sidebar hidden. open: sidebar visible and the main view reserves its width.
+    const sidebarState = (kind) => (
+        document.documentElement.hasAttribute(`data-vyasa-hide-${kind}-sidebar`) ? 'closed' : 'open'
+    );
 
     const applySidebarState = (kind, state) => {
-        const root = document.documentElement;
-        const attr = `data-vyasa-hide-${kind}-sidebar`;
-        const dataKey = `vyasaSidebarState${kind[0].toUpperCase()}${kind.slice(1)}`;
-        root.dataset[dataKey] = state;
-        root.toggleAttribute(attr, state === 'closed');
-        try {
-            localStorage.setItem(`vyasa-${kind}-sidebar-state`, state);
-            if (state === 'closed') localStorage.setItem(`vyasa-${kind}-sidebar-hidden`, '1');
-            else localStorage.setItem(`vyasa-${kind}-sidebar-hidden`, '0');
-        } catch (_) {}
+        const closed = state === 'closed';
+        document.documentElement.toggleAttribute(`data-vyasa-hide-${kind}-sidebar`, closed);
+        try { localStorage.setItem(`vyasa-${kind}-sidebar-hidden`, closed ? '1' : '0'); } catch (_) {}
         document.querySelectorAll(`#${kind}-sidebar details[data-sidebar="${kind}"]`).forEach((sidebar) => {
-            sidebar.open = state !== 'closed';
+            sidebar.open = !closed;
         });
-        if (state === 'closed') pulseNavbarToggle(kind);
+        if (closed) pulseNavbarToggle(kind);
     };
 
     const toggleDockedSidebar = (kind) => {
-        const current = sidebarState(kind);
-        const next = current === 'closed' ? 'overlay' : current === 'overlay' ? 'docked' : 'closed';
-        applySidebarState(kind, next);
+        applySidebarState(kind, sidebarState(kind) === 'closed' ? 'open' : 'closed');
         syncContentResize();
         return true;
     };
@@ -1883,7 +1880,7 @@ function openIframeFullscreen(button) {
         overlay.innerHTML = `
             <div class="iframe-fullscreen-header">
                 <div class="iframe-fullscreen-title"></div>
-                <button type="button" class="iframe-fullscreen-close px-2 py-1 text-xs border rounded hover:bg-slate-700">
+                <button type="button" class="iframe-fullscreen-close px-2 py-1 text-xs border rounded hover:bg-vyasa-hover">
                     Close
                 </button>
             </div>
@@ -2034,7 +2031,7 @@ function initJsonFocusToggle() {
         const modal = document.createElement('div');
         modal.id = 'json-focus-modal';
         modal.className = 'fixed inset-0 z-[10000] bg-black/80 backdrop-blur-sm p-4 flex items-center justify-center';
-        modal.innerHTML = `<div class="w-full max-w-6xl h-[92vh] bg-white dark:bg-slate-950 rounded-xl shadow-2xl flex flex-col"><div class="flex items-center justify-between gap-3 p-4 border-b border-slate-200 dark:border-slate-800"><div class="text-sm font-semibold text-slate-900 dark:text-slate-100">${title}</div><div class="flex items-center gap-2"><button type="button" class="json-focus-save px-3 py-2 text-sm rounded-md bg-blue-600 text-white">Save</button><button type="button" class="json-focus-close px-3 py-2 text-sm rounded-md border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200">Close</button></div></div><div class="p-4 flex-1"><textarea class="w-full h-full vyasa-admin-json px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white/85 dark:bg-slate-900/70"></textarea></div></div>`;
+        modal.innerHTML = `<div class="w-full max-w-6xl h-[92vh] bg-vyasa-surface rounded-xl shadow-2xl flex flex-col"><div class="flex items-center justify-between gap-3 p-4 border-b border-vyasa-border"><div class="text-sm font-semibold text-vyasa-text">${title}</div><div class="flex items-center gap-2"><button type="button" class="json-focus-save px-3 py-2 text-sm rounded-md bg-vyasa-accent text-vyasa-on-accent">Save</button><button type="button" class="json-focus-close px-3 py-2 text-sm rounded-md border border-vyasa-border text-vyasa-text">Close</button></div></div><div class="p-4 flex-1"><textarea class="w-full h-full vyasa-admin-json px-4 py-3 rounded-xl border border-vyasa-border bg-vyasa-surface"></textarea></div></div>`;
         const editor = modal.querySelector('textarea');
         editor.value = textarea.value;
         modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
@@ -2115,6 +2112,8 @@ const GOOGLE_FONT_QUERIES = {
     'Instrument Serif': 'family=Instrument+Serif:ital@0;1',
     'JetBrains Mono': 'family=JetBrains+Mono:wght@400;500;600;700;800',
     Karla: 'family=Karla:wght@400;500;600;700;800',
+    Geist: 'family=Geist:wght@400;500;600;700',
+    'Geist Mono': 'family=Geist+Mono:wght@400;500;600',
     Lexend: 'family=Lexend:wght@400;500;600;700;800',
     'Libre Baskerville': 'family=Libre+Baskerville:wght@400;700',
     'Libre Franklin': 'family=Libre+Franklin:wght@400;500;600;700;800',

@@ -1,3 +1,4 @@
+import { vendorUrl } from '../../../static/page_shell.js';
 import { CODE_LINE_STATE_LABELS, codeLineSpecMap, highlightedLineFragments } from './code_tools_lines.js';
 
 function getCodeThemeMeta(name) {
@@ -5,7 +6,7 @@ function getCodeThemeMeta(name) {
 }
 
 function getHljsThemeHref(themeName) {
-    return `https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/${themeName}.min.css`;
+    return vendorUrl(`https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/${themeName}.min.css`);
 }
 
 function ensureCodeThemeLinks() {
@@ -41,7 +42,7 @@ function copyCodeText(text) {
         if (!toast) {
             toast = document.createElement('div');
             toast.id = 'code-copy-toast';
-            toast.className = 'fixed top-6 right-6 z-[10000] text-xs bg-slate-900 text-white px-3 py-2 rounded shadow-lg opacity-0 transition-opacity duration-300';
+            toast.className = 'fixed top-6 right-6 z-[10000] text-xs bg-vyasa-inverse text-vyasa-on-inverse px-3 py-2 rounded shadow-lg opacity-0 transition-opacity duration-300';
             toast.textContent = 'Copied';
             document.body.appendChild(toast);
         }

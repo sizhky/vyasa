@@ -130,7 +130,7 @@ def test_heading_permalink_and_explicit_id_are_used_in_html_and_toc():
     assert 'id="server-sent-events-sse"' in html
     assert '>My Title<' in html
     assert 'href="#server-sent-events-sse"' in html
-    assert 'class="vyasa-heading-permalink' in html
+    assert 'class="vyasa-heading-action vyasa-heading-permalink' in html
     assert 'icon="link"' in html
     assert toc == [(3, 'My Title', 'server-sent-events-sse')]
 

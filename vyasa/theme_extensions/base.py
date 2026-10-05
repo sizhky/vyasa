@@ -7,7 +7,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Iterable
 
-from ..theme_colors import normalize_theme_primary
+from ..theme_colors import complete_theme_surfaces, normalize_theme_primary
 
 
 @dataclass(frozen=True)
@@ -26,11 +26,11 @@ def load_theme_toml(theme_name: str, base_dir: Path | None = None) -> dict[str, 
         preset_file = base_dir / ".vyasa-themes" / f"{name}.toml"
         if preset_file.exists():
             theme = tomllib.loads(preset_file.read_text(encoding="utf-8"))
-            return {**normalize_theme_primary(theme.get("theme_primary", "")), **theme}
+            return {**normalize_theme_primary(theme.get("theme_primary", "")), **complete_theme_surfaces(theme)}
     package_file = resources.files("vyasa.themes").joinpath(f"{name}.toml")
     if package_file.is_file():
         theme = tomllib.loads(package_file.read_text(encoding="utf-8"))
-        return {**normalize_theme_primary(theme.get("theme_primary", "")), **theme}
+        return {**normalize_theme_primary(theme.get("theme_primary", "")), **complete_theme_surfaces(theme)}
     return {}
 
 

@@ -1,15 +1,37 @@
-/* Title sits inside the card; docked sidebars removed the left gutter
-   the old hanging-title layout depended on */
-.vyasa-blog-card-title {
-    margin-bottom: 0.75rem;
+/* Home feed: one divided list, no card frames, so previews that contain
+   their own bordered blocks (code, callouts) are never nested in a box. */
+.vyasa-blog-feed > * + * {
+    border-top: 1px solid var(--vyasa-border);
 }
 .vyasa-blog-card {
-    padding: 1.25rem;
-    border: 1px solid var(--vyasa-outline-ghost);
-    border-radius: 0.75rem;
-    background: color-mix(in srgb, var(--vyasa-paper) 82%, white 18%);
-    box-shadow: 0 10px 28px -28px color-mix(in srgb, var(--vyasa-ink) 35%, transparent);
+    padding: var(--vyasa-space-6) 0;
 }
-.dark .vyasa-blog-card {
-    background: color-mix(in srgb, var(--vyasa-paper-low) 86%, black 14%);
+.vyasa-blog-card-title {
+    margin-bottom: var(--vyasa-space-3);
+    color: var(--vyasa-ink) !important;
+    font: var(--vyasa-weight-semibold) var(--vyasa-text-lg)/var(--vyasa-leading-tight) var(--vyasa-font-heading);
+    letter-spacing: -0.011em;
+    text-decoration: none;
+}
+.vyasa-blog-card-title:hover { color: var(--vyasa-link) !important; }
+.vyasa-blog-card-meta {
+    margin-top: var(--vyasa-space-1);
+    color: var(--vyasa-text-muted);
+    font: var(--vyasa-weight-regular) var(--vyasa-text-sm)/var(--vyasa-leading-tight) var(--vyasa-font-ui);
+    font-variant-numeric: tabular-nums;
+}
+.vyasa-blog-card-preview {
+    color: var(--vyasa-text-muted);
+}
+.vyasa-blog-card-more {
+    margin-top: var(--vyasa-space-3);
+    color: var(--vyasa-link) !important;
+    font: var(--vyasa-weight-medium) var(--vyasa-text-sm)/var(--vyasa-leading-tight) var(--vyasa-font-ui);
+    text-decoration: none;
+}
+.vyasa-blog-card-more:hover { color: var(--vyasa-ink) !important; }
+.vyasa-page-subtitle {
+    margin-top: var(--vyasa-space-2);
+    color: var(--vyasa-text-muted);
+    font-size: var(--vyasa-text-base);
 }

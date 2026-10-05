@@ -1,80 +1,80 @@
-.react-flow__node.vyasa-tasks-node--expanded-group { background: transparent !important; background-color: transparent !important; background-image: none !important; box-shadow: var(--kg-group-ring, 0 0 0 2px color-mix(in srgb, var(--vyasa-ink) 52%, transparent), 0 24px 64px color-mix(in srgb, var(--vyasa-primary) 10%, transparent)) !important; }
+.react-flow__node.vyasa-tasks-node--expanded-group { background: transparent !important; background-color: transparent !important; background-image: none !important; box-shadow: var(--kg-group-ring, 0 0 0 2px var(--vyasa-gray-10)) !important; }
 .react-flow__node.vyasa-tasks-node--sequence-lifeline { background: transparent !important; background-color: transparent !important; background-image: none !important; }
 .vyasa-task-link-badge { display: inline-flex; align-items: center; justify-content: flex-end; gap: 0.14rem; min-width: 0.8rem; height: 0.8rem; color: color-mix(in srgb, currentColor 58%, transparent); pointer-events: none; opacity: 0.72; }
 .vyasa-task-link-badge svg { width: 0.8rem; height: 0.8rem; stroke: currentColor !important; fill: none !important; }
-.vyasa-tasks-node-reference { color: color-mix(in srgb, var(--vyasa-primary) 78%, currentColor); font-family: inherit; font-weight: inherit; border: 0; background: color-mix(in srgb, var(--vyasa-primary) 22%, transparent); padding: 0.03em 0.2em; border-radius: 3px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.vyasa-tasks-node-reference { color: color-mix(in srgb, var(--vyasa-primary) 78%, currentColor); font-family: inherit; font-weight: inherit; border: 0; background: color-mix(in srgb, var(--vyasa-primary) 22%, transparent); padding: 0.03em 0.2em; border-radius: var(--vyasa-radius-sm); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .vyasa-tasks-node-reference-modifier .vyasa-tasks-node-reference:not(.vyasa-tasks-node-reference--broken) {
     cursor: pointer;
     text-decoration: underline;
     text-underline-offset: 2px;
 }
-.vyasa-tasks-node-reference--broken { color: #ef4444; background: color-mix(in srgb, #ef4444 18%, transparent); text-decoration: wavy underline; text-decoration-thickness: 1px; }
-.vyasa-tasks-pinned-card:focus-visible { outline: 3px solid color-mix(in srgb, var(--vyasa-primary) 72%, transparent); outline-offset: 3px; }
-.vyasa-kg-history-rail { flex: 0 0 min(31%, 390px); min-width: 280px; height: 100%; display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid color-mix(in srgb, currentColor 14%, transparent); background: color-mix(in srgb, var(--vyasa-paper) 97%, var(--vyasa-primary) 3%); z-index: 35; }
-.vyasa-kg-history-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 12px; border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent); }
+.vyasa-tasks-node-reference--broken { color: var(--vyasa-danger); background: color-mix(in srgb, var(--vyasa-danger) 18%, transparent); text-decoration: wavy underline; text-decoration-thickness: 1px; }
+.vyasa-tasks-pinned-card:focus-visible { outline: 2px solid var(--vyasa-focus-ring); outline-offset: 3px; }
+.vyasa-kg-history-rail { flex: 0 0 min(31%, 390px); min-width: 280px; height: 100%; display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid var(--vyasa-border); background: var(--vyasa-bg-subtle); z-index: 35; }
+.vyasa-kg-history-header { display: flex; align-items: center; justify-content: space-between; gap: var(--vyasa-space-2); padding: var(--vyasa-space-3); border-bottom: 1px solid var(--vyasa-border); }
 .vyasa-kg-history-header > div { display: grid; gap: 1px; }
-.vyasa-kg-history-header strong { font-size: 12px; letter-spacing: .05em; text-transform: uppercase; }
-.vyasa-kg-history-header span { font-size: 10px; opacity: .62; }
-.vyasa-kg-history-header code { font-size: 11px; white-space: nowrap; }
-.vyasa-kg-history-list { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 4px 0 14px; }
-.vyasa-kg-history-row { width: 100%; min-height: 68px; display: flex; align-items: stretch; border: 0; border-bottom: 1px solid color-mix(in srgb, currentColor 7%, transparent); background: transparent; color: inherit; padding: 0; text-align: left; cursor: pointer; }
-.vyasa-kg-history-row:hover { background: color-mix(in srgb, var(--vyasa-primary) 8%, transparent); }
-.vyasa-kg-history-row.is-selected { background: color-mix(in srgb, var(--vyasa-primary) 15%, transparent); box-shadow: inset 3px 0 var(--vyasa-primary); }
+.vyasa-kg-history-header strong { font-size: var(--vyasa-text-sm); font-weight: var(--vyasa-weight-semibold); }
+.vyasa-kg-history-header span { font-size: var(--vyasa-text-xs); color: var(--vyasa-text-muted); font-variant-numeric: tabular-nums; }
+.vyasa-kg-history-header code { font-size: var(--vyasa-text-xs); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.vyasa-kg-history-list { flex: 1 1 auto; min-height: 0; overflow: auto; padding: var(--vyasa-space-1) 0 var(--vyasa-space-3); }
+.vyasa-kg-history-row { width: 100%; min-height: 68px; display: flex; align-items: stretch; border: 0; border-bottom: 1px solid var(--vyasa-border); background: transparent; color: inherit; padding: 0; text-align: left; cursor: pointer; transition: background var(--vyasa-duration-fast) var(--vyasa-ease); }
+.vyasa-kg-history-row:hover { background: var(--vyasa-hover); }
+.vyasa-kg-history-row.is-selected { background: var(--vyasa-accent-3); box-shadow: inset 3px 0 var(--vyasa-accent-9); }
 .vyasa-kg-history-row.is-context-only { opacity: .55; }
-.vyasa-kg-history-diff { border: 1px solid color-mix(in srgb, currentColor 22%, transparent); border-radius: 6px; padding: 3px 9px; background: transparent; color: inherit; font: 700 10px/1.2 ui-monospace, monospace; letter-spacing: .04em; text-transform: uppercase; cursor: pointer; }
-.vyasa-kg-history-diff.is-selected { border-color: var(--vyasa-primary); background: color-mix(in srgb, var(--vyasa-primary) 16%, transparent); color: var(--vyasa-primary); }
+.vyasa-kg-history-diff { border: 1px solid var(--vyasa-border); border-radius: var(--vyasa-radius-md); padding: 2px var(--vyasa-space-2); background: transparent; color: inherit; font: var(--vyasa-weight-medium) var(--vyasa-text-xs)/var(--vyasa-leading-tight) var(--vyasa-font-ui); cursor: pointer; transition: background var(--vyasa-duration-fast) var(--vyasa-ease), border-color var(--vyasa-duration-fast) var(--vyasa-ease); }
+.vyasa-kg-history-diff.is-selected { border-color: var(--vyasa-accent-7); background: var(--vyasa-accent-3); color: var(--vyasa-accent-11); }
 .vyasa-kg-history-diff:disabled { opacity: .45; cursor: default; }
 .vyasa-kg-history-entry { position: relative; }
-.vyasa-kg-history-labels > span.vyasa-kg-history-base { border-color: color-mix(in srgb, var(--vyasa-primary) 55%, transparent); color: var(--vyasa-primary); font-weight: 800; }
-.vyasa-kg-history-compare { position: absolute; inset-inline-end: 9px; top: 50%; transform: translateY(-50%); opacity: 0; pointer-events: none; transition: opacity .12s ease; }
+.vyasa-kg-history-labels > span.vyasa-kg-history-base { border-color: var(--vyasa-accent-7); color: var(--vyasa-accent-11); font-weight: var(--vyasa-weight-semibold); }
+.vyasa-kg-history-compare { position: absolute; inset-inline-end: var(--vyasa-space-2); top: 50%; transform: translateY(-50%); opacity: 0; pointer-events: none; transition: opacity var(--vyasa-duration-fast) var(--vyasa-ease); }
 .vyasa-kg-history-entry:hover .vyasa-kg-history-compare, .vyasa-kg-history-compare:focus-within { opacity: 1; pointer-events: auto; }
-.vyasa-kg-history-compare button { border: 1px solid color-mix(in srgb, var(--vyasa-primary) 42%, transparent); border-radius: 5px; padding: 3px 7px; background: var(--vyasa-paper); color: var(--vyasa-primary); font: 700 9px/1.2 ui-monospace, monospace; cursor: pointer; box-shadow: 0 2px 9px rgba(0,0,0,.14); }
+.vyasa-kg-history-compare button { border: 1px solid var(--vyasa-border); border-radius: var(--vyasa-radius-sm); padding: 2px var(--vyasa-space-2); background: var(--vyasa-surface); color: var(--vyasa-accent-11); font: var(--vyasa-weight-medium) var(--vyasa-text-xs)/var(--vyasa-leading-tight) var(--vyasa-font-ui); cursor: pointer; box-shadow: var(--vyasa-shadow-sm); }
 .vyasa-kg-history-lanes { flex: 0 0 auto; overflow: visible; }
-.vyasa-kg-history-copy { flex: 1 1 auto; min-width: 0; display: grid; align-content: center; gap: 4px; padding: 8px 10px 8px 2px; }
-.vyasa-kg-history-subject { font-size: 12px; font-weight: 680; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.vyasa-kg-history-meta { display: flex; justify-content: space-between; gap: 8px; font-size: 10px; font-style: italic; opacity: .62; }
-.vyasa-kg-history-labels { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
-.vyasa-kg-history-labels > span { border: 1px solid color-mix(in srgb, #0ea5e9 48%, transparent); border-radius: 4px; padding: 1px 4px; color: color-mix(in srgb, #0284c7 82%, currentColor); font-size: 9px; line-height: 1.2; }
-.vyasa-kg-history-labels code { margin-left: auto; font-size: 9px; opacity: .62; }
-.vyasa-kg-history-state { padding: 12px; font-size: 11px; opacity: .72; }
-.vyasa-kg-history-state--error { color: #dc2626; opacity: 1; }
+.vyasa-kg-history-copy { flex: 1 1 auto; min-width: 0; display: grid; align-content: center; gap: var(--vyasa-space-1); padding: var(--vyasa-space-2) var(--vyasa-space-2) var(--vyasa-space-2) 2px; }
+.vyasa-kg-history-subject { font-size: var(--vyasa-text-sm); font-weight: var(--vyasa-weight-medium); line-height: var(--vyasa-leading-tight); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vyasa-kg-history-meta { display: flex; justify-content: space-between; gap: var(--vyasa-space-2); font-size: var(--vyasa-text-xs); color: var(--vyasa-text-muted); font-variant-numeric: tabular-nums; }
+.vyasa-kg-history-labels { display: flex; align-items: center; flex-wrap: wrap; gap: var(--vyasa-space-1); }
+.vyasa-kg-history-labels > span { border: 1px solid var(--vyasa-border); border-radius: var(--vyasa-radius-sm); padding: 0 var(--vyasa-space-1); color: var(--vyasa-text-muted); font-size: var(--vyasa-text-xs); line-height: var(--vyasa-leading-tight); }
+.vyasa-kg-history-labels code { margin-left: auto; font-size: var(--vyasa-text-xs); color: var(--vyasa-text-faint); }
+.vyasa-kg-history-state { padding: var(--vyasa-space-3); font-size: var(--vyasa-text-xs); color: var(--vyasa-text-muted); }
+.vyasa-kg-history-state--error { color: var(--vyasa-danger); }
 .vyasa-kg-review-mode [data-vyasa-kg-review-change="unchanged"] { opacity: .26; filter: saturate(.25); }
 /* Ghosting stays on the card body, where opacity is not clipped. */
 .vyasa-kg-review-mode [data-vyasa-kg-review-change="removed"] { opacity: .66; }
 /* The bloom sits on the React Flow node wrapper instead, because that wrapper
    sets overflow:hidden and clipped a box-shadow drawn on the body to nothing.
    A filter escaped the clip but traced the glyphs, haloing the label text. */
-.vyasa-kg-review-mode .react-flow__node:has([data-vyasa-kg-review-change="added"]) { --vyasa-kg-review-bloom: #16a34a; }
-.vyasa-kg-review-mode .react-flow__node:has([data-vyasa-kg-review-change="modified"]) { --vyasa-kg-review-bloom: #d97706; }
-.vyasa-kg-review-mode .react-flow__node:has([data-vyasa-kg-review-change="removed"]) { --vyasa-kg-review-bloom: #dc2626; }
+.vyasa-kg-review-mode .react-flow__node:has([data-vyasa-kg-review-change="added"]) { --vyasa-kg-review-bloom: var(--vyasa-success); }
+.vyasa-kg-review-mode .react-flow__node:has([data-vyasa-kg-review-change="modified"]) { --vyasa-kg-review-bloom: var(--vyasa-warning); }
+.vyasa-kg-review-mode .react-flow__node:has([data-vyasa-kg-review-change="removed"]) { --vyasa-kg-review-bloom: var(--vyasa-danger); }
 /* Static, to match the edge halo. No ring either: the change colour belongs to
    the bloom alone, so the card keeps the border and background its palette
    colour gave it. !important because the node wrapper sets box-shadow inline. */
 .vyasa-kg-review-mode .react-flow__node:has([data-vyasa-kg-review-change="added"]),
 .vyasa-kg-review-mode .react-flow__node:has([data-vyasa-kg-review-change="modified"]),
 .vyasa-kg-review-mode .react-flow__node:has([data-vyasa-kg-review-change="removed"]) { box-shadow: 0 0 26px 10px color-mix(in srgb, var(--vyasa-kg-review-bloom) 62%, transparent) !important; }
-.vyasa-kg-review-bar { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 36; display: flex; align-items: center; gap: 8px; max-width: calc(100% - 24px); border: 1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent); border-radius: 9px; padding: 7px 10px; background: color-mix(in srgb, var(--vyasa-paper) 94%, transparent); box-shadow: 0 6px 18px rgba(0,0,0,.1); backdrop-filter: blur(8px); font-size: 10px; white-space: nowrap; pointer-events: none; }
-.vyasa-kg-review-bar code { font-size: 10px; color: var(--vyasa-primary); }
-.vyasa-kg-review-inspector { display: grid; gap: 14px; }
-.vyasa-kg-review-revisions { display: flex; align-items: center; justify-content: space-between; gap: 6px; border-radius: 8px; padding: 7px 8px; background: color-mix(in srgb, var(--vyasa-primary) 8%, transparent); font: 600 10px/1.3 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
-.vyasa-kg-review-inspector h4 { margin: 0 0 6px; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; opacity: .66; }
-.vyasa-kg-review-field { border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent); padding: 6px 0; }
-.vyasa-kg-review-field summary { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 11px; font-weight: 700; }
-.vyasa-kg-review-mark { width: 16px; text-align: center; font: 800 12px/1 ui-monospace, monospace; }
-.vyasa-kg-review-mark--added { color: #16a34a; }
-.vyasa-kg-review-mark--modified { color: #d97706; }
-.vyasa-kg-review-mark--removed { color: #dc2626; }
-.vyasa-kg-review-values { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; margin-top: 6px; }
-.vyasa-kg-review-values > div { min-width: 0; border-radius: 7px; padding: 6px; background: color-mix(in srgb, currentColor 5%, transparent); }
-.vyasa-kg-review-values b { display: block; margin-bottom: 3px; font-size: 9px; text-transform: uppercase; opacity: .58; }
-.vyasa-kg-review-values pre { margin: 0; max-height: 180px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 10px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
-.vyasa-kg-review-edges { display: grid; gap: 5px; }
-.vyasa-kg-review-edge { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 5px; border-radius: 7px; padding: 6px; background: color-mix(in srgb, currentColor 5%, transparent); font-size: 10px; }
-.vyasa-kg-review-edge .vyasa-kg-review-field { border-top-color: color-mix(in srgb, currentColor 16%, transparent); margin-top: 4px; padding-bottom: 0; }
-.vyasa-kg-review-edge .vyasa-kg-review-field summary { font-size: 10px; }
-.vyasa-kg-review-edge--added > span { color: #16a34a; }
-.vyasa-kg-review-edge--modified > span { color: #d97706; }
-.vyasa-kg-review-edge--removed > span { color: #dc2626; }
+.vyasa-kg-review-bar { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 36; display: flex; align-items: center; gap: var(--vyasa-space-2); max-width: calc(100% - 24px); border: 1px solid var(--vyasa-border); border-radius: var(--vyasa-radius-lg); padding: var(--vyasa-space-2) var(--vyasa-space-3); background: var(--vyasa-surface); box-shadow: var(--vyasa-shadow-sm); font-size: var(--vyasa-text-xs); font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none; }
+.vyasa-kg-review-bar code { font-size: var(--vyasa-text-xs); color: var(--vyasa-accent-11); }
+.vyasa-kg-review-inspector { display: grid; gap: var(--vyasa-space-3); }
+.vyasa-kg-review-revisions { display: flex; align-items: center; justify-content: space-between; gap: var(--vyasa-space-2); border-radius: var(--vyasa-radius-md); padding: var(--vyasa-space-2); background: var(--vyasa-accent-3); font: var(--vyasa-weight-medium) var(--vyasa-text-xs)/var(--vyasa-leading-snug) var(--vyasa-font-mono); font-variant-numeric: tabular-nums; }
+.vyasa-kg-review-inspector h4 { margin: 0 0 var(--vyasa-space-2); font-size: var(--vyasa-text-xs); font-weight: var(--vyasa-weight-semibold); color: var(--vyasa-text-muted); }
+.vyasa-kg-review-field { border-top: 1px solid var(--vyasa-border); padding: var(--vyasa-space-2) 0; }
+.vyasa-kg-review-field summary { display: flex; align-items: center; gap: var(--vyasa-space-2); cursor: pointer; font-size: var(--vyasa-text-xs); font-weight: var(--vyasa-weight-medium); }
+.vyasa-kg-review-mark { width: var(--vyasa-icon-size); text-align: center; font: var(--vyasa-weight-semibold) var(--vyasa-text-xs)/1 var(--vyasa-font-mono); }
+.vyasa-kg-review-mark--added { color: var(--vyasa-success); }
+.vyasa-kg-review-mark--modified { color: var(--vyasa-warning); }
+.vyasa-kg-review-mark--removed { color: var(--vyasa-danger); }
+.vyasa-kg-review-values { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--vyasa-space-2); margin-top: var(--vyasa-space-2); }
+.vyasa-kg-review-values > div { min-width: 0; border-radius: var(--vyasa-radius-md); padding: var(--vyasa-space-2); background: var(--vyasa-gray-3); }
+.vyasa-kg-review-values b { display: block; margin-bottom: var(--vyasa-space-1); font-size: var(--vyasa-text-xs); font-weight: var(--vyasa-weight-medium); color: var(--vyasa-text-muted); }
+.vyasa-kg-review-values pre { margin: 0; max-height: 180px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: var(--vyasa-text-xs)/var(--vyasa-leading-snug) var(--vyasa-font-mono); }
+.vyasa-kg-review-edges { display: grid; gap: var(--vyasa-space-1); }
+.vyasa-kg-review-edge { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: var(--vyasa-space-1); border-radius: var(--vyasa-radius-md); padding: var(--vyasa-space-2); background: var(--vyasa-gray-3); font-size: var(--vyasa-text-xs); }
+.vyasa-kg-review-edge .vyasa-kg-review-field { border-top-color: var(--vyasa-border); margin-top: var(--vyasa-space-1); padding-bottom: 0; }
+.vyasa-kg-review-edge .vyasa-kg-review-field summary { font-size: var(--vyasa-text-xs); }
+.vyasa-kg-review-edge--added > span { color: var(--vyasa-success); }
+.vyasa-kg-review-edge--modified > span { color: var(--vyasa-warning); }
+.vyasa-kg-review-edge--removed > span { color: var(--vyasa-danger); }
 @media (max-width: 800px) { .vyasa-kg-history-rail { flex-basis: 42%; min-width: 220px; } .vyasa-kg-review-values { grid-template-columns: 1fr; } }
 .vyasa-task-node-card-value { display: block; min-width: 0; max-width: 100%; white-space: normal; }
 .vyasa-task-node-card-value :where(p, h1, h2, h3, h4, h5, h6, ul, ol, li, blockquote) { font-size: inherit !important; line-height: inherit !important; color: inherit !important; }
@@ -86,42 +86,32 @@
 .vyasa-task-node-card-value pre { display: block; max-width: 100%; overflow-x: auto; white-space: pre; }
 .vyasa-task-node-card-row:hover .vyasa-task-node-card-copy,
 .vyasa-task-node-card-row:focus-within .vyasa-task-node-card-copy { opacity: 0.72; pointer-events: auto; }
-.vyasa-task-node-card-copy { position: absolute; top: 8px; right: 0; width: 20px; height: 20px; border: 0; border-radius: 6px; background: color-mix(in srgb, var(--vyasa-paper) 92%, transparent); color: inherit; cursor: pointer; font-size: 12px; line-height: 1; opacity: 0; pointer-events: none; transition: opacity 120ms ease, background 120ms ease; }
-.vyasa-task-node-card-copy:hover { opacity: 1; background: color-mix(in srgb, var(--vyasa-primary) 14%, var(--vyasa-paper)); }
+.vyasa-task-node-card-copy { position: absolute; top: 8px; right: 0; width: 20px; height: 20px; border: 0; border-radius: var(--vyasa-radius-md); background: var(--vyasa-surface); color: inherit; cursor: pointer; font-size: var(--vyasa-text-xs); line-height: 1; opacity: 0; pointer-events: none; transition: opacity var(--vyasa-duration-fast) var(--vyasa-ease), background var(--vyasa-duration-fast) var(--vyasa-ease); }
+.vyasa-task-node-card-copy:hover { opacity: 1; background: var(--vyasa-hover); }
 .vyasa-task-slide-description { display: block; min-width: 0; max-width: 100%; white-space: normal; }
 .vyasa-task-slide-description > :first-child { margin-top: 0 !important; }
 .vyasa-task-slide-description > :last-child { margin-bottom: 0 !important; }
 .vyasa-task-slide-nav select {
     appearance: none;
-    padding: 0 34px 0 10px !important;
-    border-color: color-mix(in srgb, var(--vyasa-primary) 28%, currentColor 12%) !important;
+    padding: 0 34px 0 var(--vyasa-space-3) !important;
+    border-color: var(--vyasa-border) !important;
     background:
         linear-gradient(45deg, transparent 50%, currentColor 50%) calc(100% - 18px) 50% / 6px 6px no-repeat,
         linear-gradient(135deg, currentColor 50%, transparent 50%) calc(100% - 13px) 50% / 6px 6px no-repeat,
-        color-mix(in srgb, var(--vyasa-paper) 94%, var(--vyasa-primary) 6%) !important;
-    box-shadow:
-        inset 0 1px 0 color-mix(in srgb, white 18%, transparent),
-        0 1px 2px rgba(15, 23, 42, 0.08);
+        var(--vyasa-surface) !important;
+    transition: background var(--vyasa-duration-fast) var(--vyasa-ease), border-color var(--vyasa-duration-fast) var(--vyasa-ease);
     cursor: pointer;
 }
 .vyasa-task-slide-nav select:hover {
-    border-color: color-mix(in srgb, var(--vyasa-primary) 48%, currentColor 16%) !important;
+    border-color: var(--vyasa-border-strong) !important;
     background:
         linear-gradient(45deg, transparent 50%, currentColor 50%) calc(100% - 18px) 50% / 6px 6px no-repeat,
         linear-gradient(135deg, currentColor 50%, transparent 50%) calc(100% - 13px) 50% / 6px 6px no-repeat,
-        color-mix(in srgb, var(--vyasa-paper) 88%, var(--vyasa-primary) 12%) !important;
+        var(--vyasa-hover) !important;
 }
 .vyasa-task-slide-nav select:focus-visible {
-    outline: none;
-    border-color: color-mix(in srgb, var(--vyasa-primary) 72%, currentColor 12%) !important;
-    box-shadow:
-        0 0 0 3px color-mix(in srgb, var(--vyasa-primary) 24%, transparent),
-        inset 0 1px 0 color-mix(in srgb, white 18%, transparent);
-}
-.dark .vyasa-task-slide-nav select {
-    box-shadow:
-        inset 0 1px 0 color-mix(in srgb, white 8%, transparent),
-        0 1px 2px rgba(0, 0, 0, 0.28);
+    outline: 2px solid var(--vyasa-focus-ring);
+    outline-offset: 2px;
 }
 /* React Flow runtime overrides. */
 .tasks-container[data-tasks-maximized="true"] {
@@ -139,7 +129,7 @@
     z-index: 10000;
     display: flex;
     flex-direction: column;
-    background: var(--vyasa-paper);
+    background: var(--vyasa-bg);
 }
 .tasks-container[data-tasks-maximized="true"] .vyasa-tasks-flow {
     flex: 1 1 auto !important;
@@ -191,10 +181,10 @@ button[data-vyasa-tasks-action="toggleCardScroll"][data-vyasa-card-scroll-on="tr
 }
 @keyframes vyasa-tasks-hover-card-scroll-pulse {
     0%, 100% {
-        box-shadow: 0 10px 30px rgba(0,0,0,0.12), 0 0 4px 1px color-mix(in srgb, var(--vyasa-primary) 14%, transparent);
+        box-shadow: var(--vyasa-shadow-sm), 0 0 4px 1px color-mix(in srgb, var(--vyasa-primary) 14%, transparent);
     }
     50% {
-        box-shadow: 0 10px 30px rgba(0,0,0,0.12), 0 0 18px 8px color-mix(in srgb, var(--vyasa-primary) 68%, transparent);
+        box-shadow: var(--vyasa-shadow-sm), 0 0 18px 8px color-mix(in srgb, var(--vyasa-primary) 68%, transparent);
     }
 }
 .vyasa-tasks-pulse {
@@ -202,7 +192,7 @@ button[data-vyasa-tasks-action="toggleCardScroll"][data-vyasa-card-scroll-on="tr
 }
 @media (prefers-reduced-motion: reduce) {
     .vyasa-tasks-edge-pin-bloom { animation: none; }
-    .vyasa-tasks-pulse { animation: none; box-shadow: 0 0 0 2px var(--vyasa-primary); }
+    .vyasa-tasks-pulse { animation: none; box-shadow: 0 0 0 2px var(--vyasa-accent-9); }
 }
 .vyasa-tasks-hovering-edge-labels .react-flow__edgelabel-renderer {
     z-index: 1600 !important;
@@ -238,40 +228,30 @@ html:not(.vyasa-tasks-edge-labels-on) .vyasa-tasks-flow .vyasa-tasks-edge-label:
     cursor: pointer !important;
 }
 .vyasa-tasks-flow .react-flow__controls {
-    box-shadow: 0 10px 30px rgba(0,0,0,0.12);
-    border-radius: 10px;
+    box-shadow: var(--vyasa-shadow-sm);
+    border-radius: var(--vyasa-radius-md);
     overflow: hidden;
-    border: 1px solid color-mix(in srgb, var(--vyasa-primary) 20%, transparent);
-    background: color-mix(in srgb, var(--vyasa-paper) 96%, transparent);
+    border: 1px solid var(--vyasa-border);
+    background: var(--vyasa-surface);
 }
 .vyasa-tasks-flow .react-flow__controls button {
     width: 34px;
     height: 34px;
     border: 0;
-    border-bottom: 1px solid color-mix(in srgb, currentColor 14%, transparent);
-    background: color-mix(in srgb, var(--vyasa-paper) 96%, transparent);
-    color: var(--vyasa-ink);
+    border-bottom: 1px solid var(--vyasa-border);
+    background: var(--vyasa-surface);
+    color: var(--vyasa-text);
+    transition: background var(--vyasa-duration-fast) var(--vyasa-ease);
 }
 .vyasa-tasks-flow .react-flow__controls button:last-child {
     border-bottom: 0;
 }
 .vyasa-tasks-flow .react-flow__controls button:hover {
-    background: color-mix(in srgb, var(--vyasa-paper) 86%, var(--vyasa-primary) 14%);
+    background: var(--vyasa-hover);
 }
 .vyasa-tasks-flow .react-flow__controls button svg {
     fill: none;
     stroke: currentColor;
-}
-.dark .vyasa-tasks-flow .react-flow__controls,
-.dark .vyasa-tasks-flow .react-flow__controls button {
-    background: color-mix(in srgb, var(--vyasa-paper) 92%, #0f172a 8%);
-    color: color-mix(in srgb, white 88%, var(--vyasa-primary) 12%);
-}
-.dark .vyasa-tasks-flow .react-flow__controls button {
-    border-bottom-color: color-mix(in srgb, white 10%, transparent);
-}
-.dark .vyasa-tasks-flow .react-flow__controls button:hover {
-    background: color-mix(in srgb, var(--vyasa-paper) 72%, var(--vyasa-primary) 28%);
 }
 .dark .vyasa-tasks-node-image--icon {
     filter: brightness(0) invert(1);
@@ -285,21 +265,21 @@ html:not(.vyasa-tasks-edge-labels-on) .vyasa-tasks-flow .vyasa-tasks-edge-label:
 .vyasa-tasks-icon-filter-section,
 .vyasa-tasks-icon-filter-group {
     min-width: 0;
-    border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
-    border-radius: 8px;
-    background: color-mix(in srgb, currentColor 3%, transparent);
-    padding: 8px;
+    border: 1px solid var(--vyasa-border);
+    border-radius: var(--vyasa-radius-md);
+    background: var(--vyasa-bg-subtle);
+    padding: var(--vyasa-space-2);
 }
 .vyasa-tasks-icon-filter-section > summary,
 .vyasa-tasks-icon-filter-group > summary {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: var(--vyasa-space-2);
     cursor: pointer;
     user-select: none;
-    font-weight: 700;
-    opacity: 0.76;
+    font-weight: var(--vyasa-weight-medium);
+    color: var(--vyasa-text-muted);
     list-style: none;
 }
 .vyasa-tasks-icon-filter-section > summary::-webkit-details-marker,
@@ -318,21 +298,26 @@ html:not(.vyasa-tasks-edge-labels-on) .vyasa-tasks-flow .vyasa-tasks-edge-label:
 }
 .vyasa-tasks-icon-filter-groups {
     display: grid;
-    gap: 10px;
-    margin-top: 8px;
+    gap: var(--vyasa-space-2);
+    margin-top: var(--vyasa-space-2);
 }
+/* Groups sit inside a bordered section, so they drop their own border. */
 .vyasa-tasks-icon-filter-group {
-    background: color-mix(in srgb, currentColor 4%, transparent);
+    border: 0;
+    background: var(--vyasa-gray-3);
 }
 .vyasa-tasks-icon-filter-group > div {
-    margin-top: 8px;
+    margin-top: var(--vyasa-space-2);
 }
 .vyasa-tasks-icon-filter-count {
     margin-left: auto;
-    border-radius: 999px;
-    padding: 1px 6px;
-    font-size: 10px;
-    background: color-mix(in srgb, var(--vyasa-primary) 18%, transparent);
+    border-radius: var(--vyasa-radius-pill);
+    padding: 0 var(--vyasa-space-2);
+    font-size: var(--vyasa-text-xs);
+    font-weight: var(--vyasa-weight-medium);
+    font-variant-numeric: tabular-nums;
+    background: var(--vyasa-accent-3);
+    color: var(--vyasa-accent-11);
 }
 .vyasa-tasks-icon-filter-glyph {
     width: 20px;
@@ -350,12 +335,13 @@ html:not(.vyasa-tasks-edge-labels-on) .vyasa-tasks-flow .vyasa-tasks-edge-label:
     transform: translateX(-50%);
     z-index: 30;
     max-width: 180px;
-    padding: 4px 7px;
-    border-radius: 6px;
-    background: rgb(15 23 42);
-    color: white;
-    font-size: 11px;
-    line-height: 1.2;
+    padding: var(--vyasa-space-1) var(--vyasa-space-2);
+    border-radius: var(--vyasa-radius-md);
+    background: var(--vyasa-ink);
+    color: var(--vyasa-bg);
+    box-shadow: var(--vyasa-shadow-sm);
+    font-size: var(--vyasa-text-xs);
+    line-height: var(--vyasa-leading-tight);
     white-space: nowrap;
     opacity: 0;
     pointer-events: none;
@@ -365,50 +351,53 @@ html:not(.vyasa-tasks-edge-labels-on) .vyasa-tasks-flow .vyasa-tasks-edge-label:
     opacity: 1;
 }
 .vyasa-tasks-filter-card {
-    border: 4px solid rgb(226 232 240) !important;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.12) !important;
-}
-.dark .vyasa-tasks-filter-card {
-    border-color: rgb(30 41 59) !important;
+    border: 1px solid var(--vyasa-border) !important;
+    box-shadow: var(--vyasa-shadow-sm) !important;
 }
 .vyasa-tasks-filter-card .queryBuilder {
     display: grid;
-    gap: 12px;
-    font-size: 12px;
+    gap: var(--vyasa-space-3);
+    font-size: var(--vyasa-text-xs);
     max-width: 100%;
     overflow: hidden;
 }
 .vyasa-tasks-filter-card .ruleGroup {
-    border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
-    border-radius: 12px;
-    background: linear-gradient(180deg, color-mix(in srgb, var(--vyasa-paper) 98%, transparent), color-mix(in srgb, var(--vyasa-paper) 92%, var(--vyasa-primary) 8%));
-    padding: 10px;
+    border: 1px solid var(--vyasa-border);
+    border-radius: var(--vyasa-radius-lg);
+    background: var(--vyasa-surface);
+    padding: var(--vyasa-space-3);
     min-width: 0;
     max-width: 100%;
     box-sizing: border-box;
 }
+/* The outer group sits directly in the bordered card, so it drops its box. */
+.vyasa-tasks-filter-card .queryBuilder > .ruleGroup {
+    border: 0;
+    padding: 0;
+    background: transparent;
+}
 .vyasa-tasks-filter-card .ruleGroup .ruleGroup {
-    margin-top: 10px;
+    margin-top: var(--vyasa-space-2);
     margin-left: 14px;
-    border-left: 3px solid color-mix(in srgb, var(--vyasa-primary) 42%, currentColor 18%);
-    background: color-mix(in srgb, var(--vyasa-paper) 94%, var(--vyasa-primary) 6%);
+    border-left: 3px solid var(--vyasa-accent-7);
+    background: var(--vyasa-bg-subtle);
 }
 .vyasa-tasks-filter-card .ruleGroup-header,
 .vyasa-tasks-filter-card .betweenRules {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--vyasa-space-2);
     flex-wrap: wrap;
 }
 .vyasa-tasks-filter-card .ruleGroup-notToggle {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--vyasa-space-2);
     line-height: 1;
 }
 .vyasa-tasks-filter-card .rule,
 .vyasa-tasks-filter-card .ruleGroup-header {
-    gap: 8px;
+    gap: var(--vyasa-space-2);
     align-items: center;
     flex-wrap: wrap;
     min-width: 0;
@@ -416,12 +405,12 @@ html:not(.vyasa-tasks-edge-labels-on) .vyasa-tasks-flow .vyasa-tasks-edge-label:
 .vyasa-tasks-filter-card .rule {
     display: grid !important;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
-    margin-top: 8px;
-    padding: 8px;
-    border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+    margin-top: var(--vyasa-space-2);
+    padding: var(--vyasa-space-2);
+    border: 0;
     border-left: 3px solid color-mix(in srgb, var(--vyasa-primary) 50%, currentColor 12%);
-    border-radius: 10px;
-    background: color-mix(in srgb, var(--vyasa-paper) 97%, transparent);
+    border-radius: var(--vyasa-radius-md);
+    background: var(--vyasa-gray-3);
     box-sizing: border-box;
 }
 .vyasa-tasks-filter-card .rule > * {
@@ -435,36 +424,36 @@ html:not(.vyasa-tasks-edge-labels-on) .vyasa-tasks-flow .vyasa-tasks-edge-label:
 }
 .vyasa-tasks-filter-card .rule-mute {
     min-height: 34px;
-    padding: 0 7px;
-    border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
-    border-radius: 8px;
-    background: color-mix(in srgb, var(--vyasa-paper) 94%, transparent);
+    padding: 0 var(--vyasa-space-2);
+    border: 1px solid var(--vyasa-border);
+    border-radius: var(--vyasa-radius-md);
+    background: var(--vyasa-surface);
 }
 .vyasa-tasks-filter-card .vyasa-tasks-query-values {
     display: grid;
-    gap: 4px;
+    gap: var(--vyasa-space-1);
     max-height: 130px;
     overflow: auto;
-    padding: 6px 8px;
-    border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
-    border-radius: 8px;
-    background: color-mix(in srgb, var(--vyasa-paper) 96%, transparent);
+    padding: var(--vyasa-space-2);
+    border: 1px solid var(--vyasa-border);
+    border-radius: var(--vyasa-radius-md);
+    background: var(--vyasa-surface);
 }
 .vyasa-tasks-filter-card .vyasa-tasks-query-value-option {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
+    gap: var(--vyasa-space-2);
     min-width: 0;
 }
 .vyasa-tasks-filter-card select,
 .vyasa-tasks-filter-card input[type="text"],
 .vyasa-tasks-filter-card .ruleGroup button {
-    border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
-    border-radius: 8px;
-    background: color-mix(in srgb, var(--vyasa-paper) 96%, transparent);
+    border: 1px solid var(--vyasa-border);
+    border-radius: var(--vyasa-radius-md);
+    background: var(--vyasa-surface);
     color: inherit;
     min-height: 34px;
-    padding: 5px 8px;
+    padding: var(--vyasa-space-1) var(--vyasa-space-2);
     max-width: 100%;
     min-width: 0;
     box-sizing: border-box;
@@ -473,32 +462,27 @@ html:not(.vyasa-tasks-edge-labels-on) .vyasa-tasks-flow .vyasa-tasks-edge-label:
     appearance: none;
     width: 100%;
     min-height: 36px;
-    padding: 7px 34px 7px 10px !important;
-    border-color: color-mix(in srgb, var(--vyasa-primary) 28%, currentColor 12%) !important;
+    padding: var(--vyasa-space-2) 34px var(--vyasa-space-2) var(--vyasa-space-3) !important;
+    border-color: var(--vyasa-border) !important;
     background:
         linear-gradient(45deg, transparent 50%, currentColor 50%) calc(100% - 18px) 50% / 6px 6px no-repeat,
         linear-gradient(135deg, currentColor 50%, transparent 50%) calc(100% - 13px) 50% / 6px 6px no-repeat,
-        color-mix(in srgb, var(--vyasa-paper) 94%, var(--vyasa-primary) 6%) !important;
-    box-shadow:
-        inset 0 1px 0 color-mix(in srgb, white 18%, transparent),
-        0 1px 2px rgba(15, 23, 42, 0.08);
-    font-weight: 650;
-    line-height: 1.25;
+        var(--vyasa-surface) !important;
+    transition: background var(--vyasa-duration-fast) var(--vyasa-ease), border-color var(--vyasa-duration-fast) var(--vyasa-ease);
+    font-weight: var(--vyasa-weight-medium);
+    line-height: var(--vyasa-leading-tight);
     cursor: pointer;
 }
 .vyasa-tasks-filter-card select:hover {
-    border-color: color-mix(in srgb, var(--vyasa-primary) 48%, currentColor 16%) !important;
+    border-color: var(--vyasa-border-strong) !important;
     background:
         linear-gradient(45deg, transparent 50%, currentColor 50%) calc(100% - 18px) 50% / 6px 6px no-repeat,
         linear-gradient(135deg, currentColor 50%, transparent 50%) calc(100% - 13px) 50% / 6px 6px no-repeat,
-        color-mix(in srgb, var(--vyasa-paper) 88%, var(--vyasa-primary) 12%) !important;
+        var(--vyasa-hover) !important;
 }
 .vyasa-tasks-filter-card select:focus-visible {
-    outline: none;
-    border-color: color-mix(in srgb, var(--vyasa-primary) 72%, currentColor 12%) !important;
-    box-shadow:
-        0 0 0 3px color-mix(in srgb, var(--vyasa-primary) 24%, transparent),
-        inset 0 1px 0 color-mix(in srgb, white 18%, transparent);
+    outline: 2px solid var(--vyasa-focus-ring);
+    outline-offset: 2px;
 }
 .vyasa-tasks-filter-card select:disabled {
     cursor: not-allowed;
@@ -509,41 +493,35 @@ html:not(.vyasa-tasks-edge-labels-on) .vyasa-tasks-flow .vyasa-tasks-edge-label:
     width: 30px;
     min-height: 36px;
     padding: 0;
-    border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
-    border-radius: 8px;
-    background: color-mix(in srgb, var(--vyasa-paper) 94%, var(--vyasa-primary) 6%);
+    border: 1px solid var(--vyasa-border);
+    border-radius: var(--vyasa-radius-md);
+    background: var(--vyasa-surface);
     color: inherit;
-    font-size: 16px;
-    font-weight: 700;
+    font-size: var(--vyasa-text-md);
+    font-weight: var(--vyasa-weight-medium);
     line-height: 1;
     cursor: pointer;
 }
 .vyasa-tasks-filter-card .vyasa-tasks-group-by-clear:hover:not(:disabled) {
-    border-color: color-mix(in srgb, var(--vyasa-primary) 48%, currentColor 16%);
-    background: color-mix(in srgb, var(--vyasa-paper) 88%, var(--vyasa-primary) 12%);
+    border-color: var(--vyasa-border-strong);
+    background: var(--vyasa-hover);
 }
 .vyasa-tasks-filter-card .vyasa-tasks-group-by-clear:focus-visible {
-    outline: none;
-    border-color: color-mix(in srgb, var(--vyasa-primary) 72%, currentColor 12%);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--vyasa-primary) 24%, transparent);
+    outline: 2px solid var(--vyasa-focus-ring);
+    outline-offset: 2px;
 }
 .vyasa-tasks-filter-card .vyasa-tasks-group-by-clear:disabled {
     cursor: not-allowed;
     opacity: 0.42;
-}
-.dark .vyasa-tasks-filter-card select {
-    box-shadow:
-        inset 0 1px 0 color-mix(in srgb, white 8%, transparent),
-        0 1px 2px rgba(0, 0, 0, 0.28);
 }
 .vyasa-tasks-filter-card input[type="checkbox"] {
     appearance: none;
     width: 16px;
     height: 16px;
     margin: 0;
-    border: 1px solid color-mix(in srgb, currentColor 28%, transparent);
-    border-radius: 4px;
-    background: color-mix(in srgb, var(--vyasa-paper) 96%, transparent);
+    border: 1px solid var(--vyasa-border-strong);
+    border-radius: var(--vyasa-radius-sm);
+    background: var(--vyasa-surface);
     display: inline-grid;
     place-content: center;
     flex: 0 0 auto;
@@ -553,14 +531,14 @@ html:not(.vyasa-tasks-edge-labels-on) .vyasa-tasks-flow .vyasa-tasks-edge-label:
     display: none !important;
 }
 .vyasa-tasks-filter-card input[type="checkbox"]:checked {
-    border-color: color-mix(in srgb, var(--vyasa-primary) 78%, currentColor 22%);
-    background: color-mix(in srgb, var(--vyasa-primary) 72%, white 28%);
+    border-color: var(--vyasa-accent-9);
+    background: var(--vyasa-accent-9);
 }
 .vyasa-tasks-filter-card input[type="checkbox"]:checked::before {
     content: "";
     width: 5px;
     height: 9px;
-    border: solid var(--vyasa-paper);
+    border: solid var(--vyasa-accent-contrast);
     border-width: 0 2px 2px 0;
     transform: rotate(45deg) translateY(-1px);
 }
@@ -588,11 +566,11 @@ html:not(.vyasa-tasks-edge-labels-on) .vyasa-tasks-flow .vyasa-tasks-edge-label:
     flex: 0 0 36px;
     width: 36px;
     height: 20px;
-    border: 1px solid color-mix(in srgb, currentColor 28%, transparent);
-    border-radius: 999px;
-    background: color-mix(in srgb, currentColor 12%, var(--vyasa-paper) 88%);
+    border: 1px solid var(--vyasa-border-strong);
+    border-radius: var(--vyasa-radius-pill);
+    background: var(--vyasa-gray-5);
     box-sizing: border-box;
-    transition: background 120ms ease, border-color 120ms ease;
+    transition: background var(--vyasa-duration-fast) var(--vyasa-ease), border-color var(--vyasa-duration-fast) var(--vyasa-ease);
 }
 .vyasa-tasks-filter-card .vyasa-tasks-switch-track::before {
     content: "";
@@ -601,21 +579,22 @@ html:not(.vyasa-tasks-edge-labels-on) .vyasa-tasks-flow .vyasa-tasks-edge-label:
     left: 2px;
     width: 14px;
     height: 14px;
-    border-radius: 999px;
-    background: color-mix(in srgb, currentColor 58%, var(--vyasa-paper) 42%);
+    border-radius: var(--vyasa-radius-pill);
+    background: var(--vyasa-gray-9);
     transform: translateX(0);
-    transition: transform 120ms ease, background 120ms ease;
+    transition: transform var(--vyasa-duration-fast) var(--vyasa-ease), background var(--vyasa-duration-fast) var(--vyasa-ease);
 }
 .vyasa-tasks-filter-card input[type="checkbox"].vyasa-tasks-switch-input:checked + .vyasa-tasks-switch-track {
-    border-color: color-mix(in srgb, var(--vyasa-primary) 78%, currentColor 22%);
-    background: color-mix(in srgb, var(--vyasa-primary) 72%, white 28%);
+    border-color: var(--vyasa-accent-9);
+    background: var(--vyasa-accent-9);
 }
 .vyasa-tasks-filter-card input[type="checkbox"].vyasa-tasks-switch-input:checked + .vyasa-tasks-switch-track::before {
-    background: var(--vyasa-paper);
+    background: var(--vyasa-accent-contrast);
     transform: translateX(16px);
 }
 .vyasa-tasks-filter-card input[type="checkbox"].vyasa-tasks-switch-input:focus-visible + .vyasa-tasks-switch-track {
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--vyasa-primary) 24%, transparent);
+    outline: 2px solid var(--vyasa-focus-ring);
+    outline-offset: 2px;
 }
 .vyasa-tasks-filter-card input[type="checkbox"].vyasa-tasks-switch-input:disabled + .vyasa-tasks-switch-track {
     cursor: not-allowed;
@@ -634,18 +613,17 @@ html:not(.vyasa-tasks-edge-labels-on) .vyasa-tasks-flow .vyasa-tasks-edge-label:
     z-index: 60;
     display: flex;
     flex-direction: column;
-    border-radius: 10px;
+    border-radius: var(--vyasa-radius-lg);
     overflow: hidden;
-    background: var(--vyasa-paper);
-    border: 1px solid color-mix(in srgb, var(--vyasa-ink) 24%, transparent);
-    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
+    background: var(--vyasa-surface);
+    border: 1px solid var(--vyasa-border);
+    box-shadow: var(--vyasa-shadow-sm);
     contain: layout paint;
 }
 .vyasa-kg-internals[data-state="dive"] {
     inset: 22px;
-    padding: 10px;
-    border-width: 2px;
-    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+    padding: var(--vyasa-space-2);
+    box-shadow: var(--vyasa-shadow-lg);
 }
 .vyasa-kg-internals-scrim {
     position: absolute;
@@ -657,12 +635,12 @@ html:not(.vyasa-tasks-edge-labels-on) .vyasa-tasks-flow .vyasa-tasks-edge-label:
 .vyasa-kg-internals-bar {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 4px 8px;
-    font-size: 11px;
-    font-weight: 600;
-    color: color-mix(in srgb, var(--vyasa-ink) 72%, transparent);
-    border-bottom: 1px solid color-mix(in srgb, var(--vyasa-ink) 14%, transparent);
+    gap: var(--vyasa-space-2);
+    padding: var(--vyasa-space-1) var(--vyasa-space-2);
+    font-size: var(--vyasa-text-xs);
+    font-weight: var(--vyasa-weight-medium);
+    color: var(--vyasa-text-muted);
+    border-bottom: 1px solid var(--vyasa-border);
 }
 .vyasa-kg-internals-trail {
     flex: 1 1 auto;
@@ -672,9 +650,9 @@ html:not(.vyasa-tasks-edge-labels-on) .vyasa-tasks-flow .vyasa-tasks-edge-label:
     white-space: nowrap;
 }
 .vyasa-kg-internals-bar button {
-    border: 1px solid color-mix(in srgb, var(--vyasa-ink) 22%, transparent);
-    border-radius: 4px;
-    padding: 0 6px;
+    border: 1px solid var(--vyasa-border);
+    border-radius: var(--vyasa-radius-sm);
+    padding: 0 var(--vyasa-space-2);
     line-height: 18px;
     background: transparent;
     color: inherit;
@@ -686,9 +664,9 @@ html:not(.vyasa-tasks-edge-labels-on) .vyasa-tasks-flow .vyasa-tasks-edge-label:
     min-height: 0;
 }
 .vyasa-kg-internals-note {
-    padding: 16px;
-    font-size: 12px;
-    color: color-mix(in srgb, var(--vyasa-ink) 60%, transparent);
+    padding: var(--vyasa-space-4);
+    font-size: var(--vyasa-text-xs);
+    color: var(--vyasa-text-muted);
 }
 /* A floating panel moves by its bar and resizes by its edges (floating_panel.js).
    A dive fills the host, so its own handles go; a nested panel keeps its own. */

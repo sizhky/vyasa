@@ -306,7 +306,7 @@ def render_code_shell(snippet, lang="", *, start=1, highlight_spec="", title="",
     pre_class = ' class="vyasa-code-wrap"' if wrap else ""
     title_html = (
         f'<div class="px-3 pt-0 pb-0 text-xs font-medium tracking-wide '
-        f'text-slate-500 dark:text-slate-400">{html.escape(title)}</div>'
+        f'text-vyasa-muted">{html.escape(title)}</div>'
         if title else ""
     )
     return (
@@ -621,7 +621,7 @@ class ContentRenderer(FrankenRenderer):
         video_id = token.video_id
         caption = getattr(token, "caption", None)
         iframe = f"""
-        <div class="relative w-full aspect-video my-6 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800">
+        <div class="relative w-full aspect-video my-6 rounded-lg overflow-hidden border border-vyasa-border">
             <iframe
                 src="https://www.youtube.com/embed/{video_id}"
                 title="YouTube video"
@@ -633,7 +633,7 @@ class ContentRenderer(FrankenRenderer):
         </div>
         """
         if caption:
-            return iframe + f'<p class="text-sm text-slate-500 dark:text-slate-400 text-center mt-2">{caption}</p>'
+            return iframe + f'<p class="text-sm text-vyasa-muted text-center mt-2">{caption}</p>'
         return iframe
 
     def render_iframe_embed(self, token):
@@ -678,19 +678,19 @@ class ContentRenderer(FrankenRenderer):
         if popup:
             fullscreen_button = (
                 '<div class="iframe-controls absolute top-2 right-2 z-10 flex gap-1 '
-                'bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded">'
+                'bg-vyasa-surface backdrop-blur-sm rounded">'
                 f'<button data-iframe-fullscreen-toggle="true" data-iframe-src="{src}" '
                 f'data-iframe-title="{title}" data-iframe-allow="{allow}" '
                 f'data-iframe-allowfullscreen="{str(allowfullscreen).lower()}" '
-                'class="px-2 py-1 text-xs border rounded hover:bg-slate-100 '
-                'dark:hover:bg-slate-700" title="Fullscreen">⛶</button></div>'
+                'class="px-2 py-1 text-xs border rounded hover:bg-vyasa-hover '
+                '" title="Fullscreen">⛶</button></div>'
             )
         if border in ("black", "dark"):
             border_classes = "border border-black"
         elif border in ("none", "false", "0", "off"):
             border_classes = "border border-transparent"
         else:
-            border_classes = "border border-slate-200 dark:border-slate-800"
+            border_classes = "border border-vyasa-border"
         iframe = f"""
         <div class="relative my-6 rounded-lg overflow-hidden {border_classes}" style="{container_style}">
             {fullscreen_button}
@@ -706,7 +706,7 @@ class ContentRenderer(FrankenRenderer):
         </div>
         """
         if caption:
-            return iframe + f'<p class="text-sm text-slate-500 dark:text-slate-400 text-center mt-2">{caption}</p>'
+            return iframe + f'<p class="text-sm text-vyasa-muted text-center mt-2">{caption}</p>'
         return iframe
 
     def render_download_embed(self, token):
@@ -741,7 +741,7 @@ class ContentRenderer(FrankenRenderer):
         rendered = mst.markdown(content, partial(ContentRenderer, img_dir=self.img_dir, current_path=self.current_path)).strip()
         if rendered.startswith("<p>") and rendered.endswith("</p>"):
             rendered = rendered[3:-4]
-        style = "text-sm leading-relaxed border-l-2 border-amber-400 dark:border-blue-400 pl-3 text-neutral-500 dark:text-neutral-400 transition-all duration-500 w-full my-2 xl:my-0"
+        style = "text-sm leading-relaxed border-l-2 border-amber-400 pl-3 text-vyasa-muted transition-all duration-500 w-full my-2 xl:my-0"
         toggle = f"on click if window.innerWidth >= 1280 then add .hl to #sn-{n} then wait 1s then remove .hl from #sn-{n} else toggle .open on me then toggle .show on #sn-{n}"
         ref = Span(id=f"snref-{n}", role="doc-noteref", aria_label=f"Sidenote {n}", cls="sidenote-ref cursor-pointer", _=toggle)
         note = Span(NotStr(rendered), id=f"sn-{n}", role="doc-footnote", aria_labelledby=f"snref-{n}", cls=f"sidenote {style}")
@@ -790,10 +790,9 @@ class ContentRenderer(FrankenRenderer):
                 md_path = _current_content_path(md_slug)
                 if md_path and md_path.exists():
                     present_href = present_href_for_anchor(md_path.read_text(encoding="utf-8"), self.current_path, anchor)
-                    present_here = f'<a href="{present_href}" class="vyasa-heading-action vyasa-heading-launch no-underline text-slate-400 hover:text-slate-700 dark:hover:text-slate-200" aria-label="Present from here" hx-boost="false">{to_xml(UkIcon("play-circle"))}</a>'
+                    present_here = f'<a href="{present_href}" class="vyasa-heading-action vyasa-heading-launch" aria-label="Present from here" hx-boost="false">{to_xml(UkIcon("play-circle"))}</a>'
         permalink = (
-            f'<a href="#{anchor}" class="vyasa-heading-permalink no-underline '
-            f'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200" '
+            f'<a href="#{anchor}" class="vyasa-heading-action vyasa-heading-permalink" '
             f'aria-label="Link to {html.escape(heading_text)}">'
             f'<span class="vyasa-heading-permalink-icon">{to_xml(UkIcon("link"))}</span>'
             f'<span class="vyasa-heading-permalink-copied">'

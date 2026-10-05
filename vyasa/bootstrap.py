@@ -46,7 +46,12 @@ def build_beforeware(handler, enabled: bool):
 
 
 def build_app(app_factory, hdrs, beforeware):
-    return app_factory(hdrs=hdrs, before=beforeware, exts="ws") if beforeware else app_factory(hdrs=hdrs, exts="ws")
+    from .vendor import mount_vendor, vendor_hdrs
+
+    app = app_factory(hdrs=hdrs, before=beforeware, exts="ws") if beforeware else app_factory(hdrs=hdrs, exts="ws")
+    mount_vendor(app)
+    app.hdrs = vendor_hdrs(app.hdrs)
+    return app
 
 
 def mount_package_static(app_instance, package_dir: Path):

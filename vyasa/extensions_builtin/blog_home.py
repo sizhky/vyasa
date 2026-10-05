@@ -22,7 +22,7 @@ def _home_provider(htmx, request):
     roles = services.get_roles_from_auth(request.scope.get("auth"), services.rbac_rules(), services.rbac_cfg(), services.google_oauth_cfg(), services.coerce_list)
     entries = sort_entries(iter_home_files(roots, roles, is_allowed_fn=services.is_allowed, rbac_rules=services.rbac_rules(), iter_files=services.iter_visible_files, slug_for_path=services.content_slug_for_path, show_hidden=services.get_config().get_show_hidden()), root, get_sort=services.get_config().get_home_sort, created_ts=services.get_file_created_ts)
     feed = services.render_blog_home_feed(entries, root, 0)
-    shell = Div(H1(f"Welcome to {services.get_blog_title()}!", cls="vyasa-page-title text-4xl font-bold"), P("Latest posts", cls="mt-2 text-slate-500"), feed, cls="space-y-6")
+    shell = Div(H1(f"Welcome to {services.get_blog_title()}!", cls="vyasa-page-title text-4xl font-bold"), P("Latest posts", cls="vyasa-page-subtitle"), feed, cls="space-y-6")
     return services.layout(shell, htmx=htmx, title=f"Home - {services.get_blog_title()}", show_sidebar=True, current_path="__home__", auth=request.scope.get("auth"))
 
 
@@ -80,9 +80,9 @@ def render_card(path, slug, root, *, resolve_title, abbreviations):
     href = content_url_for_slug(slug)
     return Div(
         Div(
-            A(Span(title, cls="block line-clamp-3 overflow-hidden"), Span(f"{read_time}-min read", cls="block mt-1 text-xs font-normal text-slate-500 dark:text-slate-400"), href=href, cls="vyasa-blog-card-title block text-xl font-bold leading-tight hover:underline"),
-            Div(preview, cls="prose prose-slate dark:prose-invert max-w-none"),
-            A("continue reading...", href=href, cls="inline-flex mt-4 text-sm font-medium text-blue-700 hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-200 hover:underline"),
+            A(Span(title, cls="block line-clamp-3 overflow-hidden"), Span(f"{read_time}-min read", cls="vyasa-blog-card-meta block"), href=href, cls="vyasa-blog-card-title block"),
+            Div(preview, cls="vyasa-blog-card-preview prose prose-slate dark:prose-invert max-w-none"),
+            A("continue reading...", href=href, cls="vyasa-blog-card-more inline-flex"),
             cls="vyasa-blog-card min-w-0 w-full",
         ),
         cls="relative flex w-full items-start",
@@ -94,7 +94,7 @@ def render_feed(entries, root, offset=0, batch_size=4, wrap=True):
     cards = [render_card(path, slug, root, resolve_title=services.resolve_markdown_title, abbreviations=services.effective_abbreviations) for path, slug in entries[offset:offset + batch_size]]
     sentinel = Div(id="blog-feed-sentinel", cls="h-8", hx_get=f"/_home/feed?offset={offset + batch_size}", hx_trigger="revealed once", hx_target="this", hx_swap="outerHTML") if offset + batch_size < len(entries) else ""
     if wrap:
-        return Div(*cards, sentinel, id="blog-feed", cls="space-y-4")
+        return Div(*cards, sentinel, id="blog-feed", cls="vyasa-blog-feed")
     return tuple([*cards, sentinel] if sentinel else cards)
 
 

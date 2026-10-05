@@ -37,6 +37,8 @@ _GOOGLE_FONT_QUERIES = {
     "Fraunces": "family=Fraunces:opsz,wght,SOFT,WONK@9..144,400..700,0..100,0..1",
     "Gentium Plus": "family=Gentium+Plus:ital,wght@0,400;0,700;1,400;1,700",
     "Hanken Grotesk": "family=Hanken+Grotesk:wght@400;500;600;700;800",
+    "Geist": "family=Geist:wght@400;500;600;700",
+    "Geist Mono": "family=Geist+Mono:wght@400;500;600",
     "Hepta Slab": "family=Hepta+Slab:wght@400;500;600;700",
     "IBM Plex Mono": "family=IBM+Plex+Mono:wght@400;500;600;700",
     "Inconsolata": "family=Inconsolata:wght@400;500;600;700",
@@ -243,12 +245,12 @@ def render_page_frame(frame: PageFrame, *, htmx, deps: PageFrameDeps):
             Div(logout_button, cls="flex items-center") if logout_button else Div(),
             Div(
                 Div(*extra_links, cls="flex items-center gap-3") if extra_links else Div(),
-                Div(NotStr('Powered by <a href="https://github.com/sizhky/vyasa" class="underline hover:text-white/80" target="_blank" rel="noopener noreferrer">Vyasa</a> and ❤️')),
+                Div(NotStr('Powered by <a href="https://github.com/sizhky/vyasa" class="underline" target="_blank" rel="noopener noreferrer">Vyasa</a> and ❤️')),
                 cls="flex items-center gap-4",
             ),
             cls="flex items-center justify-between w-full",
         )
-        return Footer(Div(footer_inner, cls="vyasa-footer-card bg-slate-900 text-white p-4 dark:bg-slate-800"), cls=f"{outer_cls} vyasa-footer-shell".strip(), id="site-footer", **outer_style)
+        return Footer(Div(footer_inner, cls="vyasa-footer-card px-4 py-3"), cls=f"{outer_cls} vyasa-footer-shell".strip(), id="site-footer", **outer_style)
 
     # History-restore requests (back/swipe with a cache miss) must return the full
     # page; htmx writes the response into <body>, so a partial would wipe the navbar
@@ -320,15 +322,15 @@ def _collect_toc_panels(*, toc_content, show_toc, current_path, build_sidebar_to
     ) if toc_items else Div(**desktop_attrs)
     mobile_attrs: dict[str, Any] = {
         "id": "mobile-toc-panel",
-        "cls": "vyasa-mobile-panel fixed inset-y-0 right-0 w-full sm:w-96 sm:border-l border-slate-200 dark:border-slate-800 sm:shadow-2xl bg-white dark:bg-slate-950 z-[9999] xl:hidden transform translate-x-full transition-transform duration-300",
+        "cls": "vyasa-mobile-panel fixed inset-y-0 right-0 w-full sm:w-96 sm:border-l border-vyasa-border sm:shadow-2xl bg-vyasa-surface z-[9999] xl:hidden transform translate-x-full transition-transform duration-300",
         "aria_hidden": "true",
     }
     if oob:
         mobile_attrs["hx_swap_oob"] = "true"
     mobile = Div(
-        Div(Button(UkIcon("x", cls="w-5 h-5"), id="close-mobile-toc", cls="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors ml-auto", type="button"), cls="vyasa-mobile-panel-header flex justify-end p-2 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800"),
+        Div(Button(UkIcon("x", cls="w-5 h-5"), id="close-mobile-toc", cls="p-2 hover:bg-vyasa-hover rounded transition-colors ml-auto", type="button"), cls="vyasa-mobile-panel-header flex justify-end p-2 bg-vyasa-surface border-b border-vyasa-border"),
         Div(
-            build_collapsible_sidebar("list", "Table of Contents", toc_items, is_open=True, data_sidebar="toc", shortcut_key="X") if toc_items else Div(P("No table of contents available.", cls="text-slate-500 dark:text-slate-400 text-sm p-4")),
+            build_collapsible_sidebar("list", "Table of Contents", toc_items, is_open=True, data_sidebar="toc", shortcut_key="X") if toc_items else Div(P("No table of contents available.", cls="text-vyasa-muted text-sm p-4")),
             cls="vyasa-mobile-panel-body p-4 overflow-y-auto",
         ),
         **mobile_attrs,
@@ -396,9 +398,9 @@ def _render_full_layout(content, title, show_sidebar, toc_content, current_path,
         main_content_container = Main(*content, cls=f"vyasa-main-shell {'vyasa-zen-present' if slide_mode else ''} flex-1 min-w-0 {main_spacing_cls} space-y-8 {section_class}".strip(), id="main-content", hx_boost="true", hx_target="#main-content", hx_swap="outerHTML show:window:top settle:0.1s", **_collect_main_attrs(current_path, auth, get_config, slide_mode=slide_mode))
         roles_key = tuple(get_roles_from_auth(auth, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list) or [])
         posts_panel_visibility_cls = "" if nav_posts_menu else "xl:hidden"
-        mobile_posts_panel = Div(Div(Button(UkIcon("x", cls="w-5 h-5"), id="close-mobile-posts", cls="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors ml-auto", type="button"), cls="vyasa-mobile-panel-header flex justify-end p-2 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800"), Div(Div(UkIcon("loader", cls="w-5 h-5 animate-spin"), Span("Loading posts…", cls="ml-2 text-sm"), cls="flex items-center justify-center h-32 text-slate-400"), cls="vyasa-mobile-panel-body p-4 overflow-y-auto"), id="mobile-posts-panel", cls=f"vyasa-mobile-panel fixed inset-y-0 left-0 w-full sm:w-96 sm:border-r border-slate-200 dark:border-slate-800 sm:shadow-2xl bg-white dark:bg-slate-950 z-[9999] {posts_panel_visibility_cls} transform -translate-x-full transition-transform duration-300".strip(), aria_hidden="true")
+        mobile_posts_panel = Div(Div(Button(UkIcon("x", cls="w-5 h-5"), id="close-mobile-posts", cls="p-2 hover:bg-vyasa-hover rounded transition-colors ml-auto", type="button"), cls="vyasa-mobile-panel-header flex justify-end p-2 bg-vyasa-surface border-b border-vyasa-border"), Div(Div(UkIcon("loader", cls="w-5 h-5 animate-spin"), Span("Loading posts…", cls="ml-2 text-sm"), cls="flex items-center justify-center h-32 text-vyasa-faint"), cls="vyasa-mobile-panel-body p-4 overflow-y-auto"), id="mobile-posts-panel", cls=f"vyasa-mobile-panel fixed inset-y-0 left-0 w-full sm:w-96 sm:border-r border-vyasa-border sm:shadow-2xl bg-vyasa-surface z-[9999] {posts_panel_visibility_cls} transform -translate-x-full transition-transform duration-300".strip(), aria_hidden="true")
         main_column = Div(main_content_container, cls=f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto {main_column_padding_cls} flex flex-1 min-w-0 {'min-h-0' if no_scroll else ''}".strip(), **style_attr(layout_max_style))
-        content_with_sidebars = Div(cls=f"vyasa-content-grid w-full flex flex-1 {'min-h-0' if no_scroll else ''}".strip(), id="content-with-sidebars")((Aside(Div(UkIcon("loader", cls="w-5 h-5 animate-spin"), Span("Loading posts…", cls="ml-2 text-sm"), cls="flex items-center justify-center h-32 text-slate-400"), cls=docked_sidebar_classes("posts"), id="posts-sidebar", hx_get=f"/_sidebar/posts?current_path={quote(current_path or '', safe='')}", hx_trigger="load", hx_swap="outerHTML") if not nav_posts_menu else None), main_column, toc_sidebar if toc_sidebar else None)
+        content_with_sidebars = Div(cls=f"vyasa-content-grid w-full flex flex-1 {'min-h-0' if no_scroll else ''}".strip(), id="content-with-sidebars")((Aside(Div(UkIcon("loader", cls="w-5 h-5 animate-spin"), Span("Loading posts…", cls="ml-2 text-sm"), cls="flex items-center justify-center h-32 text-vyasa-faint"), cls=docked_sidebar_classes("posts"), id="posts-sidebar", hx_get=f"/_sidebar/posts?current_path={quote(current_path or '', safe='')}", hx_trigger="load", hx_swap="outerHTML") if not nav_posts_menu else None), main_column, toc_sidebar if toc_sidebar else None)
         mobile_extra_controls = _collect_navbar_mobile_actions(current_path, show_toc, slide_mode)
         body_content = Div(id="page-container", cls=page_container_cls, data_posts_hover_expand="1", **style_attr(page_style))(*body_fragments, Div(navbar(show_mobile_menus=True, htmx_nav=htmx_nav, compact_mode=nav_posts_menu, updated_label=current_updated_label, mobile_extra_controls=mobile_extra_controls, current_path=current_path, roles=list(roles_key)), cls=f"vyasa-navbar-shell w-full sticky top-0 z-[1300] {navbar_margin_cls}".strip(), id="site-navbar"), mobile_posts_panel, mobile_toc_panel if mobile_toc_panel else None, content_with_sidebars, footer_node("w-full mt-auto".strip(), {}) if show_footer else None)
     else:

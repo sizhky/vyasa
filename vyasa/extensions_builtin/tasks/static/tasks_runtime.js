@@ -1,4 +1,4 @@
-import { ensureReact, loadScript } from '../../../static/page_shell.js';
+import { ensureReact, loadScript, vendorUrl } from '../../../static/page_shell.js';
 
 let tasksReactFlowReady = null;
 let tasksQueryBuilderReady = null;
@@ -6,7 +6,7 @@ let tasksQueryBuilderReady = null;
 export function ensureTasksReactFlow() {
     if (tasksReactFlowReady) return tasksReactFlowReady;
     tasksReactFlowReady = (async () => {
-        const cssHref = 'https://unpkg.com/@xyflow/react@12.8.4/dist/style.css';
+        const cssHref = vendorUrl('https://unpkg.com/@xyflow/react@12.8.4/dist/style.css');
         if (!document.querySelector(`link[href="${cssHref}"]`)) {
             const link = document.createElement('link');
             link.rel = 'stylesheet';

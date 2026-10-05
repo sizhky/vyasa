@@ -119,8 +119,27 @@ export function jumpToTextFragment(root, href) {
 }
 
 // One promise per URL keeps independent widgets on the same pending load.
-export function loadScript(src, isReady) {
+let vendorImports = null;
+
+// Same resolution as the vyasa/vendor.py import map: exact URL, then the longest "/" prefix.
+export function vendorUrl(url) {
+    if (!vendorImports) {
+        try {
+            vendorImports = JSON.parse(document.getElementById('vyasa-vendor-imports')?.textContent || '{}').imports || {};
+        } catch (error) {
+            vendorImports = {};
+        }
+    }
+    if (vendorImports[url]) return vendorImports[url];
+    const prefix = Object.keys(vendorImports)
+        .filter((key) => key.endsWith('/') && url.startsWith(key))
+        .sort((a, b) => b.length - a.length)[0];
+    return prefix ? vendorImports[prefix] + url.slice(prefix.length) : url;
+}
+
+export function loadScript(url, isReady) {
     if (isReady?.()) return Promise.resolve();
+    const src = vendorUrl(url);
     if (loadedScripts.has(src)) return loadedScripts.get(src);
     const existing = document.querySelector(`script[src="${src}"]`);
     const script = existing || document.createElement('script');
@@ -378,8 +397,8 @@ export function showVyasaToast(message, tone = 'info') {
         document.body.appendChild(toast);
     }
     toast.textContent = message;
-    toast.classList.remove('bg-slate-900', 'bg-emerald-700', 'bg-red-700');
-    toast.classList.add(tone === 'error' ? 'bg-red-700' : tone === 'success' ? 'bg-emerald-700' : 'bg-slate-900');
+    toast.classList.remove('bg-vyasa-inverse', 'bg-emerald-700', 'bg-red-700');
+    toast.classList.add(tone === 'error' ? 'bg-red-700' : tone === 'success' ? 'bg-emerald-700' : 'bg-vyasa-inverse');
     toast.classList.remove('opacity-0');
     toast.classList.add('opacity-100');
     clearTimeout(toast._vyasaTimer);

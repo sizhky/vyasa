@@ -321,11 +321,11 @@ def test_slide_runtime_supports_vim_navigation_and_delayed_first_reveal():
     assert "slideDebug('keydown'" in source
     assert "slideDebug('table-snapshot'" in source
     assert "syncSlideProgressBar" in source
-    assert "units.slice(leadingHeadingCount(units))" in source
+    assert "units.slice(leadingHeadingCount(units)).filter((unit) => !isHeadingUnit(unit))" in source
+    assert "while (isHeadingUnit(units[lastIndex]) && lastIndex + 1 < units.length) lastIndex += 1;" in source
     assert "endRule.dataset.revealState = visible === progressUnits.length ? 'visible' : 'hidden';" in source
     assert "vyasa-zen-slide-progress" in Path("vyasa/content_routes.py").read_text(encoding="utf-8")
-    assert "vyasa-zen-slide-end-rule-line" in styles
-    assert 'UkIcon("zap"' in Path("vyasa/content_routes.py").read_text(encoding="utf-8")
+    assert ".vyasa-zen-slide-end-rule[data-reveal-state=\"visible\"]" in styles
     state_source = Path("vyasa/content_routes.py").read_text(encoding="utf-8").split("data_reveal_state=", 1)[1].split("data_reveal_kind=", 1)[0]
     assert 'reveal_config.policy == "step"' not in state_source
     init_source = source.split("const initReveal =", 1)[1].split("const follow =", 1)[0]

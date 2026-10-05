@@ -35,12 +35,12 @@ def render_cytograph_block(code: str, current_path: str | None = None) -> str:
     style = f'height: {html.escape(str(config.get("height") or "36vh"))};'
     escaped = html.escape(json.dumps(payload))
     return (
-        f'<div class="cytograph-container relative my-6 rounded-xl border-4 border-slate-200 dark:border-slate-800" '
+        f'<div class="cytograph-container relative my-6 rounded-xl border-4 border-vyasa-border" '
         f'id="{graph_id}" data-cytograph-widget="true" data-cytograph-payload="{escaped}" style="{style}">'
-        f'<div class="absolute top-2 right-2 z-10 flex gap-1 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded">'
+        f'<div class="absolute top-2 right-2 z-10 flex gap-1 bg-vyasa-surface backdrop-blur-sm rounded">'
         f'<button onclick="resetCytograph(\'{graph_id}\')" class="px-2 py-1 text-xs border rounded">Reset</button>'
         f'<button onclick="zoomCytographIn(\'{graph_id}\')" class="px-2 py-1 text-xs border rounded">+</button>'
         f'<button onclick="zoomCytographOut(\'{graph_id}\')" class="px-2 py-1 text-xs border rounded">-</button>'
-        f'</div><div class="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">Layout: {html.escape(layout)}</div>'
+        f'</div><div class="px-4 py-3 text-xs text-vyasa-muted">Layout: {html.escape(layout)}</div>'
         f'<div class="hidden cytograph-payload">{escaped}</div></div>'
     )

@@ -1,269 +1,371 @@
+/* Stage: the largest 16:9 box that fits below the navbar. Text size, margins and
+   gaps are fractions of the stage, so a slide keeps its proportions on any screen. */
 .vyasa-zen-present {
-  background: var(--vyasa-paper, inherit);
-  color: var(--vyasa-ink, inherit);
+  --vyasa-zen-avail-h: calc(100dvh - var(--vyasa-navbar-height, 3.75rem));
+  --vyasa-zen-stage-w: min(100vw, calc(var(--vyasa-zen-avail-h) * 16 / 9));
+  --vyasa-zen-stage-h: calc(var(--vyasa-zen-stage-w) * 9 / 16);
+  --vyasa-zen-pad-x: calc(var(--vyasa-zen-stage-w) * 0.07);
+  --vyasa-zen-inner-w: calc(var(--vyasa-zen-stage-w) - 2 * var(--vyasa-zen-pad-x));
+  --vyasa-zen-text: clamp(var(--vyasa-text-md), calc(var(--vyasa-zen-stage-h) * 0.019), 1.5rem);
+  --vyasa-zen-measure: 100%;
   --vyasa-zen-font-title: var(--vyasa-font-heading);
   --vyasa-zen-font-body: var(--vyasa-font-body);
   --vyasa-zen-font-ui: var(--vyasa-font-ui);
-  --vyasa-zen-font-bump: 6px;
-  --vyasa-zen-title-size: calc(clamp(2.75rem, 5vw, 4rem) + var(--vyasa-zen-font-bump));
-  --vyasa-zen-title-line-height: 1.05;
-  --vyasa-zen-title-weight: 700;
+  background: var(--vyasa-bg, inherit);
+  color: var(--vyasa-text, inherit);
+}
+.vyasa-main-shell.vyasa-zen-present {
+  padding-inline: 0 !important;
+  padding-top: calc(var(--vyasa-zen-stage-h) * 0.04) !important;
+  overflow-x: clip;
 }
 .vyasa-zen-present .vyasa-fold-all-button { display: none !important; }
 .vyasa-zen-content .vyasa-heading-action,
 .vyasa-zen-content .vyasa-heading-action-children,
 .vyasa-zen-content .vyasa-heading-launch,
 .vyasa-zen-content .vyasa-heading-permalink { display: none !important; }
+
+/* The stage is centered. present.js shifts the slide's ink block so its left and right
+   margins match; text inside the block stays left-aligned. */
 .vyasa-zen-content {
-  --vyasa-zen-slide-max-width: 88rem;
-  width: 100%;
-  max-width: min(var(--vyasa-zen-slide-max-width), calc(100vw - 2rem));
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: var(--vyasa-zen-stage-w);
   min-width: 0;
+  margin-inline: auto;
+  padding-inline: var(--vyasa-zen-pad-x);
+  font-size: var(--vyasa-zen-text);
+}
+.vyasa-zen-slide-body,
+.vyasa-zen-cover {
+  max-width: min(100%, var(--vyasa-zen-slide-max-width, var(--vyasa-zen-measure)));
+}
+
+/* Chrome: the nav sits alone at the stage's right edge; the slide starts a fixed distance below it. */
+.vyasa-zen-chrome {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--vyasa-space-4);
+  min-height: 2.5rem;
+  margin-bottom: calc(var(--vyasa-zen-stage-h) * 0.08);
+  font-size: var(--vyasa-text-sm);
+}
+.vyasa-zen-nav {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  padding: 2px;
+  border: 1px solid var(--vyasa-border);
+  border-radius: var(--vyasa-radius-lg);
+  background: var(--vyasa-surface);
+  box-shadow: var(--vyasa-shadow-xs);
+  font-family: var(--vyasa-zen-font-ui);
+}
+.vyasa-zen-nav .vyasa-navbar-icon-button,
+.vyasa-zen-nav-count {
+  height: 2rem;
+  min-width: 2rem;
+  border: 0;
+  border-radius: calc(var(--vyasa-radius-lg) - 2px);
+  background: transparent;
+  color: var(--vyasa-text-muted);
+  transition: background-color var(--vyasa-duration-fast) var(--vyasa-ease), color var(--vyasa-duration-fast) var(--vyasa-ease);
+}
+.vyasa-zen-nav-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  padding: 0 var(--vyasa-space-3);
+  color: var(--vyasa-text);
+  font: var(--vyasa-weight-medium) var(--vyasa-text-sm)/1 var(--vyasa-zen-font-ui);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.vyasa-zen-nav-count-total { color: var(--vyasa-text-muted); }
+.vyasa-zen-nav :is(.vyasa-navbar-icon-button, .vyasa-zen-nav-count):not(:disabled):hover {
+  background: var(--vyasa-hover);
+  color: var(--vyasa-ink) !important;
+}
+.vyasa-zen-nav :is(.vyasa-navbar-icon-button, .vyasa-zen-nav-count):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--vyasa-ring);
+}
+.vyasa-zen-nav .vyasa-navbar-icon-button:disabled { opacity: 0.35; cursor: default; }
+/* Secondary slide actions sit in a toolbar under the nav, shown on hover or keyboard focus. */
+.vyasa-zen-nav-group {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  margin-left: auto;
+}
+.vyasa-zen-nav-group::after { content: ""; position: absolute; top: 100%; right: 0; left: 0; height: var(--vyasa-space-2); }
+.vyasa-zen-nav-tools {
+  position: absolute;
+  top: calc(100% + var(--vyasa-space-2));
+  right: 0;
+  z-index: 20;
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--vyasa-border);
+  border-radius: var(--vyasa-radius-lg);
+  background: var(--vyasa-surface);
+  box-shadow: var(--vyasa-shadow-sm);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-0.25rem);
+  transition: opacity var(--vyasa-duration-fast) var(--vyasa-ease), transform var(--vyasa-duration-fast) var(--vyasa-ease);
+}
+.vyasa-zen-nav-group:is(:hover, :focus-within) .vyasa-zen-nav-tools {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+/* The copy-path control reuses the page action button; here it is a ghost icon button. */
+.vyasa-zen-nav-tools .vyasa-page-action-button.vyasa-zen-nav-copy {
+  width: 2rem;
+  min-width: 2rem;
+  height: 2rem;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: calc(var(--vyasa-radius-lg) - 2px) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--vyasa-text-muted) !important;
+}
+.vyasa-zen-nav-tools .vyasa-page-action-button.vyasa-zen-nav-copy:is(:hover, :focus-visible) {
+  background: var(--vyasa-hover) !important;
+  color: var(--vyasa-ink) !important;
+}
+.vyasa-zen-nav-tools .vyasa-page-action-button.vyasa-zen-nav-copy:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--vyasa-ring) !important; }
+.vyasa-zen-nav-tools .vyasa-zen-nav-copy .vyasa-page-action-icon { width: var(--vyasa-icon-size); height: var(--vyasa-icon-size); }
+
+/* Cover and closing cards: present.js centres their ink in the chrome band. */
+.vyasa-zen-cover {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.6em;
+  min-height: calc(var(--vyasa-zen-stage-h) * 0.6);
+  translate: var(--vyasa-zen-cover-x, 0px) var(--vyasa-zen-cover-y, 0px);
 }
 .vyasa-zen-title {
   margin: 0;
-  width: 100%;
-  text-align: center;
+  color: var(--vyasa-ink);
   font-family: var(--vyasa-zen-font-title);
-  font-size: var(--vyasa-zen-title-size);
-  line-height: var(--vyasa-zen-title-line-height);
-  font-weight: var(--vyasa-zen-title-weight);
+  font-size: 2.4em;
+  font-weight: var(--vyasa-weight-semibold);
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
 }
-.vyasa-zen-shell {
-  min-height: 100vh;
-  padding: 1.5rem 0 3rem;
-}
-.vyasa-zen-header {
-  position: sticky;
-  top: 0;
-  z-index: 20;
+.vyasa-zen-cover-meta {
   display: flex;
-  justify-content: center;
-  pointer-events: none;
+  align-items: center;
+  gap: var(--vyasa-space-4);
+  margin-top: 0.4em;
+  color: var(--vyasa-text-muted);
+  font: var(--vyasa-weight-regular) var(--vyasa-text-base)/1 var(--vyasa-zen-font-ui);
+  font-variant-numeric: tabular-nums;
 }
-.vyasa-zen-nav {
-  font-family: var(--vyasa-zen-font-ui);
-  pointer-events: auto;
+#main-content a.vyasa-zen-cover-link,
+#main-content a.vyasa-zen-cover-link:visited {
   display: inline-flex;
   align-items: center;
-  gap: .75rem;
-  padding: .5rem .9rem;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--vyasa-paper, #fff) 82%, transparent);
-  backdrop-filter: blur(10px);
+  gap: var(--vyasa-space-2);
+  height: 2.25rem;
+  padding: 0 var(--vyasa-space-4);
+  border: 1px solid var(--vyasa-border);
+  border-radius: var(--vyasa-radius-md);
+  background: var(--vyasa-surface);
+  box-shadow: var(--vyasa-shadow-xs);
+  color: var(--vyasa-ink) !important;
+  font: var(--vyasa-weight-medium) var(--vyasa-text-sm)/1 var(--vyasa-zen-font-ui);
+  text-decoration: none;
 }
-.vyasa-zen-nav a { text-decoration: none; color: inherit; }
+#main-content a.vyasa-zen-cover-link:hover { background: var(--vyasa-hover); }
+#main-content a.vyasa-zen-cover-link:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--vyasa-ring); }
+
+/* Slide body: one type scale in em, derived from the stage text size. */
 .vyasa-zen-slide-body {
   width: 100%;
-  max-width: 100%;
   min-width: 0;
-  font-size: calc(2.7em + var(--vyasa-zen-font-bump));
+  color: var(--vyasa-text);
   font-family: var(--vyasa-zen-font-body);
-  --vyasa-zen-block-gap: 1.15rem;
-  --vyasa-zen-list-gap: 0.55rem;
+  line-height: 1.5;
+  --vyasa-content-font-size: 1em;
+  --vyasa-heading-before-gap: 0px;
+  --vyasa-heading-after-gap: 0px;
+  --vyasa-zen-block-gap: 0.75em;
+  --vyasa-zen-heading-gap: 1.75em;
+  --vyasa-zen-list-gap: 0.35em;
+  /* header.css #main-content .uk-list > li + li reads this; one list gap at every depth. */
+  --vyasa-list-item-gap: var(--vyasa-zen-list-gap);
 }
+.vyasa-zen-slide-body :is(h1, h2, h3, h4, h5, h6) {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  box-shadow: none;
+  color: var(--vyasa-ink);
+  font-family: var(--vyasa-zen-font-title);
+  font-weight: var(--vyasa-weight-semibold);
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+  text-decoration: none;
+  text-wrap: balance;
+}
+.vyasa-zen-slide-body .vyasa-heading-fold-summary { padding: 0 !important; border: 0 !important; }
+.vyasa-zen-slide-body h1 { font-size: 2.1em !important; letter-spacing: -0.035em; line-height: 1.1; }
+.vyasa-zen-slide-body h2 { font-size: 1.75em !important; letter-spacing: -0.03em; line-height: 1.1; }
+.vyasa-zen-slide-body h3 { font-size: 1.2em !important; letter-spacing: -0.015em; color: var(--vyasa-text); }
+.vyasa-zen-slide-body h4 { font-size: 1.05em !important; letter-spacing: -0.01em; color: var(--vyasa-text); }
+.vyasa-zen-slide-body h5,
+.vyasa-zen-slide-body h6 { font-size: 1em !important; letter-spacing: 0; color: var(--vyasa-text-muted); }
+.vyasa-zen-slide-body :is(p, ul, ol, li, blockquote, details, summary, .vyasa-callout, .tabs-container) {
+  font-size: 1em !important;
+  line-height: 1.5 !important;
+}
+.vyasa-zen-slide-body strong { color: var(--vyasa-ink); font-weight: var(--vyasa-weight-semibold); }
+.vyasa-zen-slide-body blockquote {
+  padding-left: 0.9em;
+  border-left: 2px solid var(--vyasa-border-strong);
+  color: var(--vyasa-text-muted);
+  font-style: normal;
+}
+.vyasa-zen-slide-body .vyasa-callout { font-size: 0.85em !important; }
+.vyasa-zen-slide-body table,
+.vyasa-zen-slide-body .uk-table { font-size: 0.9em !important; }
+.vyasa-zen-slide-body .uk-table thead th { font-size: inherit; }
 
+/* Vertical rhythm: blocks share one gap; a heading after a block opens a section;
+   a heading after a heading is its subsection; a heading sits close to its first block. */
+.vyasa-zen-slide-body :is(p, ul, ol, li, blockquote, details, .vyasa-callout, .tabs-container, .code-block, .mermaid-container, .d2-container, .vyasa-table-scroll) {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+.vyasa-zen-slide-body > * + * { margin-top: var(--vyasa-zen-block-gap) !important; }
+.vyasa-zen-slide-body > * + :is(h1, h2, h3, h4, h5, h6, [data-reveal-kind="heading"]) { margin-top: var(--vyasa-zen-heading-gap) !important; }
+.vyasa-zen-slide-body > :is(h1, h2, h3, h4, h5, h6, [data-reveal-kind="heading"]) + * { margin-top: 0.6em !important; }
+.vyasa-zen-slide-body > :is(h1, h2, h3, h4, h5, h6, [data-reveal-kind="heading"]) + :is(h1, h2, h3, h4, h5, h6, [data-reveal-kind="heading"]) { margin-top: 0.75em !important; }
+/* Adjacent list units are one list split into reveal steps (deck.py paragraph groups), so they keep the list gap. */
+.vyasa-zen-slide-body > [data-reveal-kind="list"] + [data-reveal-kind="list"] { margin-top: var(--vyasa-zen-list-gap) !important; }
+
+.vyasa-zen-slide-body ul,
+.vyasa-zen-slide-body ol { padding-left: 1.75em !important; margin-left: 0 !important; }
+.vyasa-zen-slide-body ul { list-style: disc outside !important; }
+.vyasa-zen-slide-body ul ul { list-style-type: circle !important; }
+.vyasa-zen-slide-body ol { list-style: decimal outside !important; }
+.vyasa-zen-slide-body .uk-list-bullet > li::before { display: none !important; }
+.vyasa-zen-slide-body li { display: list-item !important; padding-left: 0.4em !important; margin-left: 0 !important; }
+.vyasa-zen-slide-body li::marker { color: var(--vyasa-text-faint); }
+.vyasa-zen-slide-body ol > li::marker { font-variant-numeric: tabular-nums; }
+.vyasa-zen-slide-body li + li,
+.vyasa-zen-slide-body .vyasa-reveal-unit li > :is(ul, ol) { margin-top: var(--vyasa-zen-list-gap) !important; }
+
+/* Wide blocks keep the column's left edge and may extend into the right margin. */
+.vyasa-zen-slide-body .code-block,
+.vyasa-zen-slide-body .vyasa-table-scroll {
+  width: max-content;
+  min-width: 100%;
+  max-width: var(--vyasa-zen-inner-w);
+}
 .vyasa-zen-slide-body .code-block {
   position: relative;
-  min-width: 0;
-  max-width: 100%;
   overflow: hidden;
 }
-
 .vyasa-zen-slide-body .code-block pre {
   max-width: 100%;
   overflow-x: auto !important;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
-  scrollbar-gutter: stable;
+  font-size: 0.8em;
 }
-
 .vyasa-zen-slide-body .code-block pre code {
   width: max-content;
   min-width: 100%;
+  font-size: inherit;
 }
-
+/* Slide content is left-anchored, so tables start at the stage margin instead of centering. */
+.vyasa-zen-slide-body .vyasa-table-scroll > :is(table, .uk-table) { margin: 0 !important; }
+.vyasa-zen-slide-body .vyasa-table-scroll.vyasa-table-breakout { left: auto; transform: none; }
 .vyasa-zen-slide-body .code-copy-button {
-  font-family: var(--vyasa-zen-font-ui);
-  font-size: 0 !important;
-  line-height: 0;
+  top: var(--vyasa-space-2);
+  right: var(--vyasa-space-2);
+  z-index: 2;
   width: 2rem;
   height: 2rem;
   padding: 0;
-  top: 0.75rem;
-  right: 0.75rem;
-  z-index: 2;
+  font-family: var(--vyasa-zen-font-ui);
+  font-size: 0 !important;
+  line-height: 0;
 }
-
 .vyasa-zen-slide-body .code-copy-button > span:first-child {
-  font-size: 0.95rem !important;
-  width: 0.95rem;
-  height: 0.95rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: var(--vyasa-icon-size);
+  height: var(--vyasa-icon-size);
+  font-size: var(--vyasa-icon-size) !important;
   line-height: 1;
 }
-.vyasa-zen-slide-body h1,
-.vyasa-zen-slide-body h2,
-.vyasa-zen-slide-body h3,
-.vyasa-zen-slide-body h4,
-.vyasa-zen-slide-body h5,
-.vyasa-zen-slide-body h6 {
-  display: block;
-  width: fit-content;
-  max-width: 100%;
-  margin-top: 1.1rem !important;
-  margin-bottom: 1.1rem !important;
-  line-height: 1.15;
-  text-decoration: none;
-  letter-spacing: -0.02em;
-  box-shadow: inset 0 -0.18em 0 color-mix(in srgb, var(--vyasa-primary) 14%, transparent);
-  border-radius: 0.08em;
-  padding: 0 0.04em 0.02em;
-}
-.vyasa-zen-slide-body h1 { font-size: calc(2.6rem + var(--vyasa-zen-font-bump)) !important; }
-.vyasa-zen-slide-body h2 { font-size: calc(2.2rem + var(--vyasa-zen-font-bump)) !important; }
-.vyasa-zen-slide-body h3 { font-size: calc(1.8rem + var(--vyasa-zen-font-bump)) !important; }
-.vyasa-zen-slide-body h4 { font-size: calc(1.45rem + var(--vyasa-zen-font-bump)) !important; }
-.vyasa-zen-slide-body h5 { font-size: calc(1.2rem + var(--vyasa-zen-font-bump)) !important; }
-.vyasa-zen-slide-body h6 { font-size: calc(1.05rem + var(--vyasa-zen-font-bump)) !important; }
-.vyasa-zen-slide-body table,
-.vyasa-zen-slide-body .uk-table { font-size: calc(1.15rem + var(--vyasa-zen-font-bump)) !important; }
-.vyasa-zen-slide-body p,
-.vyasa-zen-slide-body li,
-.vyasa-zen-slide-body blockquote,
-.vyasa-zen-slide-body details,
-.vyasa-zen-slide-body summary,
-.vyasa-zen-slide-body .vyasa-callout,
-.vyasa-zen-slide-body .tabs-container {
-  font-size: calc(1.15rem + var(--vyasa-zen-font-bump)) !important;
-  line-height: 1.65 !important;
-}
+
 .vyasa-zen-slide-body details {
-  padding: 1rem 1.1rem;
-  border: 1px solid color-mix(in srgb, var(--vyasa-primary) 14%, var(--vyasa-outline-ghost));
-  border-radius: calc(var(--vyasa-rect-radius) * 1.25);
-  background: color-mix(in srgb, var(--vyasa-paper-low) 86%, transparent);
+  padding: 0.75em 1em;
+  border: 1px solid var(--vyasa-border);
+  border-radius: var(--vyasa-radius-lg);
+  background: var(--vyasa-bg-subtle);
 }
 .vyasa-zen-slide-body summary {
-  margin-bottom: 0.8rem;
   cursor: default;
+  color: var(--vyasa-ink);
   font-family: var(--vyasa-zen-font-ui);
-  font-weight: 650;
-  color: var(--vyasa-ink);
+  font-weight: var(--vyasa-weight-semibold);
 }
+.vyasa-zen-slide-body details[open] > summary { margin-bottom: 0.5em; }
 .vyasa-zen-slide-body .tabs-container {
-  background: color-mix(in srgb, var(--vyasa-paper-low) 90%, white 10%);
-  border: 1px solid color-mix(in srgb, var(--vyasa-primary) 10%, var(--vyasa-outline-ghost));
-  box-shadow: 0 24px 40px -36px rgba(15, 23, 42, 0.22);
-  padding: 0.5rem;
+  padding: var(--vyasa-space-2);
+  border: 1px solid var(--vyasa-border);
+  border-radius: var(--vyasa-radius-lg);
+  background: var(--vyasa-bg-subtle);
+  box-shadow: none;
 }
-.vyasa-zen-slide-body .tabs-header {
-  gap: 0.5rem;
-  padding: 0;
-  margin-bottom: 0.6rem;
-}
+.vyasa-zen-slide-body .tabs-header { gap: 2px; margin-bottom: var(--vyasa-space-2); padding: 0; }
 .vyasa-zen-slide-body .tab-button {
-  border-radius: calc(var(--vyasa-rect-radius) * 0.9) !important;
-  padding: 0.75rem 1rem;
-  font-size: calc(0.88rem + var(--vyasa-zen-font-bump));
-  letter-spacing: 0.08em;
-  color: color-mix(in srgb, var(--vyasa-ink-soft) 82%, var(--vyasa-ink) 18%);
+  padding: 0.4em 0.8em;
+  border-radius: var(--vyasa-radius-md) !important;
+  color: var(--vyasa-text-muted);
+  font-size: 0.6em;
 }
-.vyasa-zen-slide-body .tab-button:hover:not(.active) {
-  background: color-mix(in srgb, var(--vyasa-primary) 8%, transparent);
-  color: var(--vyasa-ink);
-}
+.vyasa-zen-slide-body .tab-button:hover:not(.active) { background: var(--vyasa-hover); color: var(--vyasa-ink); }
 .vyasa-zen-slide-body .tab-button.active {
-  background: color-mix(in srgb, var(--vyasa-primary) 14%, white 12%);
+  background: var(--vyasa-surface);
   color: var(--vyasa-ink);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vyasa-primary) 16%, var(--vyasa-outline-ghost));
+  box-shadow: var(--vyasa-shadow-xs);
 }
-.vyasa-zen-slide-body .tabs-content {
-  padding: 0.15rem 0.25rem 0.35rem;
-}
-.vyasa-zen-slide-body .tab-panel {
-  padding: 0.35rem 0.45rem 0.55rem;
-}
-.vyasa-zen-slide-body p,
-.vyasa-zen-slide-body ul,
-.vyasa-zen-slide-body ol,
-.vyasa-zen-slide-body li,
-.vyasa-zen-slide-body blockquote,
-.vyasa-zen-slide-body details,
-.vyasa-zen-slide-body .vyasa-callout,
-.vyasa-zen-slide-body .tabs-container,
-.vyasa-zen-slide-body .code-block,
-.vyasa-zen-slide-body .mermaid-container,
-.vyasa-zen-slide-body .d2-container,
-.vyasa-zen-slide-body .vyasa-table-scroll {
-  margin-top: 0 !important;
-  margin-bottom: 0 !important;
-}
-.vyasa-zen-slide-body > * + * {
-  margin-top: var(--vyasa-zen-block-gap) !important;
-}
-.vyasa-zen-slide-body p + ul,
-.vyasa-zen-slide-body p + ol,
-.vyasa-zen-slide-body ul + p,
-.vyasa-zen-slide-body ol + p {
-  margin-top: var(--vyasa-zen-list-gap) !important;
-}
-.vyasa-zen-slide-body ul,
-.vyasa-zen-slide-body ol {
-  padding-left: 1.4em;
-}
-.vyasa-zen-slide-body ul {
-  list-style: disc outside !important;
-}
-.vyasa-zen-slide-body .uk-list-bullet > li::before { display: none !important; }
-.vyasa-zen-slide-body ul ul {
-  list-style-type: circle !important;
-}
-.vyasa-zen-slide-body ol {
-  list-style: decimal outside !important;
-}
-.vyasa-zen-slide-body li {
-  display: list-item !important;
-  padding-left: 0.2em;
-}
-.vyasa-zen-slide-body li + li {
-  margin-top: var(--vyasa-zen-list-gap) !important;
-}
-.vyasa-zen-slide-body {
-  --vyasa-zen-block-gap: 1.15rem;
-  --vyasa-zen-list-attach-gap: 0.35rem;
-}
-.vyasa-zen-slide-body p,
-.vyasa-zen-slide-body ul,
-.vyasa-zen-slide-body ol,
-.vyasa-zen-slide-body blockquote,
-.vyasa-zen-slide-body details,
-.vyasa-zen-slide-body .vyasa-callout,
-.vyasa-zen-slide-body .tabs-container,
-.vyasa-zen-slide-body .code-block,
-.vyasa-zen-slide-body .mermaid-container,
-.vyasa-zen-slide-body .d2-container,
-.vyasa-zen-slide-body .vyasa-table-scroll {
-  margin-top: 0 !important;
-  margin-bottom: 0 !important;
-}
-.vyasa-zen-slide-body > * + * {
-  margin-top: var(--vyasa-zen-block-gap) !important;
-}
-.vyasa-zen-slide-body p + ul,
-.vyasa-zen-slide-body p + ol,
-.vyasa-zen-slide-body ul + li,
-.vyasa-zen-slide-body ol + li {
-  margin-top: var(--vyasa-zen-list-attach-gap) !important;
-}
+.vyasa-zen-slide-body .tabs-content { padding: 0 var(--vyasa-space-1) var(--vyasa-space-1); }
+.vyasa-zen-slide-body .tab-panel { padding: var(--vyasa-space-1) var(--vyasa-space-2) var(--vyasa-space-2); }
+
+/* Reveal: a short fade and nudge; a reveal must not read as a transition effect. */
 .vyasa-zen-slide-body[data-reveal-mode="stagger"] {
   --vyasa-reveal-duration: 420ms;
-  --vyasa-reveal-stagger: 220ms;
-  --vyasa-reveal-distance: 1.75rem;
+  --vyasa-reveal-stagger: 300ms;
+  --vyasa-reveal-distance: 0.5rem;
   --vyasa-reveal-easing: cubic-bezier(0.22, 1, 0.36, 1);
-  padding-bottom: min(28vh, 18rem);
+  margin-top: var(--vyasa-zen-center-offset, 0px);
+  /* present.js sets the scroll room: what centring needs, or the bottom reserve once content overflows. */
+  padding-bottom: var(--vyasa-zen-scroll-room, 3rem);
+  transition: margin-top var(--vyasa-reveal-duration) cubic-bezier(0.65, 0, 0.35, 1);
 }
 .vyasa-reveal-unit {
   display: block;
@@ -273,180 +375,223 @@
   box-sizing: border-box;
   opacity: 0;
   transform: translate3d(var(--vyasa-reveal-distance), 0, 0);
-  filter: blur(2px);
   transition:
     opacity var(--vyasa-reveal-duration) var(--vyasa-reveal-easing),
-    transform var(--vyasa-reveal-duration) var(--vyasa-reveal-easing),
-    filter var(--vyasa-reveal-duration) var(--vyasa-reveal-easing);
-  will-change: opacity, transform, filter;
+    transform var(--vyasa-reveal-duration) var(--vyasa-reveal-easing);
+  will-change: opacity, transform;
 }
-.vyasa-reveal-unit[data-reveal-state="hidden"] {
-  display: none;
-}
-.vyasa-reveal-unit[data-reveal-state="entering"] {
-  display: block;
-  opacity: 0;
-}
-.vyasa-reveal-unit[data-reveal-state="leaving"] {
-  display: block;
-  opacity: 0;
-}
+.vyasa-reveal-unit[data-reveal-state="hidden"] { display: none; }
+/* Focus: units revealed before the current one recede so the speaker's place is clear. */
+.vyasa-reveal-unit[data-reveal-state="visible"][data-reveal-focus="past"] { opacity: 0.75; }
+.vyasa-reveal-unit[data-reveal-state="entering"],
+.vyasa-reveal-unit[data-reveal-state="leaving"] { display: block; opacity: 0; }
 .vyasa-reveal-unit[data-reveal-state="visible"] {
   display: block;
   opacity: 1;
   transform: translate3d(0, 0, 0);
-  filter: blur(0);
 }
-.vyasa-zen-slide-progress {
-  position: fixed;
-  bottom: 1.55rem;
-  left: 50%;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  width: min(var(--vyasa-zen-slide-max-width), calc(100vw - 2rem));
-  padding: 0.25rem 0;
-  color: var(--vyasa-ink-soft);
-  font-family: var(--vyasa-zen-font-ui);
-  font-size: calc(0.65rem + var(--vyasa-zen-font-bump));
-  opacity: 0.72;
-  pointer-events: none;
-  transform: translateX(-50%);
-}
-.vyasa-zen-slide-progress-track { flex: 1; height: 0.3rem; overflow: hidden; border-radius: 999px; background: color-mix(in srgb, var(--vyasa-ink-soft) 18%, transparent); }
-.vyasa-zen-slide-progress-track::after { content: ""; display: block; width: var(--vyasa-slide-progress, 0%); height: 100%; border-radius: inherit; background: color-mix(in srgb, var(--vyasa-primary) 85%, white); transition: width 220ms ease; }
-.vyasa-zen-deck-progress {
-  position: fixed; bottom: 0.75rem; left: 50%; z-index: 10;
-  width: min(var(--vyasa-zen-slide-max-width), calc(100vw - 2rem));
-  opacity: 0.72; pointer-events: none; transform: translateX(-50%);
-}
-.vyasa-zen-deck-progress-track { width: 100%; height: 0.3rem; overflow: hidden; border-radius: 999px; background: color-mix(in srgb, var(--vyasa-ink-soft) 18%, transparent); }
-.vyasa-zen-deck-progress-track::after { content: ""; display: block; width: var(--vyasa-deck-progress, 0%); height: 100%; border-radius: inherit; background: color-mix(in srgb, var(--vyasa-primary) 85%, white); transition: width 220ms ease; }
-#slide-overview .vyasa-zen-overview-card {
-  background: color-mix(in srgb, var(--vyasa-paper) 68%, transparent);
-  border-color: color-mix(in srgb, var(--vyasa-ink-soft) 22%, transparent);
-  box-shadow: 0 1.5rem 4rem color-mix(in srgb, black 32%, transparent);
-  backdrop-filter: blur(0.75rem) saturate(1.1);
-  -webkit-backdrop-filter: blur(0.75rem) saturate(1.1);
-}
-#slide-overview .vyasa-zen-overview-margin {
-  height: calc(35vh - 3rem);
-  pointer-events: none;
-}
-#slide-overview .vyasa-zen-overview-margin > td {
-  padding: 0;
-  border: 0;
-  background: transparent !important;
-  vertical-align: middle;
-}
-#slide-overview .vyasa-zen-overview-title {
-  margin: 0;
-  color: var(--vyasa-ink);
-  font-size: clamp(1.5rem, 3vw, 2.75rem);
-  text-align: center;
-  opacity: 0.38;
-}
-#slide-overview .vyasa-zen-overview-heading {
-  text-align: center;
-}
-#slide-overview .vyasa-zen-overview-subtitle {
-  display: block;
-  margin-top: 0.75rem;
-  color: var(--vyasa-ink-soft);
-  font-family: var(--vyasa-zen-font-ui);
-  font-size: 0.85rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  opacity: 0.58;
-}
-#slide-overview [data-zen-overview-node] td:last-child {
-  padding-left: calc(1rem + (var(--vyasa-overview-depth) - 1) * 1.5rem);
-}
-#slide-overview .vyasa-zen-overview-label {
-  color: var(--vyasa-link) !important;
-  font-weight: 400 !important;
-}
-#slide-overview .vyasa-zen-overview-chevron,
-#slide-overview .vyasa-zen-overview-chevron-space {
-  display: inline-block;
-  width: 1.25rem;
-  margin-right: 0.5rem;
-  vertical-align: middle;
-}
-#slide-overview .vyasa-zen-overview-chevron::before {
-  display: inline-block;
-  width: 0.5rem;
-  height: 0.5rem;
-  border-top: 0.12rem solid currentColor;
-  border-right: 0.12rem solid currentColor;
-  content: "";
-  opacity: 0.55;
-  transform: rotate(45deg);
-}
-#slide-overview [data-collapsed="false"] .vyasa-zen-overview-chevron::before {
-  transform: rotate(135deg);
-}
-#slide-overview tr:focus-within td {
-  background: color-mix(in srgb, var(--vyasa-primary) 13%, var(--vyasa-paper-raised));
-  box-shadow:
-    inset 0 1px color-mix(in srgb, var(--vyasa-primary) 24%, transparent),
-    inset 0 -1px color-mix(in srgb, var(--vyasa-primary) 24%, transparent);
-  transition: background 140ms ease, box-shadow 140ms ease;
-}
-#slide-overview [data-zen-overview-toggle-branch] {
-  padding: 0;
-  border: 0;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  background: transparent;
-}
-#slide-overview tr:focus-within [data-zen-overview-focus]:focus-visible {
-  color: inherit;
-  outline: none;
-  text-decoration: none;
-}
-.vyasa-zen-slide-end-rule {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  width: min(24rem, 75%);
-  margin-right: auto;
-  margin-left: auto;
-  color: var(--vyasa-primary);
-  opacity: 0;
-  transform: translateY(0.35rem);
-  transition: opacity 220ms ease, transform 220ms ease;
-}
-.vyasa-zen-slide-end-rule-line { flex: 1; height: 0.2rem; border-radius: 999px; background: currentColor; }
-.vyasa-zen-slide-end-rule-icon { width: 1.15rem; height: 1.15rem; }
-.vyasa-zen-slide-end-rule[data-reveal-state="visible"] { opacity: 0.58; transform: translateY(0); }
-.vyasa-zen-breadcrumb-copy { width: 1.5rem; height: 1.5rem; padding: 0.2rem; opacity: 0; pointer-events: none; }
-.vyasa-breadcrumbs:hover .vyasa-zen-breadcrumb-copy,
-.vyasa-zen-breadcrumb-copy:focus-visible { opacity: 0.72; pointer-events: auto; }
-.vyasa-zen-breadcrumb-copy .vyasa-page-action-icon { width: 0.85rem; height: 0.85rem; }
 .vyasa-reveal-unit:has(.vyasa-table-scroll) {
   transform: none !important;
-  filter: none !important;
   will-change: opacity;
 }
-.vyasa-reveal-unit[data-reveal-style="fade"] {
-  transform: none;
-}
-.vyasa-reveal-unit[data-reveal-style="slide-left"] {
-  transform: translate3d(calc(var(--vyasa-reveal-distance) * -1), 0, 0);
-}
+.vyasa-reveal-unit[data-reveal-style="fade"] { transform: none; }
+.vyasa-reveal-unit[data-reveal-style="slide-left"] { transform: translate3d(calc(var(--vyasa-reveal-distance) * -1), 0, 0); }
 .vyasa-reveal-unit[data-reveal-style="none"],
 .vyasa-reveal-unit[data-reveal-style="instant"] {
   display: block;
   opacity: 1;
   transform: none;
-  filter: none;
   transition: none;
 }
-.vyasa-zen-present .vyasa-reveal-unit > :last-child {
-  margin-bottom: 0;
+.vyasa-zen-present .vyasa-reveal-unit > :last-child { margin-bottom: 0; }
+
+/* Progress: two stacked bars under the stage content, slide segments above deck position. */
+.vyasa-zen-slide-progress,
+.vyasa-zen-deck-progress {
+  position: fixed;
+  left: 50%;
+  z-index: 10;
+  width: var(--vyasa-zen-inner-w);
+  opacity: 0.72;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+.vyasa-zen-slide-progress { bottom: 1.55rem; }
+.vyasa-zen-deck-progress { bottom: var(--vyasa-space-3); }
+.vyasa-zen-slide-progress-track,
+.vyasa-zen-deck-progress-track {
+  width: 100%;
+  height: var(--vyasa-space-1);
+  overflow: hidden;
+  border-radius: var(--vyasa-radius-pill);
+  background: var(--vyasa-border);
+}
+.vyasa-zen-slide-progress-track::after,
+.vyasa-zen-deck-progress-track::after {
+  content: "";
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--vyasa-accent-9);
+  transition: width var(--vyasa-duration-base) var(--vyasa-ease);
+}
+.vyasa-zen-slide-progress-track::after { width: var(--vyasa-slide-progress, 0%); }
+.vyasa-zen-deck-progress-track::after { width: var(--vyasa-deck-progress, 0%); }
+
+/* End of slide: a hairline draws outward from the centre, then a hollow diamond settles on it. */
+.vyasa-zen-slide-body > .vyasa-zen-slide-end-rule {
+  position: relative;
+  width: min(14em, 60%);
+  height: 1em;
+  margin: 2em auto 0 !important;
+  color: var(--vyasa-accent-9);
+}
+.vyasa-zen-slide-end-rule::before,
+.vyasa-zen-slide-end-rule::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+}
+.vyasa-zen-slide-end-rule::before {
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, currentColor 30%, currentColor 70%, transparent);
+  -webkit-mask: linear-gradient(90deg, #000 calc(50% - 0.9em), transparent calc(50% - 0.9em), transparent calc(50% + 0.9em), #000 calc(50% + 0.9em));
+  mask: linear-gradient(90deg, #000 calc(50% - 0.9em), transparent calc(50% - 0.9em), transparent calc(50% + 0.9em), #000 calc(50% + 0.9em));
+  opacity: 0.7;
+  transform: translate(-50%, -50%) scaleX(0);
+  transition: transform 640ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.vyasa-zen-slide-end-rule::after {
+  width: 0.5em;
+  height: 0.5em;
+  border: 1.5px solid currentColor;
+  border-radius: 1px;
+  box-shadow: 0 0 0.75em color-mix(in srgb, currentColor 45%, transparent);
+  opacity: 0;
+  transform: translate(-50%, -50%) rotate(45deg) scale(0.4);
+  transition:
+    opacity 280ms var(--vyasa-ease) 260ms,
+    transform 420ms cubic-bezier(0.34, 1.56, 0.64, 1) 260ms;
+}
+.vyasa-zen-slide-end-rule[data-reveal-state="visible"]::before { transform: translate(-50%, -50%) scaleX(1); }
+.vyasa-zen-slide-end-rule[data-reveal-state="visible"]::after {
+  opacity: 1;
+  transform: translate(-50%, -50%) rotate(45deg) scale(1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .vyasa-zen-slide-end-rule::before,
+  .vyasa-zen-slide-end-rule::after { transition: none; }
+}
+
+
+/* Overview: a command-menu list over a dimmed slide. The panel passes clicks through so a click outside the card closes it. */
+#slide-overview:not(.hidden) {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--vyasa-space-5);
+  background: color-mix(in srgb, var(--vyasa-bg) 70%, transparent);
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+}
+#slide-overview .vyasa-zen-overview-card {
+  width: fit-content;
+  min-width: min(24rem, calc(100vw - 2rem));
+  max-width: min(44rem, calc(100vw - 2rem));
+  max-height: 72vh;
+  overflow-y: auto;
+  padding: var(--vyasa-space-2);
+  border: 1px solid var(--vyasa-border);
+  border-radius: var(--vyasa-radius-xl);
+  background: var(--vyasa-surface);
+  box-shadow: var(--vyasa-shadow-lg);
+  font-family: var(--vyasa-zen-font-ui);
+  pointer-events: auto;
+}
+#slide-overview .vyasa-zen-overview-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--vyasa-text-sm);
+}
+#slide-overview [data-zen-overview-node] td {
+  padding: var(--vyasa-space-2) var(--vyasa-space-3);
+  border: 0;
+  vertical-align: middle;
+  transition: background-color var(--vyasa-duration-fast) var(--vyasa-ease);
+}
+#slide-overview [data-zen-overview-node] td:first-child {
+  width: 1%;
+  border-radius: var(--vyasa-radius-md) 0 0 var(--vyasa-radius-md);
+  color: var(--vyasa-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+#slide-overview [data-zen-overview-node] td:last-child {
+  border-radius: 0 var(--vyasa-radius-md) var(--vyasa-radius-md) 0;
+  padding-left: calc(var(--vyasa-space-3) + (var(--vyasa-overview-depth) - 1) * var(--vyasa-space-5));
+}
+#slide-overview [data-zen-overview-node]:hover td { background: var(--vyasa-hover); }
+#slide-overview [data-zen-overview-node]:focus-within td { background: var(--vyasa-active); }
+#slide-overview .vyasa-zen-overview-margin {
+  height: calc(35vh - 3rem);
+  pointer-events: none;
+}
+#slide-overview .is-compact .vyasa-zen-overview-margin { height: auto; }
+#slide-overview .vyasa-zen-overview-margin > td {
+  padding: 0 var(--vyasa-space-3) var(--vyasa-space-3);
+  border: 0;
+  background: transparent !important;
+  vertical-align: bottom;
+}
+#slide-overview .vyasa-zen-overview-title {
+  margin: 0;
+  color: var(--vyasa-ink);
+  font: var(--vyasa-weight-semibold) var(--vyasa-text-lg)/var(--vyasa-leading-tight) var(--vyasa-zen-font-ui);
+  letter-spacing: -0.015em;
+}
+#slide-overview .vyasa-zen-overview-subtitle {
+  display: block;
+  margin-top: var(--vyasa-space-1);
+  color: var(--vyasa-text-muted);
+  font-size: var(--vyasa-text-sm);
+}
+#slide-overview .vyasa-zen-overview-label { color: var(--vyasa-ink) !important; font-weight: var(--vyasa-weight-regular) !important; }
+#slide-overview a[data-zen-overview-focus] { text-decoration: none; }
+#slide-overview .vyasa-zen-overview-chevron,
+#slide-overview .vyasa-zen-overview-chevron-space {
+  display: inline-block;
+  width: 1.25rem;
+  margin-right: var(--vyasa-space-2);
+  vertical-align: middle;
+}
+#slide-overview .vyasa-zen-overview-chevron::before {
+  display: inline-block;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-top: calc(var(--vyasa-icon-stroke) * 1px) solid currentColor;
+  border-right: calc(var(--vyasa-icon-stroke) * 1px) solid currentColor;
+  content: "";
+  opacity: 0.5;
+  transform: rotate(45deg);
+}
+#slide-overview [data-collapsed="false"] .vyasa-zen-overview-chevron::before { transform: rotate(135deg); }
+#slide-overview [data-zen-overview-toggle-branch] {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--vyasa-text-muted);
+  font: inherit;
+  text-align: left;
+}
+#slide-overview tr:focus-within [data-zen-overview-focus]:focus-visible {
+  color: inherit;
+  outline: none;
+  text-decoration: none;
 }
 
 .vyasa-zen-present .vyasa-main-shell,
@@ -458,58 +603,69 @@
 }
 
 @media (max-width: 640px) {
-  .vyasa-zen-present .vyasa-main-shell {
-    max-width: 100vw !important;
-    overflow-x: hidden;
-    padding-left: 1rem !important;
-    padding-right: 1rem !important;
-  }
+  .vyasa-zen-present .vyasa-main-shell { max-width: 100vw !important; overflow-x: hidden; }
 }
 
-.vyasa-zen-nav-key {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  padding: 0;
-  cursor: pointer;
+/* Debug rulers (?slides_debug): faint gap lines from the revealed ink box to the slide area. */
+.vyasa-zen-ruler { position: fixed; inset: 0; z-index: 40; pointer-events: none; }
+.vyasa-zen-ruler[hidden] { display: none; }
+.vyasa-zen-ruler-ink { position: absolute; outline: 1px dashed color-mix(in srgb, currentColor 22%, transparent); }
+.vyasa-zen-ruler-line { position: absolute; border: 0 dashed rgb(229 72 77 / 0.5); }
+.vyasa-zen-ruler-top, .vyasa-zen-ruler-bottom { border-left-width: 1px; }
+.vyasa-zen-ruler-left, .vyasa-zen-ruler-right { border-top-width: 1px; }
+.vyasa-zen-ruler-line::after {
+  content: attr(data-px) "px";
+  position: absolute;
+  padding: 1px 4px;
+  font: 11px/1.2 var(--vyasa-font-mono, monospace);
+  color: rgb(229 72 77 / 0.85);
+  background: var(--vyasa-bg, transparent);
+  white-space: nowrap;
 }
-.vyasa-zen-nav-kbd {
-  display: inline-flex;
-  min-width: 2.1rem;
-  min-height: 2rem;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid color-mix(in srgb, var(--vyasa-ink-soft) 22%, var(--vyasa-outline-ghost));
-  border-radius: 0.55rem;
-  background: color-mix(in srgb, var(--vyasa-paper-raised) 88%, transparent);
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, white 42%, transparent),
-    0 2px 0 color-mix(in srgb, var(--vyasa-ink-soft) 16%, transparent),
-    0 10px 24px -20px color-mix(in srgb, var(--vyasa-ink) 32%, transparent);
-  color: var(--vyasa-ink-soft);
-  font-family: var(--vyasa-zen-font-ui);
-  font-size: calc(0.95rem + var(--vyasa-zen-font-bump));
-  font-weight: 800;
-  line-height: 1;
-}
-.vyasa-zen-nav-key:hover .vyasa-zen-nav-kbd,
-.vyasa-zen-nav-key:focus-visible .vyasa-zen-nav-kbd {
-  border-color: color-mix(in srgb, var(--vyasa-ink) 30%, var(--vyasa-outline-ghost));
-  background: color-mix(in srgb, var(--vyasa-paper-raised) 72%, var(--vyasa-paper-low) 28%);
-  color: var(--vyasa-ink);
-}
-.vyasa-zen-nav-key:active .vyasa-zen-nav-kbd {
-  transform: translateY(1px);
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, white 42%, transparent),
-    0 1px 0 color-mix(in srgb, var(--vyasa-ink-soft) 16%, transparent);
-}
+.vyasa-zen-ruler-top::after, .vyasa-zen-ruler-bottom::after { top: 50%; left: 4px; transform: translateY(-50%); }
+.vyasa-zen-ruler-left::after, .vyasa-zen-ruler-right::after { top: 4px; left: 50%; transform: translateX(-50%); }
 
-.vyasa-zen-present .vyasa-breadcrumbs,
-.vyasa-zen-present [data-zen-overview-toggle="true"],
-.vyasa-zen-present [data-zen-overview-toggle="true"] + span,
-.vyasa-zen-present [data-zen-overview-toggle="true"] ~ a,
-.vyasa-zen-nav-key {
-  font-family: var(--vyasa-zen-font-ui);
+/* Horizontal centre (present.js recenterSlideX): units and the end rule shift as one block. */
+.vyasa-zen-slide-body > .vyasa-reveal-unit { position: relative; left: var(--vyasa-zen-center-x, 0px); }
+.vyasa-zen-slide-body > .vyasa-zen-slide-end-rule { left: var(--vyasa-zen-rule-x, 0px); }
+.vyasa-zen-measuring > .vyasa-reveal-unit { left: 0 !important; }
+.vyasa-zen-measuring > .vyasa-reveal-unit[data-reveal-state="hidden"] { display: block !important; opacity: 0 !important; transform: none !important; }
+.vyasa-zen-measuring > .vyasa-zen-slide-end-rule { left: 0 !important; }
+/* Diagrams fit the slide band (present.js sets --vyasa-zen-band-h), leaving room for the title. */
+.vyasa-zen-slide-body :is(.d2-container, .mermaid-container) { width: 100% !important; left: 0 !important; transform: none !important; }
+.vyasa-zen-slide-body :is(.d2-wrapper, .mermaid-wrapper) { height: auto !important; min-height: 0 !important; }
+.vyasa-zen-slide-body :is(.d2-wrapper, .mermaid-wrapper) svg { max-height: calc(var(--vyasa-zen-band-h, 60vh) * 0.7); width: auto; }
+/* Step centring (default; present.js centerPerStep): the block glides sideways as each reveal changes its width. */
+.vyasa-zen-slide-body[data-center-x="step"][data-x-placed="1"] > .vyasa-reveal-unit {
+  transition:
+    opacity var(--vyasa-reveal-duration) var(--vyasa-reveal-easing),
+    transform var(--vyasa-reveal-duration) var(--vyasa-reveal-easing),
+    left var(--vyasa-reveal-duration) cubic-bezier(0.65, 0, 0.35, 1);
+}
+.vyasa-zen-slide-body > .vyasa-reveal-unit[data-measuring] { display: block !important; opacity: 0 !important; transform: none !important; }
+/* Nested bullets (present.js markNestedBullets) fade in one by one after their unit; a restored slide shows them at once. */
+@keyframes vyasa-zen-nested-in { from { opacity: 0; } }
+.vyasa-zen-slide-body:not([data-reveal-restored]) .vyasa-reveal-unit:is([data-reveal-state="entering"], [data-reveal-state="visible"]) [data-nested-reveal] {
+  animation: vyasa-zen-nested-in var(--vyasa-reveal-duration) var(--vyasa-reveal-easing) both;
+  animation-delay: calc(var(--vyasa-nested-index) * var(--vyasa-reveal-stagger));
+}
+@media (prefers-reduced-motion: reduce) {
+  .vyasa-zen-slide-body [data-nested-reveal] { animation: none !important; }
+}
+/* Experiment (?slides_levels, present.js): heading level badges stay visible in slides. */
+[data-slides-levels] .vyasa-zen-content .vyasa-doc-heading > .vyasa-heading-level {
+  display: block;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(0, -50%);
+}
+/* Debug line-gap rulers (?slides_debug): one per gap between consecutive text lines, labelled to the left. */
+.vyasa-zen-ruler-gap { border-left-width: 1px; border-color: rgb(229 72 77 / 0.35); }
+.vyasa-zen-ruler-gap[hidden] { display: none; }
+.vyasa-zen-ruler-line.vyasa-zen-ruler-gap::after { top: 50%; right: 4px; left: auto; transform: translateY(-50%); font-size: 10px; background: transparent; }
+/* A unit's transform and opacity would contain a maximized KG (tasks.css position: fixed) inside the unit. */
+.vyasa-zen-slide-body .vyasa-reveal-unit:has(.tasks-container[data-tasks-maximized="true"]) {
+  transform: none !important;
+  opacity: 1 !important;
+  will-change: auto;
 }

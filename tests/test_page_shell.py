@@ -99,10 +99,10 @@ def test_floating_actions_park_on_screen_edge_and_reveal_together():
 
     assert ".vyasa-floating-actions::before" in source
     assert "transform: translateX(60%)" in source
-    assert "transform: translateX(-1.25rem)" in source
+    assert "transform: translateX(calc(-1 * var(--vyasa-space-5)))" in source
     assert ".vyasa-floating-actions:hover" in source
     assert ".vyasa-floating-actions:focus-within" in source
-    assert "cubic-bezier(.34, 1.56, .64, 1)" in source
+    assert "transition: transform var(--vyasa-duration-base) var(--vyasa-ease)" in source
     assert "prefers-reduced-motion: reduce" in source
 
 
@@ -133,7 +133,7 @@ def test_theme_toggle_icon_keeps_ink_color_on_focus():
 
     assert "#theme-mode-toggle:focus" in css
     assert "--vyasa-emphasis-control-text: var(--vyasa-ink)" in css
-    assert "#theme-mode-toggle [uk-icon]" in css
+    assert "#theme-mode-toggle :is(uk-icon, [uk-icon])" in css
     assert "stroke: currentColor !important" in css
 
 
@@ -145,7 +145,7 @@ def test_git_ref_select_resets_control_alignment():
     assert "appearance: none" in css
     assert "font: inherit" in css
     assert "--vyasa-emphasis-control-menu-text: var(--vyasa-ink)" in css
-    assert "--vyasa-emphasis-control-menu-bg: color-mix(in srgb, var(--vyasa-paper-raised) 94%, var(--vyasa-primary) 6%)" in css
+    assert "--vyasa-emphasis-control-menu-bg: var(--vyasa-surface)" in css
     assert "--vyasa-emphasis-control-text: var(--vyasa-emphasis-control-menu-text)" in css
     assert "--vyasa-emphasis-control-bg-hover: var(--vyasa-emphasis-control-menu-option-hover)" in css
 
@@ -155,7 +155,7 @@ def test_toc_sidebar_defaults_closed_but_open_choice_persists():
     scripts = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
 
     assert "kind === 'toc' && stored !== '0'" in head_init
-    assert "localStorage.setItem(`vyasa-${kind}-sidebar-hidden`, '0')" in scripts
+    assert "closed ? '1' : '0'" in scripts
 
 
 def test_static_layout_hides_updated_label_in_navbar():
@@ -294,25 +294,23 @@ def test_sidebars_bound_main_content_width():
     assert "window.dispatchEvent(new Event('resize'));" in source
 
 
-def test_sidebar_controls_cycle_closed_overlay_and_docked_states():
+def test_sidebar_controls_toggle_closed_and_open_states():
     source = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
     css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
 
-    assert "current === 'closed' ? 'overlay' : current === 'overlay' ? 'docked' : 'closed'" in source
-    assert "data-vyasa-sidebar-state-posts=\"docked\"" in css
-    assert "data-vyasa-sidebar-state-toc=\"docked\"" in css
+    assert "sidebarState(kind) === 'closed' ? 'open' : 'closed'" in source
+    assert "overlay" not in source.split("const sidebarState")[1].split("const togglePostsPanel")[0]
+    assert "html:not([data-vyasa-hide-posts-sidebar])" in css
+    assert "html:not([data-vyasa-hide-toc-sidebar])" in css
 
 
-def test_docked_sidebar_mode_persists_across_a_refresh():
+def test_sidebar_open_state_persists_across_a_refresh():
     head_init = Path("vyasa/static/head-init.js").read_text(encoding="utf-8")
     scripts = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
 
-    assert "localStorage.setItem(`vyasa-${kind}-sidebar-state`, state)" in scripts
-    assert "const state = localStorage.getItem(`vyasa-${kind}-sidebar-state`);" in head_init
-    assert "root.dataset[dataKey] = state;" in head_init
-    assert "// closed: sidebar hidden." in scripts
-    assert "// overlay: sidebar visible but floats over the main view." in scripts
-    assert "// docked: sidebar visible and the main view reserves its width." in scripts
+    assert "localStorage.setItem(`vyasa-${kind}-sidebar-hidden`, closed ? '1' : '0')" in scripts
+    assert "localStorage.getItem(`vyasa-${kind}-sidebar-hidden`)" in head_init
+    assert "sidebar-state" not in scripts + head_init
 
 
 def test_scroll_progress_legacy_owners_are_removed():
@@ -330,8 +328,8 @@ def test_scroll_progress_legacy_owners_are_removed():
 def test_document_heading_spacing_uses_shared_before_and_after_gaps():
     css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
 
-    assert "--vyasa-heading-before-gap: 1rem;" in css
-    assert "--vyasa-heading-after-gap: 0.7rem;" in css
+    assert "--vyasa-heading-before-gap: var(--vyasa-space-5);" in css
+    assert "--vyasa-heading-after-gap: var(--vyasa-space-2);" in css
     assert "#main-content .vyasa-doc-heading {" in css
     assert "#main-content .vyasa-heading-fold {" in css
     assert "#main-content .vyasa-heading-fold-body > :last-child {" in css
@@ -346,9 +344,9 @@ def test_heading_level_indicator_stays_out_of_document_and_slide_layout():
     assert ".vyasa-doc-heading > .vyasa-heading-level {" in css
     assert "position: absolute;" in css
     assert "right: 100%;" in level_rule
-    assert "padding-right: 0.55rem;" in level_rule
-    assert "font: 600 0.875rem/1 var(--vyasa-font-ui);" in level_rule
-    assert "color: color-mix(in srgb, var(--vyasa-ink-soft) 72%, transparent);" in level_rule
+    assert "padding-right: var(--vyasa-space-2);" in level_rule
+    assert "font: var(--vyasa-weight-medium) var(--vyasa-text-xs)/1 var(--vyasa-font-mono);" in level_rule
+    assert "color: var(--vyasa-text-faint);" in level_rule
     assert "white-space: nowrap;" in level_rule
     assert "cursor: pointer;" in level_rule
     assert "@media (hover: hover) and (min-width: 768px)" in css
