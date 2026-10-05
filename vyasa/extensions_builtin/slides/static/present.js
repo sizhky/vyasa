@@ -147,13 +147,52 @@ if (!window.__vyasaZenBound) {
     revealTimers = [];
   };
 
+  // Room kept free above the viewport bottom for the two progress bars.
+  const REVEAL_BOTTOM_RESERVE = 48;
+  // Optical centre: a block placed at the exact midpoint reads as sitting low.
+  const OPTICAL_CENTER = 0.46;
+
+  // Reveal shifts (scroll and recentre) take the section reveal duration, so content
+  // moves at the same speed a new section fades in.
+  const revealShiftMs = () => {
+    const body = getRevealBody(document);
+    const value = body && (body.style.getPropertyValue('--vyasa-reveal-duration') || getComputedStyle(body).getPropertyValue('--vyasa-reveal-duration'));
+    const parsed = parseInt(String(value || '').replace(/ms$/, ''), 10);
+    return Number.isFinite(parsed) ? parsed : 240;
+  };
+  const easeInOutCubic = (t) => (t < 0.5 ? 4 * t * t * t : 1 - ((-2 * t + 2) ** 3) / 2);
+  let glideFrame = 0;
+  let glideTarget = null;
+  const glideScrollTo = (top) => {
+    const to = Math.max(0, Math.round(top));
+    if (glideTarget !== null && Math.abs(to - glideTarget) < 2) return;
+    window.cancelAnimationFrame(glideFrame);
+    glideTarget = null;
+    const from = window.scrollY;
+    if (Math.abs(to - from) < 1) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      window.scrollTo(0, to);
+      return;
+    }
+    const start = performance.now();
+    const duration = Math.max(1, revealShiftMs());
+    const step = (now) => {
+      const t = Math.min(1, (now - start) / duration);
+      window.scrollTo(0, from + (to - from) * easeInOutCubic(t));
+      if (t < 1) glideFrame = window.requestAnimationFrame(step);
+      else glideTarget = null;
+    };
+    glideTarget = to;
+    glideFrame = window.requestAnimationFrame(step);
+  };
+  ['wheel', 'touchstart'].forEach((type) =>
+    window.addEventListener(type, () => { window.cancelAnimationFrame(glideFrame); glideTarget = null; }, { passive: true }));
+
   const getRevealViewportInsets = () => {
     const navbarBottom = document.getElementById('site-navbar')?.getBoundingClientRect().bottom || 0;
-    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
-    const bottomComfort = Math.min(220, Math.max(96, Math.round(viewportHeight * 0.18)));
     return {
       top: Math.max(24, Math.ceil(navbarBottom + 16)),
-      bottom: bottomComfort,
+      bottom: REVEAL_BOTTOM_RESERVE,
     };
   };
 
@@ -166,27 +205,18 @@ if (!window.__vyasaZenBound) {
     const visibleTop = inset.top;
     const visibleBottom = viewportHeight - inset.bottom;
     const availableHeight = Math.max(1, visibleBottom - visibleTop);
-    const preferredTop = Math.min(
-      visibleBottom - Math.min(160, Math.round(viewportHeight * 0.14)),
-      visibleTop + Math.round(availableHeight * 0.58),
-    );
     let targetTop = null;
     if (rect.top < visibleTop) {
       targetTop = window.scrollY + rect.top - visibleTop;
     } else if (rect.bottom > visibleBottom) {
       if (rect.height >= availableHeight) {
         targetTop = window.scrollY + rect.top - visibleTop;
-      } else if (rect.top > preferredTop) {
-        targetTop = window.scrollY + rect.top - preferredTop;
       } else {
         targetTop = window.scrollY + rect.bottom - visibleBottom;
       }
     }
     if (targetTop == null) return;
-    window.scrollTo({
-      top: Math.max(0, Math.round(targetTop)),
-      behavior: 'smooth',
-    });
+    glideScrollTo(targetTop);
   };
 
   const scrollLastVisibleUnit = (direction, root = document) => {
@@ -205,7 +235,7 @@ if (!window.__vyasaZenBound) {
       ? Math.min(page, rect.bottom - visibleBottom)
       : Math.max(-page, rect.top - visibleTop);
     if ((direction === 'down' && delta <= 2) || (direction === 'up' && delta >= -2)) return false;
-    window.scrollBy({ top: Math.round(delta), behavior: 'smooth' });
+    glideScrollTo(window.scrollY + delta);
     slideDebug('reveal-scroll', {
       direction,
       delta: Math.round(delta),
@@ -253,8 +283,38 @@ if (!window.__vyasaZenBound) {
     };
   });
 
-  const showUnit = (unit, { keepVisible = true } = {}) => {
+  // Revealed units sit at the optical centre of the window below the navbar (46% from
+  // the top, never above the nav chrome); once they outgrow that space the offset is 0
+  // and keepUnitInView scrolls instead.
+  const recenterRevealedUnits = (root = document) => {
+    const body = getRevealBody(root);
+    if (!body) return 0;
+    const shown = Array.from(body.querySelectorAll('.vyasa-reveal-unit'))
+      .filter((unit) => unit.dataset.revealState === 'entering' || unit.dataset.revealState === 'visible');
+    const contentHeight = shown.length
+      ? shown.at(-1).getBoundingClientRect().bottom - shown[0].getBoundingClientRect().top
+      : 0;
+    const naturalTop = body.getBoundingClientRect().top + window.scrollY - (parseFloat(getComputedStyle(body).marginTop) || 0);
+    const bandTop = document.getElementById('site-navbar')?.getBoundingClientRect().bottom || 0;
+    const bandHeight = window.innerHeight - REVEAL_BOTTOM_RESERVE - bandTop;
+    const desiredTop = bandTop + (bandHeight - contentHeight) * OPTICAL_CENTER;
+    const offset = Math.max(0, Math.round(desiredTop - naturalTop));
+    const firstPlacement = body.dataset.centerPlaced !== '1';
+    if (firstPlacement) body.style.transition = 'none';
+    body.style.setProperty('--vyasa-zen-center-offset', `${offset}px`);
+    body.dataset.centered = offset > 0 ? '1' : '0';
+    if (firstPlacement) {
+      void body.offsetHeight;
+      body.style.transition = '';
+      body.dataset.centerPlaced = '1';
+    }
+    if (offset > 0 && window.scrollY > 0) glideScrollTo(0);
+    return offset;
+  };
+
+  const showUnit = (unit, { keepVisible: keepVisibleRequested = true } = {}) => {
     unit.dataset.revealState = 'entering';
+    const keepVisible = keepVisibleRequested && recenterRevealedUnits() === 0;
     if (keepVisible) {
       window.requestAnimationFrame(() => keepUnitInView(unit));
     }
@@ -276,6 +336,7 @@ if (!window.__vyasaZenBound) {
           if (typeof window.__vyasaRenderTasksGraphs === 'function') {
             window.__vyasaRenderTasksGraphs(unit);
           }
+          recenterRevealedUnits();
           if (keepVisible) {
             keepUnitInView(unit);
           }
@@ -297,6 +358,7 @@ if (!window.__vyasaZenBound) {
     syncSlideProgressBar();
     window.setTimeout(() => {
       unit.dataset.revealState = 'hidden';
+      recenterRevealedUnits();
     }, Number.isFinite(duration) ? duration : 240);
   };
 
@@ -391,6 +453,7 @@ if (!window.__vyasaZenBound) {
     };
     revealLog('initReveal complete', window.__vyasaRevealDebug);
     syncSlideProgressBar(root);
+    recenterRevealedUnits(root);
     slideDebug('table-snapshot', { reason: 'init', tables: tableSnapshot(root) });
   };
 
@@ -448,6 +511,7 @@ if (!window.__vyasaZenBound) {
     initReveal();
   });
   initReveal();
+  window.addEventListener('resize', () => recenterRevealedUnits());
 
   const toggleOverview = () => {
     const panel = document.getElementById('slide-overview');

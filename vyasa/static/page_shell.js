@@ -119,8 +119,27 @@ export function jumpToTextFragment(root, href) {
 }
 
 // One promise per URL keeps independent widgets on the same pending load.
-export function loadScript(src, isReady) {
+let vendorImports = null;
+
+// Same resolution as the vyasa/vendor.py import map: exact URL, then the longest "/" prefix.
+export function vendorUrl(url) {
+    if (!vendorImports) {
+        try {
+            vendorImports = JSON.parse(document.getElementById('vyasa-vendor-imports')?.textContent || '{}').imports || {};
+        } catch (error) {
+            vendorImports = {};
+        }
+    }
+    if (vendorImports[url]) return vendorImports[url];
+    const prefix = Object.keys(vendorImports)
+        .filter((key) => key.endsWith('/') && url.startsWith(key))
+        .sort((a, b) => b.length - a.length)[0];
+    return prefix ? vendorImports[prefix] + url.slice(prefix.length) : url;
+}
+
+export function loadScript(url, isReady) {
     if (isReady?.()) return Promise.resolve();
+    const src = vendorUrl(url);
     if (loadedScripts.has(src)) return loadedScripts.get(src);
     const existing = document.querySelector(`script[src="${src}"]`);
     const script = existing || document.createElement('script');

@@ -1,3 +1,4 @@
+import { vendorUrl } from '../../../static/page_shell.js';
 import { CODE_LINE_STATE_LABELS, codeLineSpecMap, highlightedLineFragments } from './code_tools_lines.js';
 
 function getCodeThemeMeta(name) {
@@ -5,7 +6,7 @@ function getCodeThemeMeta(name) {
 }
 
 function getHljsThemeHref(themeName) {
-    return `https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/${themeName}.min.css`;
+    return vendorUrl(`https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/${themeName}.min.css`);
 }
 
 function ensureCodeThemeLinks() {

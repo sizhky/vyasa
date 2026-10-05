@@ -16,7 +16,7 @@
 }
 .vyasa-main-shell.vyasa-zen-present {
   padding-inline: 0 !important;
-  padding-top: max(calc(var(--vyasa-zen-stage-h) * 0.04), calc((var(--vyasa-zen-avail-h) - var(--vyasa-zen-stage-h)) / 2)) !important;
+  padding-top: calc(var(--vyasa-zen-stage-h) * 0.04) !important;
   overflow-x: clip;
 }
 .vyasa-zen-present .vyasa-fold-all-button { display: none !important; }
@@ -28,10 +28,11 @@
 /* The stage is centered; content inside starts at the stage's left margin and
    prose stops at a readable measure, leaving the remaining width empty on the right. */
 .vyasa-zen-content {
+  display: flex;
+  flex-direction: column;
   box-sizing: border-box;
   width: var(--vyasa-zen-stage-w);
   min-width: 0;
-  min-height: var(--vyasa-zen-stage-h);
   margin-inline: auto;
   padding-inline: var(--vyasa-zen-pad-x);
   font-size: var(--vyasa-zen-text);
@@ -41,7 +42,7 @@
   max-width: min(100%, var(--vyasa-zen-slide-max-width, var(--vyasa-zen-measure)));
 }
 
-/* Chrome: breadcrumbs and nav share one row; the slide starts a fixed distance below it. */
+/* Chrome: the nav sits alone at the stage's right edge; the slide starts a fixed distance below it. */
 .vyasa-zen-chrome {
   display: flex;
   align-items: center;
@@ -51,14 +52,6 @@
   margin-bottom: calc(var(--vyasa-zen-stage-h) * 0.08);
   font-size: var(--vyasa-text-sm);
 }
-.vyasa-zen-chrome .vyasa-breadcrumbs {
-  flex-wrap: nowrap;
-  min-width: 0;
-  margin: 0 !important;
-  overflow: hidden;
-  white-space: nowrap;
-}
-.vyasa-zen-chrome .vyasa-breadcrumbs > * { flex: none; }
 .vyasa-zen-nav {
   display: inline-flex;
   flex: none;
@@ -95,13 +88,63 @@
 .vyasa-zen-nav-count-total { color: var(--vyasa-text-muted); }
 .vyasa-zen-nav :is(.vyasa-navbar-icon-button, .vyasa-zen-nav-count):not(:disabled):hover {
   background: var(--vyasa-hover);
-  color: var(--vyasa-ink);
+  color: var(--vyasa-ink) !important;
 }
 .vyasa-zen-nav :is(.vyasa-navbar-icon-button, .vyasa-zen-nav-count):focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px var(--vyasa-ring);
 }
 .vyasa-zen-nav .vyasa-navbar-icon-button:disabled { opacity: 0.35; cursor: default; }
+/* Secondary slide actions sit in a toolbar under the nav, shown on hover or keyboard focus. */
+.vyasa-zen-nav-group {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  margin-left: auto;
+}
+.vyasa-zen-nav-group::after { content: ""; position: absolute; top: 100%; right: 0; left: 0; height: var(--vyasa-space-2); }
+.vyasa-zen-nav-tools {
+  position: absolute;
+  top: calc(100% + var(--vyasa-space-2));
+  right: 0;
+  z-index: 20;
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--vyasa-border);
+  border-radius: var(--vyasa-radius-lg);
+  background: var(--vyasa-surface);
+  box-shadow: var(--vyasa-shadow-sm);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-0.25rem);
+  transition: opacity var(--vyasa-duration-fast) var(--vyasa-ease), transform var(--vyasa-duration-fast) var(--vyasa-ease);
+}
+.vyasa-zen-nav-group:is(:hover, :focus-within) .vyasa-zen-nav-tools {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+/* The copy-path control reuses the page action button; here it is a ghost icon button. */
+.vyasa-zen-nav-tools .vyasa-page-action-button.vyasa-zen-nav-copy {
+  width: 2rem;
+  min-width: 2rem;
+  height: 2rem;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: calc(var(--vyasa-radius-lg) - 2px) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--vyasa-text-muted) !important;
+}
+.vyasa-zen-nav-tools .vyasa-page-action-button.vyasa-zen-nav-copy:is(:hover, :focus-visible) {
+  background: var(--vyasa-hover) !important;
+  color: var(--vyasa-ink) !important;
+}
+.vyasa-zen-nav-tools .vyasa-page-action-button.vyasa-zen-nav-copy:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--vyasa-ring) !important; }
+.vyasa-zen-nav-tools .vyasa-zen-nav-copy .vyasa-page-action-icon { width: var(--vyasa-icon-size); height: var(--vyasa-icon-size); }
 
 /* Cover and closing cards: same column and left edge as content slides. */
 .vyasa-zen-cover {
@@ -157,6 +200,8 @@
   font-family: var(--vyasa-zen-font-body);
   line-height: 1.5;
   --vyasa-content-font-size: 1em;
+  --vyasa-heading-before-gap: 0px;
+  --vyasa-heading-after-gap: 0px;
   --vyasa-zen-block-gap: 0.75em;
   --vyasa-zen-heading-gap: 1.75em;
   --vyasa-zen-list-gap: 0.35em;
@@ -212,12 +257,12 @@
 .vyasa-zen-slide-body > :is(h1, h2, h3, h4, h5, h6, [data-reveal-kind="heading"]) + :is(h1, h2, h3, h4, h5, h6, [data-reveal-kind="heading"]) { margin-top: 0.75em !important; }
 
 .vyasa-zen-slide-body ul,
-.vyasa-zen-slide-body ol { padding-left: 1.1em !important; margin-left: 0 !important; }
+.vyasa-zen-slide-body ol { padding-left: 1.75em !important; margin-left: 0 !important; }
 .vyasa-zen-slide-body ul { list-style: disc outside !important; }
 .vyasa-zen-slide-body ul ul { list-style-type: circle !important; }
 .vyasa-zen-slide-body ol { list-style: decimal outside !important; }
 .vyasa-zen-slide-body .uk-list-bullet > li::before { display: none !important; }
-.vyasa-zen-slide-body li { display: list-item !important; padding-left: 0.15em !important; margin-left: 0 !important; }
+.vyasa-zen-slide-body li { display: list-item !important; padding-left: 0.4em !important; margin-left: 0 !important; }
 .vyasa-zen-slide-body li::marker { color: var(--vyasa-text-faint); }
 .vyasa-zen-slide-body ol > li::marker { font-variant-numeric: tabular-nums; }
 .vyasa-zen-slide-body li + li,
@@ -312,7 +357,14 @@
   --vyasa-reveal-stagger: 160ms;
   --vyasa-reveal-distance: 0.5rem;
   --vyasa-reveal-easing: cubic-bezier(0.22, 1, 0.36, 1);
-  padding-bottom: min(28vh, 18rem);
+  margin-top: var(--vyasa-zen-center-offset, 0px);
+  /* Matches REVEAL_BOTTOM_RESERVE in present.js: the last unit can scroll up to the band bottom, no further. */
+  padding-bottom: 3rem;
+}
+/* Scroll room below the content is needed only once the revealed units overflow the band. */
+.vyasa-zen-slide-body[data-reveal-mode="stagger"][data-centered="1"] {
+  padding-bottom: 0;
+  transition: margin-top var(--vyasa-reveal-duration) cubic-bezier(0.65, 0, 0.35, 1);
 }
 .vyasa-reveal-unit {
   display: block;
@@ -383,20 +435,53 @@
 .vyasa-zen-slide-progress-track::after { width: var(--vyasa-slide-progress, 0%); }
 .vyasa-zen-deck-progress-track::after { width: var(--vyasa-deck-progress, 0%); }
 
-.vyasa-zen-slide-end-rule {
-  width: 2.5em;
-  height: 2px;
-  border-radius: var(--vyasa-radius-pill);
-  background: var(--vyasa-border-strong);
-  opacity: 0;
-  transition: opacity var(--vyasa-duration-base) var(--vyasa-ease);
+/* End of slide: a hairline draws outward from the centre, then a hollow diamond settles on it. */
+.vyasa-zen-slide-body > .vyasa-zen-slide-end-rule {
+  position: relative;
+  width: min(14em, 60%);
+  height: 1em;
+  margin: 2em auto 0 !important;
+  color: var(--vyasa-accent-9);
 }
-.vyasa-zen-slide-end-rule[data-reveal-state="visible"] { opacity: 1; }
+.vyasa-zen-slide-end-rule::before,
+.vyasa-zen-slide-end-rule::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+}
+.vyasa-zen-slide-end-rule::before {
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, currentColor 30%, currentColor 70%, transparent);
+  -webkit-mask: linear-gradient(90deg, #000 calc(50% - 0.9em), transparent calc(50% - 0.9em), transparent calc(50% + 0.9em), #000 calc(50% + 0.9em));
+  mask: linear-gradient(90deg, #000 calc(50% - 0.9em), transparent calc(50% - 0.9em), transparent calc(50% + 0.9em), #000 calc(50% + 0.9em));
+  opacity: 0.7;
+  transform: translate(-50%, -50%) scaleX(0);
+  transition: transform 640ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.vyasa-zen-slide-end-rule::after {
+  width: 0.5em;
+  height: 0.5em;
+  border: 1.5px solid currentColor;
+  border-radius: 1px;
+  box-shadow: 0 0 0.75em color-mix(in srgb, currentColor 45%, transparent);
+  opacity: 0;
+  transform: translate(-50%, -50%) rotate(45deg) scale(0.4);
+  transition:
+    opacity 280ms var(--vyasa-ease) 260ms,
+    transform 420ms cubic-bezier(0.34, 1.56, 0.64, 1) 260ms;
+}
+.vyasa-zen-slide-end-rule[data-reveal-state="visible"]::before { transform: translate(-50%, -50%) scaleX(1); }
+.vyasa-zen-slide-end-rule[data-reveal-state="visible"]::after {
+  opacity: 1;
+  transform: translate(-50%, -50%) rotate(45deg) scale(1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .vyasa-zen-slide-end-rule::before,
+  .vyasa-zen-slide-end-rule::after { transition: none; }
+}
 
-.vyasa-zen-breadcrumb-copy { width: 1.5rem; height: 1.5rem; padding: var(--vyasa-space-1); opacity: 0; pointer-events: none; }
-.vyasa-breadcrumbs:hover .vyasa-zen-breadcrumb-copy,
-.vyasa-zen-breadcrumb-copy:focus-visible { opacity: 0.72; pointer-events: auto; }
-.vyasa-zen-breadcrumb-copy .vyasa-page-action-icon { width: var(--vyasa-icon-size); height: var(--vyasa-icon-size); }
 
 /* Overview: a command-menu list over a dimmed slide. The panel passes clicks through so a click outside the card closes it. */
 #slide-overview:not(.hidden) {
@@ -513,5 +598,4 @@
 
 @media (max-width: 640px) {
   .vyasa-zen-present .vyasa-main-shell { max-width: 100vw !important; overflow-x: hidden; }
-  .vyasa-zen-chrome .vyasa-breadcrumbs { display: none; }
 }

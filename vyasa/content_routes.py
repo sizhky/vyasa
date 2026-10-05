@@ -64,15 +64,13 @@ def _prev_next_nav(root, current_path, abbreviations):
     return Div(prev_link, next_link, cls="vyasa-prev-next")
 
 
-def _breadcrumbs(path, slug_to_title, abbreviations, *, disable_boost=False, include_current=False, current_anchor=None, copy_path=None, copy_absolute_path=None):
+def _breadcrumbs(path, slug_to_title, abbreviations):
     parts = [part for part in str(path).split("/") if part]
     if len(parts) < 2:
         return None
-    boost_attrs = {"hx_boost": "false"} if disable_boost else {}
-    items = [Span(A("Posts", href="/", cls="hover:underline whitespace-nowrap", **boost_attrs), cls="inline-flex min-w-0 items-center")]
+    items = [Span(A("Posts", href="/", cls="hover:underline whitespace-nowrap"), cls="inline-flex min-w-0 items-center")]
     acc = []
-    breadcrumb_parts = parts if include_current else parts[:-1]
-    for part in breadcrumb_parts:
+    for part in parts[:-1]:
         acc.append(part)
         # the first segment may carry the git ref as `alias@ref`; show only the
         # alias (the ref already appears as a badge), but keep it in the href.
@@ -84,30 +82,10 @@ def _breadcrumbs(path, slug_to_title, abbreviations, *, disable_boost=False, inc
                     slug_to_title(label_part, abbreviations=abbreviations),
                     href=content_url_for_slug("/".join(acc)),
                     cls="hover:underline whitespace-nowrap",
-                    **boost_attrs,
                 ),
                 cls="inline-flex min-w-0 items-center gap-2",
             )
         )
-    if include_current and current_anchor:
-        items.append(
-            Span(
-                Span(UkIcon("chevron-right", cls="w-3 h-3"), cls="opacity-50"),
-                A(
-                    slug_to_title(current_anchor.replace("-", " "), abbreviations=abbreviations),
-                    href=content_url_for_slug("/".join(parts), fragment=current_anchor),
-                    cls="hover:underline whitespace-nowrap",
-                    **boost_attrs,
-                ),
-                cls="inline-flex min-w-0 items-center gap-2",
-            )
-        )
-    if copy_path and copy_absolute_path:
-        copy_button, copy_toast, copy_target = copy_text_button(
-            "Copy Path", copy_path, "slide-path-clipboard", "slide-path-toast",
-            alternate_text=copy_absolute_path, icon_only=True, extra_cls="vyasa-zen-breadcrumb-copy",
-        )
-        items.extend((copy_button, copy_toast, copy_target))
     return Div(*items, cls="vyasa-breadcrumbs mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-vyasa-muted")
 
 
@@ -394,6 +372,7 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
         render_content = _fallback_home_markdown(get_root_folder().name.upper())
         reveal_config = resolve_slide_reveal_config({})
         slide_width = None
+        slide_relative_path = slide_absolute_path = None
         deck = ZenSlideDeck(render_content)
         overview = deck.outline(doc_path)
         total = len(deck.slides) + 2
@@ -437,7 +416,11 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
             cls="vyasa-navbar-icon-button",
         )
 
-    nav = Div(
+    copy_path_nodes = copy_text_button(
+        "Copy Path", slide_relative_path, "slide-path-clipboard", "slide-path-toast",
+        alternate_text=slide_absolute_path, icon_only=True, extra_cls="vyasa-zen-nav-copy",
+    ) if slide_relative_path and slide_absolute_path else ()
+    nav_controls = Div(
         nav_step("left", "chevron-left", "Previous slide", nav_state["index"] > 1),
         Button(
             Span(str(nav_state["index"])), Span(f'/ {nav_state["total"]}', cls="vyasa-zen-nav-count-total"),
@@ -445,6 +428,11 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
         ),
         nav_step("right", "chevron-right", "Next slide", nav_state["index"] < nav_state["total"]),
         cls="vyasa-zen-nav",
+    )
+    nav = Div(
+        nav_controls,
+        Div(*copy_path_nodes, cls="vyasa-zen-nav-tools") if copy_path_nodes else None,
+        cls="vyasa-zen-nav-group",
     )
     overview_rows = []
     for position, item in enumerate(overview):
@@ -606,15 +594,7 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
                 rendered_slide = from_md(slide_markdown, current_path=doc_path, slide_mode=True)
             slide_body = Div(rendered_slide, cls="vyasa-zen-slide-body")
         content = Div(
-            Div(
-                _breadcrumbs(
-                    doc_path, slug_to_title, abbreviations, disable_boost=True, include_current=True,
-                    current_anchor=deck.anchor(slide_num - 1), copy_path=slide_relative_path,
-                    copy_absolute_path=slide_absolute_path,
-                ),
-                nav,
-                cls="vyasa-zen-chrome",
-            ),
+            Div(nav, cls="vyasa-zen-chrome"),
             slide_body,
             overview_panel,
             Script(f"window.__vyasaZen={json.dumps(nav_state)};"),

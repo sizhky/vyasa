@@ -33,7 +33,11 @@ def extension_asset_url(extension_id: str, asset_name: str) -> str:
 
 
 def asset_url(path: str) -> str:
-    """Return static URL with mtime cache-busting token."""
+    """Return static URL with mtime cache-busting token; CDN URLs resolve to the offline mirror."""
+    if path.startswith("http"):
+        from .vendor import vendor_url
+
+        return vendor_url(path)
     file_path = _static_file_for_url(path)
     if file_path is None:
         return path
