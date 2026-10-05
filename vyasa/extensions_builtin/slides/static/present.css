@@ -358,12 +358,8 @@
   --vyasa-reveal-distance: 0.5rem;
   --vyasa-reveal-easing: cubic-bezier(0.22, 1, 0.36, 1);
   margin-top: var(--vyasa-zen-center-offset, 0px);
-  /* Matches REVEAL_BOTTOM_RESERVE in present.js: the last unit can scroll up to the band bottom, no further. */
-  padding-bottom: 3rem;
-}
-/* Scroll room below the content is needed only once the revealed units overflow the band. */
-.vyasa-zen-slide-body[data-reveal-mode="stagger"][data-centered="1"] {
-  padding-bottom: 0;
+  /* present.js sets the scroll room: what centring needs, or the bottom reserve once content overflows. */
+  padding-bottom: var(--vyasa-zen-scroll-room, 3rem);
   transition: margin-top var(--vyasa-reveal-duration) cubic-bezier(0.65, 0, 0.35, 1);
 }
 .vyasa-reveal-unit {

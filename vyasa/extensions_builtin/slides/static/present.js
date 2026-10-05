@@ -162,10 +162,21 @@ if (!window.__vyasaZenBound) {
     revealTimers = [];
   };
 
-  // Room kept free above the viewport bottom for the two progress bars.
-  const REVEAL_BOTTOM_RESERVE = 48;
-  // Optical centre: a block placed at the exact midpoint reads as sitting low.
-  const OPTICAL_CENTER = 0.46;
+  // Slide area: the window below the navbar minus equal reserves at top and bottom.
+  // The top reserve holds the nav chrome (its natural height above the slide body);
+  // the bottom reserve mirrors it and holds the two progress bars.
+  const REVEAL_MIN_RESERVE = 48;
+  const navbarBottomInDocument = () => {
+    const navbar = document.getElementById('site-navbar');
+    return navbar ? navbar.offsetTop + navbar.offsetHeight : 0;
+  };
+  const naturalBodyTop = (body) =>
+    body.getBoundingClientRect().top + window.scrollY - (parseFloat(getComputedStyle(body).marginTop) || 0);
+  const slideReserve = () => {
+    const body = getRevealBody(document);
+    if (!body) return REVEAL_MIN_RESERVE;
+    return Math.max(REVEAL_MIN_RESERVE, Math.round(naturalBodyTop(body) - navbarBottomInDocument()));
+  };
 
   // Reveal shifts (scroll and recentre) take the section reveal duration, so content
   // moves at the same speed a new section fades in.
@@ -207,7 +218,7 @@ if (!window.__vyasaZenBound) {
     const navbarBottom = document.getElementById('site-navbar')?.getBoundingClientRect().bottom || 0;
     return {
       top: Math.max(24, Math.ceil(navbarBottom + 16)),
-      bottom: REVEAL_BOTTOM_RESERVE,
+      bottom: slideReserve(),
     };
   };
 
@@ -298,38 +309,51 @@ if (!window.__vyasaZenBound) {
     };
   });
 
-  // Revealed units sit at the optical centre of the window below the navbar (46% from
-  // the top, never above the nav chrome); once they outgrow that space the offset is 0
-  // and keepUnitInView scrolls instead.
+  // Revealed units sit at the vertical centre of the slide area; once they outgrow it
+  // the offset is 0 and keepUnitInView scrolls instead.
   const recenterRevealedUnits = (root = document) => {
     const body = getRevealBody(root);
-    if (!body) return 0;
+    if (!body) return false;
     const shown = Array.from(body.querySelectorAll('.vyasa-reveal-unit'))
       .filter((unit) => unit.dataset.revealState === 'entering' || unit.dataset.revealState === 'visible');
     const contentHeight = shown.length
       ? shown.at(-1).getBoundingClientRect().bottom - shown[0].getBoundingClientRect().top
       : 0;
-    const naturalTop = body.getBoundingClientRect().top + window.scrollY - (parseFloat(getComputedStyle(body).marginTop) || 0);
-    const bandTop = document.getElementById('site-navbar')?.getBoundingClientRect().bottom || 0;
-    const bandHeight = window.innerHeight - REVEAL_BOTTOM_RESERVE - bandTop;
-    const desiredTop = bandTop + (bandHeight - contentHeight) * OPTICAL_CENTER;
-    const offset = Math.max(0, Math.round(desiredTop - naturalTop));
+    const naturalTop = naturalBodyTop(body);
+    const reserve = slideReserve();
+    const bandTop = (document.getElementById('site-navbar')?.getBoundingClientRect().bottom || 0) + reserve;
+    const bandHeight = window.innerHeight - reserve - bandTop;
+    const desiredTop = bandTop + (bandHeight - contentHeight) / 2;
+    const fits = contentHeight <= bandHeight;
+    // Content below its centre gets a top margin; content that would need to rise
+    // above the nav chrome scrolls instead, with enough room below to allow it.
+    const shift = Math.round(desiredTop - naturalTop);
+    const offset = fits ? Math.max(0, shift) : 0;
+    const scrollTarget = fits ? Math.max(0, -shift) : null;
     const firstPlacement = body.dataset.centerPlaced !== '1';
     if (firstPlacement) body.style.transition = 'none';
     body.style.setProperty('--vyasa-zen-center-offset', `${offset}px`);
-    body.dataset.centered = offset > 0 ? '1' : '0';
+    if (fits) {
+      const room = shift >= 0 ? 0 : Math.max(0, Math.round(window.innerHeight - desiredTop - contentHeight));
+      body.style.setProperty('--vyasa-zen-scroll-room', `${room}px`);
+    } else {
+      body.style.setProperty('--vyasa-zen-scroll-room', `${reserve}px`);
+    }
     if (firstPlacement) {
       void body.offsetHeight;
       body.style.transition = '';
       body.dataset.centerPlaced = '1';
     }
-    if (offset > 0 && window.scrollY > 0) glideScrollTo(0);
-    return offset;
+    if (scrollTarget !== null) {
+      if (firstPlacement) window.scrollTo(0, scrollTarget);
+      else glideScrollTo(scrollTarget);
+    }
+    return fits;
   };
 
   const showUnit = (unit, { keepVisible: keepVisibleRequested = true } = {}) => {
     unit.dataset.revealState = 'entering';
-    const keepVisible = keepVisibleRequested && recenterRevealedUnits() === 0;
+    const keepVisible = keepVisibleRequested && !recenterRevealedUnits();
     if (keepVisible) {
       window.requestAnimationFrame(() => keepUnitInView(unit));
     }
