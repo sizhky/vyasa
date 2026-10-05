@@ -46,8 +46,12 @@ if (!window.__vyasaZenBound) {
     const cached = slidePageCache.get(new URL(href, location.href).pathname + new URL(href, location.href).search);
     const main = document.getElementById('main-content');
     if (!cached || !main) return false;
-    main.outerHTML = cached;
-    window.history.pushState(null, '', href);
+    // startViewTransition runs swap later; location must change with the DOM, or cacheCurrentSlide stores the old slide under the new path.
+    const swap = () => {
+      main.outerHTML = cached;
+      window.history.pushState(null, '', href);
+    };
+    if (document.startViewTransition) document.startViewTransition(swap); else swap();
     disableNavbarBoost();
     clearRevealTimers();
     pendingRevealDirection = null;
@@ -732,12 +736,25 @@ if (!window.__vyasaZenBound) {
     return `${target.pathname}${target.search}${target.hash}`;
   };
 
+  // Slide change (present.css ::view-transition): the direction picks the keyframes, and the
+  // deck's reveal tokens move to :root because view-transition pseudo-elements inherit from there.
+  const markSlideNav = (direction) => {
+    const root = document.documentElement;
+    const body = getRevealBody(document);
+    root.dataset.slideNav = direction;
+    ['--vyasa-reveal-duration', '--vyasa-reveal-easing'].forEach((name) => {
+      const value = body?.style.getPropertyValue(name).trim();
+      if (value) root.style.setProperty(name, value);
+    });
+  };
+
   const followHref = (href, direction = 'forward', useSegmentCache = false) => {
     if (!href) return false;
     href = retainDebugQuery(href);
     slideDebug('followHref', { href, direction, useSegmentCache });
     pendingRevealDirection = direction;
     pendingSlideBottomScroll = direction === 'back';
+    markSlideNav(direction);
     if (useSegmentCache) {
       cacheCurrentSlide();
       if (restoreCachedSlide(href)) return true;
@@ -745,7 +762,7 @@ if (!window.__vyasaZenBound) {
     if (window.htmx && typeof window.htmx.ajax === 'function') {
       window.htmx.ajax('GET', href, {
         target: '#main-content',
-        swap: 'outerHTML show:window:top settle:0.1s',
+        swap: 'outerHTML transition:true show:window:top settle:0.1s',
       }).then(() => {
         const nextUrl = new URL(href, location.href);
         if (`${window.location.pathname}${window.location.search}` !== `${nextUrl.pathname}${nextUrl.search}`) {
