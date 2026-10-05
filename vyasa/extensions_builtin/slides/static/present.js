@@ -50,6 +50,10 @@ if (!window.__vyasaZenBound) {
     const swap = () => {
       main.outerHTML = cached;
       window.history.pushState(null, '', href);
+      // The cached slide skips initReveal, so it needs its own layout watch and a fresh centre.
+      const body = getRevealBody(document);
+      if (body) watchSlideLayout(body);
+      scheduleRecenter();
     };
     if (document.startViewTransition) document.startViewTransition(swap); else swap();
     disableNavbarBoost();
@@ -578,12 +582,12 @@ if (!window.__vyasaZenBound) {
     unit.dataset.revealState = 'leaving';
     syncSlideProgressBar();
     if (centerPerStep) holdXUntil = performance.now() + (Number.isFinite(duration) ? duration : 420) + revealShiftMs();
-    window.setTimeout(() => {
+    revealTimers.push(window.setTimeout(() => {
       unit.dataset.revealState = 'hidden';
       recenterRevealedUnits();
       const body = getRevealBody(document);
-      if (centerPerStep && body) window.setTimeout(() => recenterSlideX(body, { force: true }), revealShiftMs());
-    }, Number.isFinite(duration) ? duration : 420);
+      if (centerPerStep && body) revealTimers.push(window.setTimeout(() => recenterSlideX(body, { force: true }), revealShiftMs()));
+    }, Number.isFinite(duration) ? duration : 420));
   };
 
   // Late layout (images, diagrams, fonts, tab switches) recentres on the next frame.
@@ -634,6 +638,9 @@ if (!window.__vyasaZenBound) {
       return;
     }
     clearRevealTimers();
+    // A sideways hold and glide belong to the slide that started them; the new slide's first placement must run.
+    holdXUntil = 0;
+    incomingUnits = [];
     const readMs = (value, fallback) => {
       const parsed = parseInt(String(value || '').replace(/ms$/, ''), 10);
       return Number.isFinite(parsed) ? parsed : fallback;
