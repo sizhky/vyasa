@@ -67,10 +67,22 @@ if (!window.__vyasaZenBound) {
 
   const isHeadingUnit = (unit) => unit?.dataset.revealKind === 'heading';
 
-  const getBaselineVisibleCount = (root = document) => {
-    const units = getStepUnits(root);
+  // Baseline: the leading headings, or the first unit when a slide has no heading.
+  const baselineCount = (units) => {
     const headingCount = leadingHeadingCount(units);
     return headingCount > 0 ? headingCount : Math.min(1, units.length);
+  };
+  const getBaselineVisibleCount = (root = document) => baselineCount(getStepUnits(root));
+
+  // Load reveal. Off: the old branch also auto-reveals the first section after the title.
+  const AUTO_REVEAL_FIRST_SECTION = false;
+  const initialRevealUnits = (units) => (AUTO_REVEAL_FIRST_SECTION
+    ? units.slice(0, Math.min(units.length, leadingHeadingCount(units) + 1))
+    : units.slice(0, baselineCount(units)));
+  const showInitialUnit = (body, unit) => {
+    // The old branch's first section follows the same L as a stepped reveal.
+    if (AUTO_REVEAL_FIRST_SECTION && !isHeadingUnit(unit)) glideSidewaysThen(body, [unit], () => showUnit(unit));
+    else showUnit(unit);
   };
 
   const leadingHeadingCount = (units) => {
@@ -191,7 +203,7 @@ if (!window.__vyasaZenBound) {
     const body = getRevealBody(document);
     const value = body && (body.style.getPropertyValue('--vyasa-reveal-duration') || getComputedStyle(body).getPropertyValue('--vyasa-reveal-duration'));
     const parsed = parseInt(String(value || '').replace(/ms$/, ''), 10);
-    return Number.isFinite(parsed) ? parsed : 240;
+    return Number.isFinite(parsed) ? parsed : 420;
   };
   const easeInOutCubic = (t) => (t < 0.5 ? 4 * t * t * t : 1 - ((-2 * t + 2) ** 3) / 2);
   let glideFrame = 0;
@@ -550,19 +562,19 @@ if (!window.__vyasaZenBound) {
       String(
         unit.style.getPropertyValue('--vyasa-reveal-duration')
         || getComputedStyle(unit).getPropertyValue('--vyasa-reveal-duration')
-        || '240ms'
+        || '420ms'
       ).replace(/ms$/, ''),
       10,
     );
     unit.dataset.revealState = 'leaving';
     syncSlideProgressBar();
-    if (centerPerStep) holdXUntil = performance.now() + (Number.isFinite(duration) ? duration : 240) + revealShiftMs();
+    if (centerPerStep) holdXUntil = performance.now() + (Number.isFinite(duration) ? duration : 420) + revealShiftMs();
     window.setTimeout(() => {
       unit.dataset.revealState = 'hidden';
       recenterRevealedUnits();
       const body = getRevealBody(document);
       if (centerPerStep && body) window.setTimeout(() => recenterSlideX(body, { force: true }), revealShiftMs());
-    }, Number.isFinite(duration) ? duration : 240);
+    }, Number.isFinite(duration) ? duration : 420);
   };
 
   // Late layout (images, diagrams, fonts, tab switches) recentres on the next frame.
@@ -613,8 +625,8 @@ if (!window.__vyasaZenBound) {
     const policy = body.dataset.revealPolicy || 'step';
     const navDirection = pendingRevealDirection;
     pendingRevealDirection = null;
-    const stagger = readMs(body.style.getPropertyValue('--vyasa-reveal-stagger') || getComputedStyle(body).getPropertyValue('--vyasa-reveal-stagger'), 160);
-    const fallbackDuration = readMs(body.style.getPropertyValue('--vyasa-reveal-duration') || getComputedStyle(body).getPropertyValue('--vyasa-reveal-duration'), 240);
+    const stagger = readMs(body.style.getPropertyValue('--vyasa-reveal-stagger') || getComputedStyle(body).getPropertyValue('--vyasa-reveal-stagger'), 300);
+    const fallbackDuration = readMs(body.style.getPropertyValue('--vyasa-reveal-duration') || getComputedStyle(body).getPropertyValue('--vyasa-reveal-duration'), 420);
     const baseDelay = Math.max(120, Math.round(stagger * 0.6));
     units.forEach((unit, index) => {
       const style = unit.dataset.revealStyle || body.dataset.revealStyle || 'slide-right';
@@ -655,12 +667,10 @@ if (!window.__vyasaZenBound) {
       }
     }
     if (!backNavMode && policy === 'step') {
-      const headingCount = leadingHeadingCount(units);
-      const initialUnits = units.slice(0, Math.min(units.length, headingCount + 1));
-      initialUnits.forEach((unit, index) => {
+      initialRevealUnits(units).forEach((unit, index) => {
         revealTimers.push(window.setTimeout(() => {
           if (unit.dataset.revealState !== 'visible') {
-            showUnit(unit);
+            showInitialUnit(body, unit);
             revealLog('initial reveal timer fired', {
               index: unit.dataset.revealIndex,
               kind: unit.dataset.revealKind,

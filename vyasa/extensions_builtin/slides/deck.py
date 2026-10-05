@@ -10,8 +10,8 @@ class SlideRevealConfig:
     unit: str = "paragraph-groups"
     style: str = "slide-right"
     policy: str = "step"
-    stagger_ms: int = 160
-    duration_ms: int = 240
+    stagger_ms: int = 300
+    duration_ms: int = 420
     distance: str = "0.5rem"
     easing: str = "cubic-bezier(0.22, 1, 0.36, 1)"
 

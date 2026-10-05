@@ -354,8 +354,8 @@
 
 /* Reveal: a short fade and nudge; a reveal must not read as a transition effect. */
 .vyasa-zen-slide-body[data-reveal-mode="stagger"] {
-  --vyasa-reveal-duration: 240ms;
-  --vyasa-reveal-stagger: 160ms;
+  --vyasa-reveal-duration: 420ms;
+  --vyasa-reveal-stagger: 300ms;
   --vyasa-reveal-distance: 0.5rem;
   --vyasa-reveal-easing: cubic-bezier(0.22, 1, 0.36, 1);
   margin-top: var(--vyasa-zen-center-offset, 0px);
