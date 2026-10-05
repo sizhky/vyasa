@@ -663,3 +663,9 @@
 .vyasa-zen-ruler-gap { border-left-width: 1px; border-color: rgb(229 72 77 / 0.35); }
 .vyasa-zen-ruler-gap[hidden] { display: none; }
 .vyasa-zen-ruler-line.vyasa-zen-ruler-gap::after { top: 50%; right: 4px; left: auto; transform: translateY(-50%); font-size: 10px; background: transparent; }
+/* A unit's transform and opacity would contain a maximized KG (tasks.css position: fixed) inside the unit. */
+.vyasa-zen-slide-body .vyasa-reveal-unit:has(.tasks-container[data-tasks-maximized="true"]) {
+  transform: none !important;
+  opacity: 1 !important;
+  will-change: auto;
+}
