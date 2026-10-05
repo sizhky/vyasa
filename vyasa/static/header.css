@@ -312,11 +312,40 @@ hr {
     margin: var(--vyasa-space-6) 0;
     background: var(--vyasa-border);
 }
+/* Doubled --- (markdown/renderer.py _render_double_rules): the stronger break between posts.
+   A 3px bar that fades at both ends, with a diamond in a gap at the centre. */
 .vyasa-double-rule {
+    position: relative;
+    box-sizing: content-box;
     width: 100%;
-    margin: var(--vyasa-space-6) 0;
+    height: 1rem;
+    /* Padding, not margin: the rule is often a section's last child, where margins are reset. */
+    margin: 0 !important;
+    padding-block: var(--vyasa-space-5);
+}
+.vyasa-double-rule::before,
+.vyasa-double-rule::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+}
+.vyasa-double-rule::before {
+    left: 0;
+    right: 0;
     height: 3px;
-    border-block: 1px solid var(--vyasa-border);
+    border-radius: 3px;
+    transform: translateY(-50%);
+    background: linear-gradient(90deg, transparent, var(--vyasa-border-strong) 18%, var(--vyasa-border-strong) 82%, transparent);
+    -webkit-mask: linear-gradient(90deg, #000 calc(50% - 1.25rem), transparent calc(50% - 1.25rem), transparent calc(50% + 1.25rem), #000 calc(50% + 1.25rem));
+    mask: linear-gradient(90deg, #000 calc(50% - 1.25rem), transparent calc(50% - 1.25rem), transparent calc(50% + 1.25rem), #000 calc(50% + 1.25rem));
+}
+.vyasa-double-rule::after {
+    left: 50%;
+    width: 0.7rem;
+    height: 0.7rem;
+    border: 2px solid var(--vyasa-border-strong);
+    border-radius: 2px;
+    transform: translate(-50%, -50%) rotate(45deg);
 }
 .vyasa-double-rule hr {
     display: none;
