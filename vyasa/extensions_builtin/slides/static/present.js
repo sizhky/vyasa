@@ -940,15 +940,69 @@ if (!window.__vyasaZenBound) {
   };
   const overviewRows = () =>
     Array.from(document.querySelectorAll('#slide-overview [data-zen-overview-node]'));
-  const refreshOverviewVisibility = () => {
+  // Expanding or collapsing a section resizes the card smoothly: leaving rows fade out first,
+  // then the card glides from its old size to its new one (FLIP) while entering rows fade in.
+  const OVERVIEW_RESIZE_MS = 220;
+  const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  let overviewResizeTimer = 0;
+  const resizeOverviewCard = (applyChange) => {
+    const card = document.querySelector('#slide-overview .vyasa-zen-overview-card');
+    if (!card || reducedMotion()) {
+      applyChange();
+      return;
+    }
+    window.clearTimeout(overviewResizeTimer);
+    card.style.transition = 'none';
+    card.style.width = '';
+    card.style.height = '';
+    const before = card.getBoundingClientRect();
+    applyChange();
+    const after = card.getBoundingClientRect();
+    if (Math.abs(after.width - before.width) < 1 && Math.abs(after.height - before.height) < 1) {
+      card.style.transition = '';
+      return;
+    }
+    card.style.width = `${before.width}px`;
+    card.style.height = `${before.height}px`;
+    card.style.overflowY = 'hidden';
+    void card.offsetHeight;
+    card.style.transition = `width ${OVERVIEW_RESIZE_MS}ms var(--vyasa-ease), height ${OVERVIEW_RESIZE_MS}ms var(--vyasa-ease)`;
+    card.style.width = `${after.width}px`;
+    card.style.height = `${after.height}px`;
+    overviewResizeTimer = window.setTimeout(() => {
+      card.style.transition = '';
+      card.style.width = '';
+      card.style.height = '';
+      card.style.overflowY = '';
+    }, OVERVIEW_RESIZE_MS + 20);
+  };
+  const overviewRowVisibility = () => {
     const collapsedDepths = [];
-    overviewRows().forEach((row) => {
+    return overviewRows().map((row) => {
       const depth = Number(row.dataset.depth);
       while (collapsedDepths.length && collapsedDepths.at(-1) >= depth) collapsedDepths.pop();
-      row.hidden = collapsedDepths.length > 0;
-      if (!row.hidden && row.dataset.collapsed === 'true') collapsedDepths.push(depth);
+      const hidden = collapsedDepths.length > 0;
+      if (!hidden && row.dataset.collapsed === 'true') collapsedDepths.push(depth);
+      return [row, hidden];
     });
-    fitOverview();
+  };
+  let overviewLeaveTimer = 0;
+  const refreshOverviewVisibility = () => {
+    window.clearTimeout(overviewLeaveTimer);
+    const plan = overviewRowVisibility();
+    const leaving = plan.filter(([row, hidden]) => hidden && !row.hidden).map(([row]) => row);
+    const entering = plan.filter(([row, hidden]) => !hidden && row.hidden).map(([row]) => row);
+    const apply = () => resizeOverviewCard(() => {
+      plan.forEach(([row, hidden]) => { row.hidden = hidden; delete row.dataset.overviewLeaving; });
+      entering.forEach((row) => {
+        row.dataset.overviewEntering = '';
+        window.setTimeout(() => { delete row.dataset.overviewEntering; }, OVERVIEW_RESIZE_MS * 2);
+      });
+      fitOverview();
+    });
+    if (!leaving.length || reducedMotion()) return apply();
+    leaving.forEach((row) => { row.dataset.overviewLeaving = ''; });
+    overviewLeaveTimer = window.setTimeout(apply, OVERVIEW_RESIZE_MS * 0.6);
   };
   const moveOverviewSelection = (delta) => {
     const links = overviewRows()

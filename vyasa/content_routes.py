@@ -457,7 +457,8 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
             chevron = '<span class="vyasa-zen-overview-chevron-space" aria-hidden="true"></span>'
         if item["href"]:
             row_href = f' data-zen-overview-href="{item["href"]}"'
-            index_control = f'{to_xml(UkIcon("file-text", cls="w-4 h-4"))}<span>{item["index"]}</span>'
+            icon = to_xml(UkIcon("file-text", cls="w-4 h-4"))
+            number = str(item["index"])
             label_control = (
                 f'<a data-zen-overview-focus href="{item["href"]}" hx-get="{item["href"]}" '
                 f'hx-target="#main-content" hx-swap="outerHTML show:window:top settle:0.1s" '
@@ -465,17 +466,26 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
             )
         else:
             row_href = ""
-            index_control = to_xml(UkIcon("folder", cls="w-4 h-4"))
+            icon = to_xml(UkIcon("folder", cls="w-4 h-4"))
+            number = ""
             label_control = label
+        # Table-of-contents row: tree (chevron, icon, title) on the left, slide number on the right.
         overview_rows.append(
             f'<tr data-zen-overview-node{row_href} data-depth="{depth}"{tree_state}{hidden} '
             f'style="--vyasa-overview-depth:{depth}" class="cursor-pointer">'
-            f'<td class="whitespace-nowrap"><span class="inline-flex items-center gap-1">'
-            f'{index_control}</span></td><td>{chevron}{label_control}</td></tr>'
+            f'<td><span class="vyasa-zen-overview-tree">{chevron}<span class="vyasa-zen-overview-icon">{icon}</span>{label_control}</span></td>'
+            f'<td class="vyasa-zen-overview-number">{number}</td></tr>'
         )
     overview_title = to_xml(Div(
-        H1(title, cls="vyasa-zen-overview-title"),
-        Span("Navigate by section", cls="vyasa-zen-overview-subtitle"),
+        Div(
+            H1(title, cls="vyasa-zen-overview-title"),
+            Span("Navigate by section", cls="vyasa-zen-overview-subtitle"),
+        ),
+        A(
+            UkIcon("log-out", cls="w-4 h-4"), Span("Exit to document"), Kbd("⇧ Esc"),
+            href=nav_state["post"], hx_boost="false", data_zen_overview_exit="true",
+            cls="vyasa-zen-overview-exit", aria_label="Exit to document (Shift+Escape)",
+        ),
         cls="vyasa-zen-overview-heading",
     ))
     overview_top_margin = f'<tr class="vyasa-zen-overview-margin" aria-hidden="true"><td colspan="2">{overview_title}</td></tr>'

@@ -536,16 +536,25 @@
   vertical-align: middle;
   transition: background-color var(--vyasa-duration-fast) var(--vyasa-ease);
 }
+/* A row reads like a table of contents: the tree on the left, the slide number right-aligned. */
 #slide-overview [data-zen-overview-node] td:first-child {
-  width: 1%;
   border-radius: var(--vyasa-radius-md) 0 0 var(--vyasa-radius-md);
+  padding-left: calc(var(--vyasa-space-2) + (var(--vyasa-overview-depth) - 1) * var(--vyasa-space-5));
+}
+#slide-overview [data-zen-overview-node] td.vyasa-zen-overview-number {
+  width: 1%;
+  padding-left: var(--vyasa-space-6);
+  border-radius: 0 var(--vyasa-radius-md) var(--vyasa-radius-md) 0;
   color: var(--vyasa-text-muted);
   font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
 }
-#slide-overview [data-zen-overview-node] td:last-child {
-  border-radius: 0 var(--vyasa-radius-md) var(--vyasa-radius-md) 0;
-  padding-left: calc(var(--vyasa-space-3) + (var(--vyasa-overview-depth) - 1) * var(--vyasa-space-5));
-}
+#slide-overview .vyasa-zen-overview-tree { display: flex; align-items: center; gap: var(--vyasa-space-2); }
+#slide-overview .vyasa-zen-overview-icon { display: inline-flex; flex: none; color: var(--vyasa-text-muted); }
+@keyframes vyasa-overview-row-in { from { opacity: 0; transform: translateY(-0.25rem); } }
+#slide-overview [data-zen-overview-node][data-overview-entering] td { animation: vyasa-overview-row-in 220ms var(--vyasa-ease) both; }
+#slide-overview [data-zen-overview-node][data-overview-leaving] td { opacity: 0; transition: opacity 130ms var(--vyasa-ease); }
 #slide-overview [data-zen-overview-node]:hover td { background: var(--vyasa-hover); }
 #slide-overview [data-zen-overview-node]:focus-within td { background: var(--vyasa-active); }
 #slide-overview .vyasa-zen-overview-margin {
@@ -553,12 +562,34 @@
   pointer-events: none;
 }
 #slide-overview .is-compact .vyasa-zen-overview-margin { height: auto; }
+#slide-overview .is-compact .vyasa-zen-overview-margin:last-child > td { padding: 0; }
+/* Title text and the last row's text both sit card padding + one row padding from the card edge. */
 #slide-overview .vyasa-zen-overview-margin > td {
-  padding: 0 var(--vyasa-space-3) var(--vyasa-space-3);
+  padding: var(--vyasa-space-2) var(--vyasa-space-3) var(--vyasa-space-3);
   border: 0;
   background: transparent !important;
   vertical-align: bottom;
 }
+#slide-overview .vyasa-zen-overview-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--vyasa-space-5);
+}
+#slide-overview .vyasa-zen-overview-exit {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--vyasa-space-2);
+  padding: var(--vyasa-space-1) var(--vyasa-space-2);
+  border-radius: var(--vyasa-radius-md);
+  color: var(--vyasa-link);
+  font-size: var(--vyasa-text-sm);
+  text-decoration: none;
+  pointer-events: auto;
+  transition: background-color var(--vyasa-duration-fast) var(--vyasa-ease), color var(--vyasa-duration-fast) var(--vyasa-ease);
+}
+#slide-overview .vyasa-zen-overview-exit:hover { background: var(--vyasa-hover); color: var(--vyasa-link-hover); }
 #slide-overview .vyasa-zen-overview-title {
   margin: 0;
   color: var(--vyasa-ink);
@@ -575,10 +606,11 @@
 #slide-overview a[data-zen-overview-focus] { text-decoration: none; }
 #slide-overview .vyasa-zen-overview-chevron,
 #slide-overview .vyasa-zen-overview-chevron-space {
-  display: inline-block;
-  width: 1.25rem;
-  margin-right: var(--vyasa-space-2);
-  vertical-align: middle;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
 }
 #slide-overview .vyasa-zen-overview-chevron::before {
   display: inline-block;

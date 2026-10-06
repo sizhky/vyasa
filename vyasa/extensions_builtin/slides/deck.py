@@ -303,7 +303,7 @@ class ZenSlideDeck:
                     crumbs.append(split_heading_text_and_id(match.group(2).strip())[0])
             if not crumbs:
                 items.append({
-                    "index": index + 1, "label": f"Slide {index + 1}", "depth": 1,
+                    "index": index + 1, "label": "Introduction" if index == 1 else f"Slide {index + 1}", "depth": 1,
                     "href": content_url_for_slug(doc_path, prefix="/slides", suffix=f"/{slide_slug(index + 1)}"),
                 })
                 continue
