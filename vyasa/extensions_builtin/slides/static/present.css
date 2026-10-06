@@ -1,7 +1,9 @@
-/* Stage: the largest 16:9 box that fits below the navbar. Text size, margins and
-   gaps are fractions of the stage, so a slide keeps its proportions on any screen. */
+/* Stage: the largest 16:9 box that fits the window; slide mode renders no navbar.
+   Text size, margins and gaps are fractions of the stage, so a slide keeps its
+   proportions on any screen. */
 .vyasa-zen-present {
-  --vyasa-zen-avail-h: calc(100dvh - var(--vyasa-navbar-height, 3.75rem));
+  --vyasa-navbar-height: 0px;
+  --vyasa-zen-avail-h: 100dvh;
   --vyasa-zen-stage-w: min(100vw, calc(var(--vyasa-zen-avail-h) * 16 / 9));
   --vyasa-zen-stage-h: calc(var(--vyasa-zen-stage-w) * 9 / 16);
   --vyasa-zen-pad-x: calc(var(--vyasa-zen-stage-w) * 0.07);
