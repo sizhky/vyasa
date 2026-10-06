@@ -282,9 +282,11 @@
   min-width: 100%;
   max-width: var(--vyasa-zen-inner-w);
 }
+/* A code block is as wide as its longest line, like a table; short snippets do not span the column. */
 .vyasa-zen-slide-body .code-block {
   position: relative;
   overflow: hidden;
+  min-width: min(100%, 24em);
 }
 .vyasa-zen-slide-body .code-block pre {
   max-width: 100%;
