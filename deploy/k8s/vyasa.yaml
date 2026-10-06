@@ -1,0 +1,100 @@
+# Single-replica Vyasa. Replace every REPLACE_ME before `kubectl apply`.
+# Secrets live in `vyasa-secrets`; create it with the command in README.md.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vyasa-data
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vyasa
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: {app: vyasa}
+  template:
+    metadata:
+      labels: {app: vyasa}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+      containers:
+        - name: vyasa
+          image: REPLACE_ME/vyasa:latest
+          ports:
+            - containerPort: 5001
+          env:
+            - name: VYASA_GIT_REPOS
+              value: "docs=git@github.com:REPLACE_ME/docs.git"
+            - name: VYASA_GIT_FETCH_INTERVAL
+              value: "30"
+            - name: VYASA_AUTH_REQUIRED
+              value: "true"
+            - name: VYASA_MICROSOFT_TENANT_ID
+              value: "REPLACE_ME"
+            - name: VYASA_MICROSOFT_ALLOWED_DOMAINS
+              value: "penguinai.co"
+            - name: VYASA_MICROSOFT_CLIENT_ID
+              valueFrom: {secretKeyRef: {name: vyasa-secrets, key: microsoft-client-id}}
+            - name: VYASA_MICROSOFT_CLIENT_SECRET
+              valueFrom: {secretKeyRef: {name: vyasa-secrets, key: microsoft-client-secret}}
+            - name: VYASA_SESSION_SECRET
+              valueFrom: {secretKeyRef: {name: vyasa-secrets, key: session-secret}}
+            - name: GIT_SSH_COMMAND
+              value: "ssh -i /etc/vyasa/ssh/id_ed25519 -o UserKnownHostsFile=/etc/vyasa/ssh/known_hosts -o IdentitiesOnly=yes"
+          volumeMounts:
+            - {name: data, mountPath: /data}
+            - {name: ssh, mountPath: /etc/vyasa/ssh, readOnly: true}
+          readinessProbe:
+            tcpSocket: {port: 5001}
+            periodSeconds: 10
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {memory: 1Gi}
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: vyasa-data}
+        - name: ssh
+          secret:
+            secretName: vyasa-secrets
+            defaultMode: 0440
+            items:
+              - {key: ssh-key, path: id_ed25519}
+              - {key: known-hosts, path: known_hosts}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vyasa
+spec:
+  selector: {app: vyasa}
+  ports:
+    - port: 80
+      targetPort: 5001
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vyasa
+spec:
+  tls:
+    - hosts: [REPLACE_ME.penguinai.co]
+      secretName: vyasa-tls
+  rules:
+    - host: REPLACE_ME.penguinai.co
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: {name: vyasa, port: {number: 80}}

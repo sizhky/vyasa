@@ -1,0 +1,10 @@
+*
+!pyproject.toml
+!setup.py
+!settings.ini
+!MANIFEST.in
+!README.md
+!LICENSE
+!vyasa
+**/__pycache__
+**/*.pyc
