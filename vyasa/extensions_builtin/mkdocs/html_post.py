@@ -13,7 +13,7 @@ import re
 MARKER = re.compile(r'<span class="vyasa-mkdocs-attrs" data-mkdocs-target="(inline|block)" data-mkdocs-attrs="([^"]*)"></span>')
 ABBR_COMMENT = re.compile(r"<!-- vyasa-mkdocs-abbr (.*?) -->", re.DOTALL)
 TAG_ATTR = re.compile(r'\s([\w:-]+)(?:="([^"]*)")?')
-HEADING = re.compile(r'<h([1-6]) id="([^"]*)"[^>]*>.*?<span class="vyasa-heading-text">(.*?)</span>', re.DOTALL)
+HEADING = re.compile(r'(<h([1-6]) id="([^"]*)"[^>]*>)(.*?<span class="vyasa-heading-text">(.*?)</span>)', re.DOTALL)
 
 
 def mkdocs_slug(text: str, separator: str = "-") -> str:
@@ -36,11 +36,12 @@ def add_slug_aliases(text: str) -> str:
     ids = set(re.findall(r'\sid="([^"]+)"', text))
 
     def alias(match):
-        slug = mkdocs_slug(match.group(3))
+        slug = mkdocs_slug(match.group(5))
         if not slug or slug in ids:
             return match.group(0)
         ids.add(slug)
-        return f'<span id="{slug}" class="vyasa-mkdocs-anchor"></span>' + match.group(0)
+        # The alias sits inside the heading, so it moves, hides, and reveals with it.
+        return f'{match.group(1)}<span id="{slug}" class="vyasa-mkdocs-anchor"></span>{match.group(4)}'
 
     return HEADING.sub(alias, text)
 

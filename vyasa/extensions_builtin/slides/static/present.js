@@ -636,8 +636,9 @@ if (!window.__vyasaZenBound) {
   document.fonts?.ready.then(scheduleRecenter);
 
   // Nested bullets fade in one by one after their unit reveals; CSS reads the index.
+  // Cards of a card grid (MkDocs `grid cards`) fade in the same way, in grid order.
   const markNestedBullets = (units) => units.forEach((unit) => {
-    unit.querySelectorAll('li li').forEach((item, index) => {
+    unit.querySelectorAll('li li, .grid.cards > :is(ul, ol) > li, .grid > .card').forEach((item, index) => {
       item.dataset.nestedReveal = '';
       item.style.setProperty('--vyasa-nested-index', String(index + 1));
     });

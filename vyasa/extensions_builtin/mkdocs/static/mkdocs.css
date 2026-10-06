@@ -145,3 +145,9 @@ ol[type="a"] { list-style-type: lower-alpha !important; }
 ol[type="A"] { list-style-type: upper-alpha !important; }
 ol[type="i"] { list-style-type: lower-roman !important; }
 ol[type="I"] { list-style-type: upper-roman !important; }
+
+/* Slides: the slide list rules (present.css) must not turn grid cards back into bullets. */
+.vyasa-zen-slide-body .grid.cards > :is(ul, ol) { padding-left: 0 !important; list-style: none !important; }
+.vyasa-zen-slide-body .grid.cards > :is(ul, ol) > li { display: block !important; padding: var(--vyasa-space-4) !important; list-style: none !important; }
+.vyasa-zen-slide-body .grid.cards > :is(ul, ol) > li + li { margin-top: 0 !important; }
+.vyasa-zen-slide-body .grid.cards > :is(ul, ol) > li::marker { content: none; }

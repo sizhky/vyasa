@@ -142,157 +142,116 @@ def split_top_level_html(fragment):
     return chunks
 
 
-def split_markdown_paragraph_groups(markdown_text):
-    groups, current = [], []
-    in_fence = False
-    tabs_depth = 0
-    for line in markdown_text.splitlines():
-        stripped = line.strip()
-        if re.match(r"^(```+|~~~+)", stripped):
-            in_fence = not in_fence
-        elif not in_fence and stripped == ":::tabs":
-            tabs_depth += 1
-        elif not in_fence and tabs_depth and stripped == ":::":
-            tabs_depth -= 1
-        if not in_fence and stripped == "---":
-            continue
-        if not in_fence and not tabs_depth and not stripped:
-            if current:
-                groups.append("\n".join(current).strip())
-                current = []
-            continue
-        current.append(line)
-    if current:
-        groups.append("\n".join(current).strip())
-    groups = [group for group in groups if group]
-    exploded = []
-    for group in groups:
-        if _contains_tabs_group(group):
-            exploded.append(group)
-        elif _contains_list_group(group) and not _contains_fenced_block(group):
-            exploded.extend(_split_mixed_list_group(group))
-        else:
-            exploded.append(group)
-    return exploded
-
-
-def _is_heading_only_group(group):
-    lines = [line.strip() for line in (group or "").splitlines() if line.strip()]
-    return len(lines) == 1 and bool(re.match(r"^#{1,6}\s+", lines[0]))
-
-
-def _is_list_group(group):
-    lines = [line.strip() for line in (group or "").splitlines() if line.strip()]
-    return bool(lines) and all(
-        re.match(r"^\s*([-*+]\s+|\d+\.\s+)", line) for line in lines
-    )
-
-
-def _split_mixed_list_group(group):
-    parts = []
-    prelude = []
-    current_item = []
-    for line in (group or "").splitlines():
-        if re.match(r"^([-*+]\s+|\d+\.\s+)", line):
-            if current_item:
-                parts.append("\n".join(current_item).strip())
-            elif prelude:
-                parts.append("\n".join(prelude).strip())
-                prelude = []
-            current_item = [line]
-            continue
-        if current_item:
-            current_item.append(line)
-        else:
-            prelude.append(line)
-    if current_item:
-        parts.append("\n".join(current_item).strip())
-    elif prelude:
-        parts.append("\n".join(prelude).strip())
-    return [part for part in parts if part]
-
-
-def _contains_list_group(group):
-    lines = [line.strip() for line in (group or "").splitlines() if line.strip()]
-    return any(re.match(r"^([-*+]\s+|\d+\.\s+)", line) for line in lines)
-
-
-def _contains_fenced_block(group):
-    return any(re.match(r"^\s*(```+|~~~+)", line) for line in (group or "").splitlines())
-
-
-def _contains_tabs_group(group):
-    text = group or ""
-    return ":::tabs" in text or "::tab{" in text
+_DIRECTIVE = re.compile(r"^(?:<p\b[^>]*>\s*)?<vyasa-reveal(?P<attrs>[^>]*)></vyasa-reveal>(?:\s*</p>)?$")
+_LIST = re.compile(r"^<(ul|ol)\b([^>]*)>(.*)</\1>$", re.DOTALL)
+_SUPPORT_ONLY = re.compile(r"^<(script|style|link)\b", re.IGNORECASE)
+_POPOVER = re.compile(r"^<\w+\b[^>]*\bid=\"([^\"]+)\"[^>]*\bpopover\b")
 
 
 def _parse_reveal_directive_chunk(chunk):
-    match = re.fullmatch(r"<vyasa-reveal(?P<attrs>[^>]*)></vyasa-reveal>", chunk.strip())
+    match = _DIRECTIVE.match(chunk.strip())
     if not match:
         return None
-    attrs = {}
-    for key, value in re.findall(r'data-([a-z]+)="([^"]+)"', match.group("attrs")):
-        attrs[key] = value
-    return attrs
+    return dict(re.findall(r'data-([a-z]+)="([^"]+)"', match.group("attrs")))
+
+
+def split_list_items(chunk):
+    """One chunk per top-level item of a rendered list; an ordered list keeps its numbering.
+
+    >>> split_list_items('<ol class="x"><li>a</li><li>b<ul><li>c</li></ul></li></ol>')
+    ['<ol class="x" start="1"><li>a</li></ol>', '<ol class="x" start="2"><li>b<ul><li>c</li></ul></li></ol>']
+    >>> split_list_items('<p>text</p>')
+    ['<p>text</p>']
+    """
+    match = _LIST.match(chunk.strip())
+    if not match:
+        return [chunk]
+    tag, attrs, inner = match.groups()
+    items = [item for item in split_top_level_html(inner) if item.startswith("<li")]
+    if len(items) < 2:
+        return [chunk]
+    start_match = re.search(r'\bstart="(\d+)"', attrs)
+    first = int(start_match.group(1)) if start_match else 1
+    attrs = re.sub(r'\s*\bstart="\d+"', "", attrs)
+    if tag == "ol":
+        return [f'<ol{attrs} start="{first + index}">{item}</ol>' for index, item in enumerate(items)]
+    return [f"<ul{attrs}>{item}</ul>" for item in items]
+
+
+def _is_anchor(chunk):
+    """True for an empty `<a>` or `<span>`, such as a link target with no content.
+
+    >>> _is_anchor('<span id="a"></span>'), _is_anchor('<a id="b"> </a>'), _is_anchor('<div class="d2"></div>')
+    (True, True, False)
+    """
+    return bool(re.fullmatch(r"<(a|span)\b[^>]*>\s*</\1>", chunk.strip(), re.IGNORECASE))
+
+
+def _unit_kind(chunk):
+    if re.match(r"^<h[1-6]\b", chunk):
+        return "heading"
+    return "list" if re.match(r"^<(ul|ol)\b", chunk) else "content"
 
 
 def build_slide_reveal_units(markdown_text, *, render_fragment, current_path, config: SlideRevealConfig):
+    """Reveal units from the rendered slide: one per top-level HTML element.
+
+    The renderer alone decides where a block ends, so callouts, tabs, card grids, and
+    footnotes stay whole. `paragraph-groups` also reveals a list one item at a time.
+    Support elements join a unit: scripts and styles join the unit before them, and a
+    popover joins the unit that holds its trigger.
+    """
     if not config.enabled:
         return []
-    pending = {}
-    units = []
-    if config.unit == "paragraph-groups":
-        content, tooltips = extract_tooltips(inject_reveal_directives(markdown_text))
-        definitions = format_tooltip_definitions(tooltips)
-        for group in split_markdown_paragraph_groups(content):
-            directive = _parse_reveal_directive_chunk(group)
-            if directive:
-                pending.update(directive)
-                continue
-            kind = "content"
-            if _is_heading_only_group(group):
-                kind = "heading"
-            elif _contains_list_group(group):
-                kind = "list"
-            units.append({
-                "html": render_fragment(
-                    f"{group}\n\n{definitions}" if definitions else group,
-                    current_path=current_path,
-                    slide_mode=True,
-                ),
-                "kind": kind,
-                **pending,
-            })
-            pending = {}
-        return [unit for unit in units if unit.get("html", "").strip()]
-
     fragment = render_fragment(inject_reveal_directives(markdown_text), current_path=current_path, slide_mode=True)
-    for chunk in split_top_level_html(fragment):
+    chunks = split_top_level_html(fragment)
+    if config.unit == "paragraph-groups":
+        chunks = [piece for chunk in chunks for piece in split_list_items(chunk)]
+    units, pending, popovers, lead = [], {}, [], ""
+    for chunk in chunks:
         directive = _parse_reveal_directive_chunk(chunk)
+        if directive is None and _is_anchor(chunk):
+            lead += chunk  # a link target belongs to the block after it
+            continue
         if directive is not None:
             pending.update(directive)
+        elif re.match(r"^<hr\b", chunk):
             continue
-        units.append({"html": chunk, "kind": "content", **pending})
-        pending = {}
+        elif popover := _POPOVER.match(chunk):
+            popovers.append((popover.group(1), chunk))
+        elif _SUPPORT_ONLY.match(chunk) and units:
+            units[-1]["html"] += chunk
+        else:
+            units.append({"html": lead + chunk, "kind": _unit_kind(chunk), **pending})
+            pending, lead = {}, ""
+    if lead and units:
+        units[-1]["html"] += lead
+    for popover_id, chunk in popovers:
+        owner = next((unit for unit in units if f'popovertarget="{popover_id}"' in unit["html"]), units[-1] if units else None)
+        if owner is not None:
+            owner["html"] += chunk
     return [unit for unit in units if unit.get("html", "").strip()]
 
 
+_SEGMENT_COUNTS: dict[tuple, int] = {}
+
+
 def count_slide_progress_segments(markdown_text, *, render_fragment, current_path, config):
-    counter_render = render_fragment if config.unit == "top-level-blocks" else (
-        lambda text, current_path=None, slide_mode=False: text
-    )
-    units = build_slide_reveal_units(
-        markdown_text, render_fragment=counter_render, current_path=current_path, config=config,
-    )
-    step_units = [
-        unit for unit in units
-        if (unit.get("style") or config.style) not in {"none", "instant"}
-    ]
-    first_content = next(
-        (index for index, unit in enumerate(step_units) if unit.get("kind") != "heading"),
-        len(step_units),
-    )
-    return sum(1 for unit in step_units[first_content:] if unit.get("kind") != "heading")
+    """Revealable non-heading units after a slide's leading headings.
+
+    Counting needs the rendered units, so counts are cached per slide text and config.
+    """
+    from ...config import config_generation
+
+    key = (markdown_text, current_path, config, config_generation())
+    if key not in _SEGMENT_COUNTS:
+        if len(_SEGMENT_COUNTS) > 4096:
+            _SEGMENT_COUNTS.clear()
+        units = build_slide_reveal_units(markdown_text, render_fragment=render_fragment, current_path=current_path, config=config)
+        step_units = [unit for unit in units if (unit.get("style") or config.style) not in {"none", "instant"}]
+        first_content = next((index for index, unit in enumerate(step_units) if unit.get("kind") != "heading"), len(step_units))
+        _SEGMENT_COUNTS[key] = sum(1 for unit in step_units[first_content:] if unit.get("kind") != "heading")
+    return _SEGMENT_COUNTS[key]
 
 
 class ZenSlideDeck:
