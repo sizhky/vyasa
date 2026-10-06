@@ -14,6 +14,7 @@ from .document_pages import (
     DocumentActionContext,
     DocumentPage,
     document_header,
+    document_page_options,
     copy_text_button,
     frontmatter_error_nodes,
     frontmatter_metadata_block,
@@ -56,7 +57,9 @@ def _fallback_home_markdown(blog_title):
 
 
 def _prev_next_nav(root, current_path, abbreviations):
-    prev_item, next_item = get_adjacent_posts(root, current_path, abbreviations=abbreviations)
+    runtime = get_extension_runtime()
+    provided = runtime.adjacent_provider(current_path) if runtime and runtime.adjacent_provider else None
+    prev_item, next_item = provided if provided is not None else get_adjacent_posts(root, current_path, abbreviations=abbreviations)
     if not prev_item and not next_item:
         return None
     prev_link = A(f"← {prev_item['title']}", href=prev_item["href"], cls="vyasa-prev-link") if prev_item else Div()
@@ -333,7 +336,7 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
         pager if pager else Div(),
     )
     layout_start = time.time()
-    result = DocumentPage(post_title, path, post_content, file_path=str(file_path), toc_source=raw_content).render(layout, htmx=htmx, blog_title=get_blog_title(), auth=request.scope.get("auth"))
+    result = DocumentPage(post_title, path, post_content, file_path=str(file_path), toc_source=raw_content, **document_page_options(metadata, path)).render(layout, htmx=htmx, blog_title=get_blog_title(), auth=request.scope.get("auth"))
     logger.debug(f"[DEBUG] Layout generation took {(time.time() - layout_start) * 1000:.2f}ms")
     logger.debug(f"[DEBUG] ########## REQUEST COMPLETE: {(time.time() - request_start) * 1000:.2f}ms TOTAL ##########\n")
     return result
@@ -626,7 +629,7 @@ def render_index(htmx, request, *, get_blog_title, find_index_file_fn, parse_fro
     blog_title = get_blog_title()
     index_file = find_index_file_fn()
     if index_file:
-        _, raw_content = parse_frontmatter(index_file)
+        index_metadata, raw_content = parse_frontmatter(index_file)
         page_title, render_content = resolve_markdown_title(index_file)
         index_path = str(index_file.relative_to(get_root_folder()).with_suffix(""))
         relative_file_path = content_slug_for_path(index_file, strip_suffix=False) or index_file.name
@@ -644,7 +647,7 @@ def render_index(htmx, request, *, get_blog_title, find_index_file_fn, parse_fro
             *action_aux_nodes,
             Div(from_md(render_content, current_path=index_path), data_vyasa_document_body="true", cls="w-full"),
         )
-        result = DocumentPage(page_title, index_path, page_content, toc_source=raw_content).render(layout, htmx=htmx, blog_title=blog_title, auth=request.scope.get("auth"))
+        result = DocumentPage(page_title, index_path, page_content, toc_source=raw_content, **document_page_options(index_metadata, index_path)).render(layout, htmx=htmx, blog_title=blog_title, auth=request.scope.get("auth"))
         if logger:
             logger.debug("Request complete path=/ route=index total={:.2f}ms", (time.time() - request_start) * 1000)
         return result

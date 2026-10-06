@@ -99,6 +99,17 @@ class DocumentPage:
         return bool(self.file_path) and PathCls(self.file_path).is_absolute()
 
 
+def document_page_options(metadata: dict, current_path: str) -> dict:
+    """DocumentPage overrides that extensions derive from a page's front matter."""
+    from .extensions import get_extension_runtime
+
+    runtime = get_extension_runtime()
+    options: dict = {}
+    for provider in runtime.document_page_option_providers if runtime else ():
+        options.update(provider(metadata or {}, current_path) or {})
+    return {key: value for key, value in options.items() if key in {"show_toc", "show_sidebar", "full_width"}}
+
+
 @dataclass(frozen=True)
 class DocumentActionContext:
     title: str
@@ -217,6 +228,21 @@ def present_button(slug: str):
         data_vyasa_present_document="true",
         data_tooltip="Present document",
         aria_label="Present document",
+        cls="vyasa-page-action-button vyasa-page-action-tooltip inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm",
+    )
+
+
+def external_action_link(label: str, href: str, tooltip: str):
+    """Page action that opens an outside URL, styled like the other page actions."""
+    return A(
+        action_icon("external-link"),
+        label,
+        href=href,
+        target="_blank",
+        rel="noopener",
+        hx_boost="false",
+        data_tooltip=tooltip,
+        aria_label=tooltip,
         cls="vyasa-page-action-button vyasa-page-action-tooltip inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm",
     )
 

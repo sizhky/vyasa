@@ -846,7 +846,9 @@ def navbar(
         context = {"current_path": current_path, "roles": roles}
         controls = [node for provider in runtime.navbar_control_providers if (node := provider(context))]
     ref_switcher = controls[0] if len(controls) == 1 else (Div(*controls, cls="flex items-center gap-3") if controls else None)
-    return navbar_view(get_blog_title(), theme_toggle(), show_mobile_menus, htmx_nav, posts_menu_items, compact_mode, updated_label, mobile_extra_controls, ref_switcher=ref_switcher)
+    view = navbar_view(get_blog_title(), theme_toggle(), show_mobile_menus, htmx_nav, posts_menu_items, compact_mode, updated_label, mobile_extra_controls, ref_switcher=ref_switcher)
+    bands = [node for provider in runtime.navbar_band_providers if (node := provider({"current_path": current_path, "roles": roles}))] if runtime else []
+    return Div(view, *bands) if bands else view
 
 
 def _posts_sidebar_fingerprint():
@@ -1441,6 +1443,16 @@ def _ref_from_current_path(current_path):
 
 
 def get_posts(roles=None, current_path=""):
+    runtime = get_extension_runtime()
+    if runtime and runtime.posts_tree_provider:
+        items = runtime.posts_tree_provider(
+            roles=roles,
+            current_path=current_path,
+            can_read=lambda route: is_allowed(route, roles or [], _rbac_rules),
+            row_decorators=_sidebar_row_decorators(),
+        )
+        if items is not None:
+            return items
     parsed = _ref_from_current_path(current_path)
     if parsed:
         root_id, ref, active_parts = parsed

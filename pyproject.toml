@@ -30,6 +30,7 @@ dependencies = [
     "python-fasthtml>=0.6.9",
     "mistletoe>=1.4.0",
     "python-frontmatter>=1.1.0",
+    "pyyaml>=6.0",
     "uvicorn>=0.30.0",
     "monsterui>=0.0.37",
     "loguru>=0.7.3",

@@ -9,6 +9,7 @@ Vyasa turns a folder of Markdown files into a navigable site with a live Python 
 | How do I run it and shape the site? | [Configuration and CLI](configuration.md) | The server entry point and config precedence live there. |
 | What can I write in Markdown? | [Writing in Vyasa Markdown](markdown-features.md) | It covers the authoring surface before internals. |
 | How do diagrams fit into a page? | [Mermaid diagrams](mermaid-diagrams.md) or [D2 diagrams](d2-diagrams.md) | Each renderer has different knobs and runtime behavior. |
+| Can Vyasa serve my MkDocs project? | [MkDocs compatibility](mkdocs-compatibility.md) | It lists the `mkdocs.yml` keys, nav features, and Markdown syntax that Vyasa supports, and the ones it does not. |
 | How do I restyle the shell and article? | [Theming and CSS](theming.md) | It separates page chrome from content styling. |
 | How do auth and path rules work? | [Security and access](security.md) | It explains the live app trust boundaries. |
 | How do I sort homepage cards? | [Configuration and CLI](configuration.md) | `home_sort` lives in root `.vyasa` and only affects the blog-style homepage card feed. |

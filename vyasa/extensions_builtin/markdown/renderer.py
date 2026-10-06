@@ -17,7 +17,7 @@ from monsterui.all import UkIcon, apply_classes
 from ...assets import asset_url, bundle_asset_nodes_for_collector
 from ...extensions import request_asset_bundle
 from ...config import get_config
-from ...extensions import bind_asset_collector, current_asset_collector, get_extension_runtime, refresh_extension_runtime
+from ...extensions import bind_asset_collector, current_asset_collector, get_extension_runtime, refresh_extension_runtime, translate_markdown_source
 from ...helpers import (
     _plain_text_from_html,
     content_path_for_slug,
@@ -968,6 +968,7 @@ def from_md(content: str, img_dir: str | None = None, current_path: str | None =
         slide_mode=slide_mode,
         asset_collector=asset_collector,
     )
+    content = translate_markdown_source(content)
     content = _rewrite_raw_html_urls(content, current_path)
     if img_dir is None and current_path:
         path_parts = Path(current_path).parts

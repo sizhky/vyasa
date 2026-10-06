@@ -24,6 +24,7 @@ def load_builtin_extensions():
     from . import code_tools
     from . import link_preview
     from . import mermaid
+    from . import mkdocs
     from . import mdx
     from . import rbac_admin
     from . import scoped_custom_css
@@ -49,6 +50,7 @@ def load_builtin_extensions():
         wikilinks.EXTENSION,
         tabs.EXTENSION,
         mermaid.EXTENSION,
+        mkdocs.EXTENSION,
         d2.EXTENSION,
         debug_perf.EXTENSION,
         cytograph.EXTENSION,
