@@ -317,7 +317,7 @@ def test_slide_runtime_supports_vim_navigation_and_delayed_first_reveal():
     assert "revealTimers.push(window.setTimeout(() =>" in source
     assert "const headingCount = leadingHeadingCount(units);" in source
     assert "const initialUnits = units.slice(0, Math.min(units.length, headingCount + 1));" in source
-    assert "revealLog('initial reveal timer fired'" in source
+    assert "revealLog('initial reveal step'" in source
     assert "slideDebug('keydown'" in source
     assert "slideDebug('table-snapshot'" in source
     assert "syncSlideProgressBar" in source

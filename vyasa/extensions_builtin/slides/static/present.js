@@ -89,11 +89,6 @@ if (!window.__vyasaZenBound) {
   const initialRevealUnits = (units) => (AUTO_REVEAL_FIRST_SECTION
     ? units.slice(0, Math.min(units.length, leadingHeadingCount(units) + 1))
     : units.slice(0, baselineCount(units)));
-  const showInitialUnit = (body, unit) => {
-    // The old branch's first section follows the same L as a stepped reveal.
-    if (AUTO_REVEAL_FIRST_SECTION && !isHeadingUnit(unit)) glideSidewaysThen(body, [unit], () => showUnit(unit));
-    else showUnit(unit);
-  };
 
   const leadingHeadingCount = (units) => {
     const firstContent = units.findIndex((unit) => unit.dataset.revealKind !== 'heading');
@@ -693,17 +688,20 @@ if (!window.__vyasaZenBound) {
       }
     }
     if (!backNavMode && policy === 'step') {
-      initialRevealUnits(units).forEach((unit, index) => {
-        revealTimers.push(window.setTimeout(() => {
-          if (unit.dataset.revealState !== 'visible') {
-            showInitialUnit(body, unit);
-            revealLog('initial reveal timer fired', {
-              index: unit.dataset.revealIndex,
-              kind: unit.dataset.revealKind,
-            });
-          }
-        }, baseDelay + index * stagger));
-      });
+      // One unit at a time, each finishing its L (sideways, then reveal and recentre
+      // vertically) before the next starts; overlapping steps would move diagonally.
+      const queue = initialRevealUnits(units);
+      const revealNext = () => {
+        const unit = queue.shift();
+        if (!unit) return;
+        if (unit.dataset.revealState === 'visible') return revealNext();
+        glideSidewaysThen(body, [unit], () => {
+          showUnit(unit);
+          revealLog('initial reveal step', { index: unit.dataset.revealIndex, kind: unit.dataset.revealKind });
+          revealTimers.push(window.setTimeout(revealNext, Math.max(stagger, revealShiftMs())));
+        });
+      };
+      revealTimers.push(window.setTimeout(revealNext, baseDelay));
     }
     body.dataset.revealInitialized = '1';
     const state = units.map((unit) => ({
