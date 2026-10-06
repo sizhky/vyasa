@@ -3,6 +3,8 @@
     display: flex;
     flex-direction: column;
     z-index: 10500;
+    --vyasa-link-preview-dimple-scale: 32;
+    --vyasa-link-preview-dimple-inside-scale: 44;
     width: max(560px, 46vw);
     min-width: 18rem;
     min-height: 12rem;
@@ -84,8 +86,7 @@
     filter: drop-shadow(0 1px 2px rgb(0 0 0 / var(--vyasa-shadow-alpha)));
 }
 
-.vyasa-link-preview-dimple-canvas,
-.vyasa-link-preview-pinch-canvas {
+.vyasa-link-preview-dimple-canvas {
     position: absolute;
     inset: 0;
     z-index: 3;
@@ -94,10 +95,6 @@
 
 .vyasa-link-preview-dimple-canvas {
     mix-blend-mode: soft-light;
-}
-
-.vyasa-link-preview-pinch-canvas {
-    mix-blend-mode: normal;
 }
 
 .vyasa-link-preview-card {

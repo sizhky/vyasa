@@ -567,14 +567,32 @@ def test_link_preview_dimple_uses_a_localized_elastic_displacement_field():
     assert "feTurbulence" not in source
     assert "card.style.filter" in source
     assert "pointerDimple.style.display" in source
-    assert "const pinch = pinchContext.createRadialGradient(x, y, 0, x, y, radius * 0.3)" in source
-    assert "pinchContext.arc(x, y, 1.8, 0, Math.PI * 2)" in source
-    assert "vyasa-link-preview-pinch-canvas" in source
+    assert "pinch" not in source
     dimple_draw = source.split("function drawDimpleCanvas", 1)[1].split("function createPreviewView", 1)[0]
     assert "createLinearGradient" not in dimple_draw
     css = Path("vyasa/extensions_builtin/link_preview/static/link_preview.css").read_text()
-    pinch_rule = css.rsplit(".vyasa-link-preview-pinch-canvas", 1)[1].split("}", 1)[0]
-    assert "mix-blend-mode: normal;" in pinch_rule
+    assert "--vyasa-link-preview-dimple-scale: 32;" in css
+    assert "pinch" not in css
+
+
+def test_link_preview_dimple_depth_overshoots_then_settles():
+    script = """
+        import { linkPreviewSpringStep } from './vyasa/extensions_builtin/link_preview/static/link_preview_geometry.js';
+        let state = { value: 0, velocity: 0, settled: false };
+        let peak = 0;
+        let frames = 0;
+        while (!state.settled && frames < 600) {
+            state = linkPreviewSpringStep(state, 1, 1 / 60);
+            peak = Math.max(peak, state.value);
+            frames += 1;
+        }
+        if (peak < 1.1 || peak > 1.35) throw new Error(`expected one visible overshoot, peak ${peak}`);
+        if (!state.settled || state.value !== 1) throw new Error('spring did not settle on its target');
+        if (frames > 120) throw new Error(`spring took ${frames} frames to settle`);
+        const stalled = linkPreviewSpringStep({ value: 0, velocity: 0 }, 1, 5);
+        if (stalled.value > 0.3) throw new Error('a stalled frame jumped the spring');
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
 
 
 def test_link_preview_refreshes_pointer_during_canvas_pan():

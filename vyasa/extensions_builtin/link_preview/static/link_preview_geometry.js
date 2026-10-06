@@ -161,3 +161,14 @@ export function linkPreviewHorizontalScroller(body, scrollers) {
     const wide = [...scrollers].filter((el) => el.scrollWidth > el.clientWidth);
     return wide.sort((a, b) => distance(a) - distance(b))[0] || body;
 }
+
+// Dimple depth follows an underdamped spring (zeta ~ 0.5): it overshoots its
+// target once, then settles. Semi-implicit Euler; dt is capped so a stalled
+// tab resumes without a jump.
+export function linkPreviewSpringStep(state, target, dt, stiffness = 260, damping = 16) {
+    const step = Math.min(Math.max(dt, 0), 1 / 30);
+    const velocity = state.velocity + (stiffness * (target - state.value) - damping * state.velocity) * step;
+    const value = state.value + velocity * step;
+    if (Math.abs(velocity) < 0.01 && Math.abs(target - value) < 0.002) return { value: target, velocity: 0, settled: true };
+    return { value, velocity, settled: false };
+}
