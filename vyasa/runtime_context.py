@@ -26,7 +26,7 @@ class RuntimeContext:
     config: Any
     rbac_rules: Any
     rbac_cfg: Any
-    google_oauth_cfg: Any
+    oauth_cfg: Any
     logger: Any
     markdown_renderer: Any
 
@@ -38,7 +38,7 @@ class RuntimeContext:
             request,
             self._value(self.rbac_rules),
             self._value(self.rbac_cfg),
-            self._value(self.google_oauth_cfg),
+            self._value(self.oauth_cfg),
             self.config._coerce_list,
         )
 
@@ -51,7 +51,7 @@ class RuntimeContext:
             request,
             self._value(self.rbac_rules),
             self._value(self.rbac_cfg),
-            self._value(self.google_oauth_cfg),
+            self._value(self.oauth_cfg),
             self.config._coerce_list,
         ) or {}
 

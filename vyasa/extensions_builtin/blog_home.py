@@ -19,7 +19,7 @@ def _home_provider(htmx, request):
     services = get_runtime_services()
     roots = services.get_content_mounts()
     root = roots[0][1] if roots else services.get_root_folder()
-    roles = services.get_roles_from_auth(request.scope.get("auth"), services.rbac_rules(), services.rbac_cfg(), services.google_oauth_cfg(), services.coerce_list)
+    roles = services.get_roles_from_auth(request.scope.get("auth"), services.rbac_rules(), services.rbac_cfg(), services.oauth_cfg(), services.coerce_list)
     entries = sort_entries(iter_home_files(roots, roles, is_allowed_fn=services.is_allowed, rbac_rules=services.rbac_rules(), iter_files=services.iter_visible_files, slug_for_path=services.content_slug_for_path, show_hidden=services.get_config().get_show_hidden()), root, get_sort=services.get_config().get_home_sort, created_ts=services.get_file_created_ts)
     feed = services.render_blog_home_feed(entries, root, 0)
     shell = Div(H1(f"Welcome to {services.get_blog_title()}!", cls="vyasa-page-title text-4xl font-bold"), P("Latest posts", cls="vyasa-page-subtitle"), feed, cls="space-y-6")
@@ -30,7 +30,7 @@ def _feed_provider(offset=0, htmx=None, request=None):
     services = get_runtime_services()
     roots = services.get_content_mounts()
     root = roots[0][1] if roots else services.get_root_folder()
-    roles = services.get_roles_from_auth(request.scope.get("auth"), services.rbac_rules(), services.rbac_cfg(), services.google_oauth_cfg(), services.coerce_list) if request else None
+    roles = services.get_roles_from_auth(request.scope.get("auth"), services.rbac_rules(), services.rbac_cfg(), services.oauth_cfg(), services.coerce_list) if request else None
     entries = sort_entries(iter_home_files(roots, roles, is_allowed_fn=services.is_allowed, rbac_rules=services.rbac_rules(), iter_files=services.iter_visible_files, slug_for_path=services.content_slug_for_path, show_hidden=services.get_config().get_show_hidden()), root, get_sort=services.get_config().get_home_sort, created_ts=services.get_file_created_ts)
     return services.render_blog_home_feed(entries, root, max(0, offset), wrap=False)
 

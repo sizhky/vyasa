@@ -669,3 +669,48 @@
   opacity: 1 !important;
   will-change: auto;
 }
+
+/* Slide change: the slide is a sheet in a stack. It moves with the reveal's fade and nudge,
+   at twice the reveal duration, because a whole sheet travels further than one unit.
+   present.js markSlideNav sets data-slide-nav and copies the deck's reveal tokens to :root,
+   where ::view-transition-* inherit them.
+   Forward: the sheet leaves left; the next sheet rises from beneath it.
+   Back: the sheet sinks beneath; the previous sheet returns from the left, on top.
+   The chrome and progress bars have their own names, so they leave the sheet and swap in place. */
+:root {
+  --vyasa-slide-duration: calc(var(--vyasa-reveal-duration, 420ms) * 2);
+  --vyasa-slide-easing: var(--vyasa-reveal-easing, cubic-bezier(0.22, 1, 0.36, 1));
+  --vyasa-slide-nudge: -8%;
+  --vyasa-slide-depth: 0.96;
+}
+.vyasa-zen-content { view-transition-name: vyasa-slide; }
+.vyasa-zen-chrome { view-transition-name: vyasa-slide-chrome; }
+.vyasa-zen-slide-progress { view-transition-name: vyasa-slide-progress; }
+.vyasa-zen-deck-progress { view-transition-name: vyasa-deck-progress; }
+::view-transition-group(vyasa-slide-chrome),
+::view-transition-group(vyasa-slide-progress),
+::view-transition-group(vyasa-deck-progress),
+::view-transition-new(vyasa-slide-chrome),
+::view-transition-new(vyasa-slide-progress),
+::view-transition-new(vyasa-deck-progress) { animation: none; }
+::view-transition-old(vyasa-slide-chrome),
+::view-transition-old(vyasa-slide-progress),
+::view-transition-old(vyasa-deck-progress) { display: none; }
+/* The sheet's motion lives only in its old and new images; the group does not morph between slide heights. */
+::view-transition-group(vyasa-slide) { animation: none; }
+@keyframes vyasa-slide-leave { to { opacity: 0; transform: translate3d(var(--vyasa-slide-nudge), 0, 0); } }
+@keyframes vyasa-slide-return { from { opacity: 0; transform: translate3d(var(--vyasa-slide-nudge), 0, 0); } }
+@keyframes vyasa-slide-sink { to { opacity: 0; transform: scale(var(--vyasa-slide-depth)); } }
+@keyframes vyasa-slide-rise { from { opacity: 0; transform: scale(var(--vyasa-slide-depth)); } }
+::view-transition-old(vyasa-slide),
+::view-transition-new(vyasa-slide) {
+  mix-blend-mode: normal;
+  animation: var(--vyasa-slide-duration) var(--vyasa-slide-easing) both;
+}
+::view-transition-old(vyasa-slide) { z-index: 1; animation-name: vyasa-slide-leave; }
+::view-transition-new(vyasa-slide) { animation-name: vyasa-slide-rise; }
+:root[data-slide-nav="back"]::view-transition-old(vyasa-slide) { z-index: 0; animation-name: vyasa-slide-sink; }
+:root[data-slide-nav="back"]::view-transition-new(vyasa-slide) { z-index: 1; animation-name: vyasa-slide-return; }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(vyasa-slide), ::view-transition-new(vyasa-slide) { animation: none; }
+}

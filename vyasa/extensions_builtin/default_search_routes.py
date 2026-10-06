@@ -18,7 +18,7 @@ def register_default_search_routes(rt, runtime) -> None:
             get_roles_from_request=services.get_roles_from_request,
             rbac_rules=services.rbac_rules(),
             rbac_cfg=services.rbac_cfg(),
-            google_oauth_cfg=services.google_oauth_cfg(),
+            oauth_cfg=services.oauth_cfg(),
             coerce_list=services.coerce_list,
             get_root_folder=services.get_root_folder,
             is_allowed=services.is_allowed,
@@ -51,7 +51,7 @@ def register_default_search_routes(rt, runtime) -> None:
             request,
             services.rbac_rules(),
             services.rbac_cfg(),
-            services.google_oauth_cfg(),
+            services.oauth_cfg(),
             services.coerce_list,
         )
         return services.render_posts_search_results(q, roles=roles, current_path=current_path, ref_state=ref_state)

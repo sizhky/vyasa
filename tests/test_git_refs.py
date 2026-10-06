@@ -261,7 +261,7 @@ def test_ref_slide_route_reads_ref_query_from_objects(site):
         get_roles_from_auth=lambda *args, **kwargs: [],
         rbac_rules={},
         rbac_cfg={},
-        google_oauth_cfg={},
+        oauth_cfg={},
         coerce_list=lambda value: value,
         is_allowed=lambda *args, **kwargs: True,
         parse_frontmatter=lambda path: ({}, ""),
