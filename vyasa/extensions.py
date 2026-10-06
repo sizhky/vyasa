@@ -380,6 +380,22 @@ class _RouteRegistrar:
         self.runtime.static_build_providers.append(provider)
 
 
+def unique_route_handlers(route_handlers: list[dict]) -> list[Callable]:
+    """Each register function once, in first-seen order. One function may own
+    several prefixes, and it registers all of its routes when called.
+
+    >>> f, g = (lambda rt, rn: None), (lambda rt, rn: None)
+    >>> unique_route_handlers([{"handler": f}, {"handler": g}, {"handler": f}, {"handler": None}]) == [f, g]
+    True
+    """
+    seen: list[Callable] = []
+    for entry in route_handlers:
+        handler = entry.get("handler")
+        if callable(handler) and handler not in seen:
+            seen.append(handler)
+    return seen
+
+
 class _ConfigRegistrar:
     def __init__(self, runtime: ExtensionRuntime):
         self.runtime = runtime
