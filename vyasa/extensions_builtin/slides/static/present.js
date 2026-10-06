@@ -523,7 +523,9 @@ if (!window.__vyasaZenBound) {
     if (firstPlacement) {
       void body.offsetHeight;
       body.style.transition = '';
-      body.dataset.centerPlaced = '1';
+      // Like the sideways placement, the first vertical placement is the first one with ink:
+      // a recentre before any unit shows must not turn the first heading's placement into a glide.
+      if (hasInk) body.dataset.centerPlaced = '1';
     }
     if (scrollTarget !== null) {
       if (firstPlacement) window.scrollTo(0, scrollTarget);
