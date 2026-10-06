@@ -238,13 +238,29 @@ if (!window.__vyasaZenBound) {
   ['wheel', 'touchstart'].forEach((type) =>
     window.addEventListener(type, () => { window.cancelAnimationFrame(glideFrame); glideTarget = null; }, { passive: true }));
 
-  const getRevealViewportInsets = () => {
-    const navbarBottom = document.getElementById('site-navbar')?.getBoundingClientRect().bottom || 0;
-    return {
-      top: Math.max(24, Math.ceil(navbarBottom + 16)),
-      bottom: activeReserve,
-    };
+  // The slide area is the window minus the top band (nav chrome) and the bottom band
+  // (progress bars); both bands are opaque and occlude content scrolled under them.
+  const getRevealViewportInsets = () => ({ top: activeReserve, bottom: activeReserve });
+
+  // Soft shadows on a band while revealed content is hidden under it.
+  let clipFrame = 0;
+  const syncClipShadows = () => {
+    window.cancelAnimationFrame(clipFrame);
+    clipFrame = window.requestAnimationFrame(() => {
+      const body = getRevealBody(document);
+      const content = body?.closest('.vyasa-zen-content');
+      if (!content) return;
+      const ink = unionRect(shownInk(body).map(({ r }) => r));
+      const { top, bottom } = getRevealViewportInsets();
+      content.toggleAttribute('data-zen-clip-top', Number.isFinite(ink.top) && ink.top < top - 1);
+      content.toggleAttribute('data-zen-clip-bottom', Number.isFinite(ink.bottom) && ink.bottom > window.innerHeight - bottom + 1);
+    });
   };
+  window.addEventListener('scroll', syncClipShadows, { passive: true });
+  window.addEventListener('resize', syncClipShadows);
+  document.addEventListener('transitionend', (event) => {
+    if (event.target instanceof Element && event.target.closest('.vyasa-zen-slide-body')) syncClipShadows();
+  });
 
   const keepUnitInView = (unit) => {
     if (!unit?.isConnected) return;
@@ -500,10 +516,14 @@ if (!window.__vyasaZenBound) {
     const navBottom = document.getElementById('site-navbar')?.getBoundingClientRect().bottom || 0;
     const bandFor = (reserve) => ({ reserve, top: navBottom + reserve, height: window.innerHeight - 2 * reserve - navBottom });
     const chromeBand = bandFor(slideReserve());
-    const band = contentHeight <= chromeBand.height ? chromeBand : bandFor(REVEAL_MIN_RESERVE);
+    // Content taller than the slide area scrolls inside it; it never moves into the bands.
+    const band = chromeBand;
     setVar(body, '--vyasa-zen-band-h', `${Math.round(chromeBand.height)}px`);
     const { reserve, top: bandTop, height: bandHeight } = band;
     activeReserve = reserve;
+    const content = body.closest('.vyasa-zen-content');
+    if (content) setVar(content, '--vyasa-zen-band-reserve', `${reserve}px`);
+    syncClipShadows();
     const desiredTop = bandTop + (bandHeight - contentHeight) / 2;
     const fits = contentHeight <= bandHeight;
     // Content below its centre gets a top margin; content that would need to rise
