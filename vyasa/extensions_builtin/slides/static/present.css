@@ -4,6 +4,8 @@
 .vyasa-zen-present {
   --vyasa-navbar-height: 0px;
   --vyasa-zen-avail-h: 100dvh;
+  /* Space above and below the nav chrome; equal, so the chrome sits centred in the top band. */
+  --vyasa-zen-chrome-gap: calc(var(--vyasa-zen-stage-h) * 0.06);
   --vyasa-zen-stage-w: min(100vw, calc(var(--vyasa-zen-avail-h) * 16 / 9));
   --vyasa-zen-stage-h: calc(var(--vyasa-zen-stage-w) * 9 / 16);
   --vyasa-zen-pad-x: calc(var(--vyasa-zen-stage-w) * 0.07);
@@ -18,7 +20,7 @@
 }
 .vyasa-main-shell.vyasa-zen-present {
   padding-inline: 0 !important;
-  padding-top: calc(var(--vyasa-zen-stage-h) * 0.04) !important;
+  padding-top: var(--vyasa-zen-chrome-gap) !important;
   overflow-x: clip;
 }
 .vyasa-zen-present .vyasa-fold-all-button { display: none !important; }
@@ -48,14 +50,14 @@
    It stays in place while overflowing content scrolls under the top band. */
 .vyasa-zen-chrome {
   position: sticky;
-  top: calc(var(--vyasa-zen-stage-h) * 0.04);
+  top: var(--vyasa-zen-chrome-gap);
   z-index: 11;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--vyasa-space-4);
   min-height: 2.5rem;
-  margin-bottom: calc(var(--vyasa-zen-stage-h) * 0.08);
+  margin-bottom: var(--vyasa-zen-chrome-gap);
   font-size: var(--vyasa-text-sm);
 }
 .vyasa-zen-nav {
@@ -424,8 +426,9 @@
   pointer-events: none;
   transform: translateX(-50%);
 }
-.vyasa-zen-slide-progress { bottom: 1.55rem; }
-.vyasa-zen-deck-progress { bottom: var(--vyasa-space-3); }
+/* The two bars (0.8rem apart, 0.25rem tall: 1.05rem in all) sit centred in the bottom band. */
+.vyasa-zen-deck-progress { bottom: calc(var(--vyasa-zen-band-reserve, 2.6rem) / 2 - 0.525rem); }
+.vyasa-zen-slide-progress { bottom: calc(var(--vyasa-zen-band-reserve, 2.6rem) / 2 + 0.275rem); }
 .vyasa-zen-slide-progress-track,
 .vyasa-zen-deck-progress-track {
   width: 100%;
