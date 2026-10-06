@@ -459,9 +459,23 @@ def test_link_preview_keeps_wide_tables_scrollable_inside_the_popup():
     table_rule = css.split(".vyasa-link-preview-body .vyasa-table-scroll > table", 1)[1].split("}", 1)[0]
     assert "width: max-content !important;" in table_rule
     assert "min-width: 100%;" in table_rule
-    assert "const tables = [...body.querySelectorAll('.vyasa-table-scroll')]" in source
-    assert "tables.forEach((table) => { table.scrollLeft += deltaX; });" in source
-    assert "body.querySelectorAll('.vyasa-table-scroll')" in source
+    assert "overscroll-behavior-x: contain;" in css.split(".vyasa-link-preview-body .vyasa-table-scroll.vyasa-table-breakout", 1)[1].split("}", 1)[0]
+    assert "addEventListener('wheel'" not in source
+
+
+def test_link_preview_code_mode_scrolls_one_table_nearest_the_body_centre():
+    script = """
+        import { linkPreviewHorizontalScroller } from './vyasa/extensions_builtin/link_preview/static/link_preview_geometry.js';
+        const box = (top, bottom, wide) => ({ getBoundingClientRect: () => ({ top, bottom }),
+            scrollWidth: wide ? 900 : 300, clientWidth: 300 });
+        const body = box(0, 600, false);
+        const above = box(-400, -100, true);
+        const centred = box(250, 400, true);
+        const narrow = box(280, 320, false);
+        if (linkPreviewHorizontalScroller(body, [above, narrow, centred]) !== centred) throw new Error('expected centred table');
+        if (linkPreviewHorizontalScroller(body, [narrow]) !== body) throw new Error('expected body fallback');
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
 
 
 def test_link_preview_pointer_joins_source_to_nearest_popup_edge():

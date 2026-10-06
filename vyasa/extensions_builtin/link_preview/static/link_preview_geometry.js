@@ -147,3 +147,17 @@ export function linkPreviewPointerPoints(sourceRect, popupRect, baseWidth = 28) 
 export function resizeLinkPreviewRect(rect, edge, dx, dy, viewport, margin = 8) {
     return resizePanelRect(rect, edge, dx, dy, viewport, margin);
 }
+
+// KG code mode scrolls a preview the pointer is not over, so no native scroller
+// is under the pointer. Horizontal delta goes to the one wide scroller nearest
+// the vertical centre of the body viewport, or to the body when none is wide.
+export function linkPreviewHorizontalScroller(body, scrollers) {
+    const view = body.getBoundingClientRect();
+    const centre = (view.top + view.bottom) / 2;
+    const distance = (el) => {
+        const box = el.getBoundingClientRect();
+        return Math.max(0, box.top - centre, centre - box.bottom);
+    };
+    const wide = [...scrollers].filter((el) => el.scrollWidth > el.clientWidth);
+    return wide.sort((a, b) => distance(a) - distance(b))[0] || body;
+}

@@ -322,6 +322,7 @@
     left: auto;
     transform: none;
     margin: var(--vyasa-space-5) 0;
+    overscroll-behavior-x: contain;
 }
 
 .vyasa-link-preview-body .vyasa-table-scroll > table,

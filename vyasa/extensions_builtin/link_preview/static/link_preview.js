@@ -3,6 +3,7 @@ import {
     installLinkPreviewPanTracking,
     linkPreviewDimpleDisplacement,
     linkPreviewDimplePath,
+    linkPreviewHorizontalScroller,
     linkPreviewPreferredHeight,
     linkPreviewPreferredPosition,
     linkPreviewPreferredWidth,
@@ -166,17 +167,13 @@ function positionPopover(popover, point) {
 }
 
 
-// One owner decides which element inside a popover scrolls. The wheel handler
-// below and the graph's code mode both ask here, so a change to the preview
-// markup moves one line, not two.
+// KG code mode scrolls a preview from outside it, so it cannot rely on the
+// browser routing the wheel. Pointer wheels inside a popover scroll natively.
 function scrollPreviewBody(popover, deltaX, deltaY) {
     const body = popover?.querySelector?.('.vyasa-link-preview-body');
     if (!body) return false;
-    const tables = [...body.querySelectorAll('.vyasa-table-scroll')]
-        .filter((table) => table.scrollWidth > table.clientWidth);
     body.scrollTop += deltaY;
-    if (tables.length) tables.forEach((table) => { table.scrollLeft += deltaX; });
-    else body.scrollLeft += deltaX;
+    linkPreviewHorizontalScroller(body, body.querySelectorAll('.vyasa-table-scroll')).scrollLeft += deltaX;
     return true;
 }
 
@@ -741,12 +738,6 @@ document.body.addEventListener('pointerout', (event) => {
         if (hoveredLink === link) hoveredLink = null;
     }
 }, true);
-document.body.addEventListener('wheel', (event) => {
-    const popover = event.target?.closest?.('.vyasa-link-preview-popover');
-    if (!popover || !scrollPreviewBody(popover, event.deltaX, event.deltaY)) return;
-    event.preventDefault();
-    event.stopPropagation();
-}, { capture: true, passive: false });
 window.addEventListener('keydown', handleKeydown, true);
 window.addEventListener('keyup', trackModifier, true);
 window.addEventListener('blur', () => { modifierDown = false; });
