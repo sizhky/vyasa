@@ -402,31 +402,30 @@ class VyasaConfig:
             return value.lower() in ('true', '1', 'yes', 'on')
         return bool(value)
 
-    def get_google_oauth(self):
-        """Get Google OAuth settings (optional)."""
-        cfg = self._config.get('google_oauth', {})
+    def get_oauth_provider(self, name: str):
+        """Get one OAuth provider's settings from `[<name>_oauth]` or `VYASA_<NAME>_*`."""
+        cfg = self._config.get(f'{name}_oauth', {})
         if not isinstance(cfg, dict):
             cfg = {}
 
-        client_id = cfg.get('client_id') or self.get('google_client_id', 'VYASA_GOOGLE_CLIENT_ID', None)
-        client_secret = cfg.get('client_secret') or self.get('google_client_secret', 'VYASA_GOOGLE_CLIENT_SECRET', None)
-        allowed_domains = cfg.get('allowed_domains')
-        if allowed_domains is None:
-            allowed_domains = self.get('google_allowed_domains', 'VYASA_GOOGLE_ALLOWED_DOMAINS', [])
-        allowed_emails = cfg.get('allowed_emails')
-        if allowed_emails is None:
-            allowed_emails = self.get('google_allowed_emails', 'VYASA_GOOGLE_ALLOWED_EMAILS', [])
-        default_roles = cfg.get('default_roles')
-        if default_roles is None:
-            default_roles = self.get('google_default_roles', 'VYASA_GOOGLE_DEFAULT_ROLES', [])
+        def read(key, default=None):
+            value = cfg.get(key)
+            return value if value is not None else self.get(f'{name}_{key}', f'VYASA_{name.upper()}_{key.upper()}', default)
 
         return {
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "allowed_domains": self._coerce_list(allowed_domains),
-            "allowed_emails": self._coerce_list(allowed_emails),
-            "default_roles": self._coerce_list(default_roles),
+            "client_id": read('client_id'),
+            "client_secret": read('client_secret'),
+            "tenant_id": read('tenant_id'),
+            "allowed_domains": [d.lower() for d in self._coerce_list(read('allowed_domains', []))],
+            "allowed_emails": [e.lower() for e in self._coerce_list(read('allowed_emails', []))],
+            "default_roles": self._coerce_list(read('default_roles', [])),
         }
+
+    def get_oauth_providers(self):
+        """Settings for every known OAuth provider, keyed by provider name."""
+        from .auth.oauth_bootstrap import OAUTH_PROVIDERS
+
+        return {name: self.get_oauth_provider(name) for name in OAUTH_PROVIDERS}
 
     def get_rbac(self):
         """Get RBAC settings (optional)."""

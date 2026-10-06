@@ -158,7 +158,7 @@ Done.
     kwargs = dict(
         htmx=True, request=SimpleNamespace(scope={"auth": None}), get_root_folder=lambda: tmp_path,
         not_found=lambda **kwargs: "NF", get_roles_from_auth=lambda *args, **kwargs: [],
-        rbac_rules={}, rbac_cfg={}, google_oauth_cfg={}, coerce_list=lambda value: value,
+        rbac_rules={}, rbac_cfg={}, oauth_cfg={}, coerce_list=lambda value: value,
         is_allowed=lambda *args, **kwargs: True,
         parse_frontmatter=lambda path: ({}, path.read_text(encoding="utf-8")),
         resolve_markdown_title=lambda path, abbreviations=None: ("Deck", path.read_text(encoding="utf-8")),

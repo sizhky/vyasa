@@ -1,10 +1,11 @@
 from fasthtml.common import *
 
 
-def login_content(error, google_enabled, local_enabled):
+def login_content(error, oauth_providers, local_enabled):
+    """`oauth_providers` is a sequence of (name, label) pairs, one button each."""
     return Div(
         H2("Login", cls="uk-h2"),
-        (A(Span("Continue with Google", cls="text-sm font-semibold"), href="/login/google", cls="inline-flex items-center justify-center px-4 py-2 my-6 rounded-md border border-vyasa-strong bg-vyasa-inverse text-vyasa-on-inverse hover:bg-vyasa-hover hover:border-vyasa-strong transition-colors max-w-sm mx-auto") if google_enabled else None),
+        Div(*(A(Span(f"Continue with {label}", cls="text-sm font-semibold"), href=f"/login/{name}", cls="inline-flex items-center justify-center px-4 py-2 rounded-md border border-vyasa-strong bg-vyasa-inverse text-vyasa-on-inverse hover:bg-vyasa-hover hover:border-vyasa-strong transition-colors") for name, label in oauth_providers), cls="flex flex-col gap-3 my-6 max-w-sm mx-auto") if oauth_providers else None,
         (Form(Div(Input(type="text", name="username", required=True, id="username", cls="uk-input input input-bordered w-full", placeholder="Username"), cls="my-4"), Div(Input(type="password", name="password", required=True, id="password", cls="uk-input input input-bordered w-full", placeholder="Password"), cls="my-4"), Button("Login", type="submit", cls="uk-btn btn btn-primary w-full"), enctype="multipart/form-data", method="post", cls="max-w-sm mx-auto") if local_enabled else None),
         P(error, cls="text-red-500 mt-4") if error else None,
         cls="prose mx-auto mt-24 text-center",

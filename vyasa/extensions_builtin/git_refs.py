@@ -23,7 +23,7 @@ def _page_bundles(context):
 
 def _roles_from_request(request):
     services = get_runtime_services()
-    return services.get_roles_from_request(request, services.rbac_rules(), services.rbac_cfg(), services.google_oauth_cfg(), services.coerce_list)
+    return services.get_roles_from_request(request, services.rbac_rules(), services.rbac_cfg(), services.oauth_cfg(), services.coerce_list)
 
 
 def _register_git_ref_routes(rt, runtime) -> None:

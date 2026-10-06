@@ -1,6 +1,6 @@
 # Security And Access
 
-Vyasa security is route-aware rather than content-export oriented: the live app decides whether a request should pass, redirect to login, or stop with `403` before the page is rendered. The core checks are assembled in [`make_user_auth_before()`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/auth/runtime.py), with config coming from [`VyasaConfig.get_google_oauth()`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/config.py) and [`VyasaConfig.get_rbac()`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/config.py). This guide is about how to think about auth in a live Vyasa site, not how to build a generic identity system. The important distinction is between "who may log in" and "which paths those people may read."
+Vyasa security is route-aware rather than content-export oriented: the live app decides whether a request should pass, redirect to login, or stop with `403` before the page is rendered. The core checks are assembled in [`make_user_auth_before()`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/auth/runtime.py), with config coming from [`VyasaConfig.get_oauth_providers()`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/config.py) and [`VyasaConfig.get_rbac()`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/config.py). This guide is about how to think about auth in a live Vyasa site, not how to build a generic identity system. The important distinction is between "who may log in" and "which paths those people may read."
 
 ## What You Can Turn On
 
@@ -12,12 +12,20 @@ client_id = "REPLACE_ME"
 client_secret = "REPLACE_ME"
 allowed_domains = ["example.com"]
 
+[microsoft_oauth]
+client_id = "REPLACE_ME"
+client_secret = "REPLACE_ME"
+tenant_id = "00000000-0000-0000-0000-000000000000"
+allowed_domains = ["example.com"]
+
 [rbac]
 enabled = true
 default_roles = ["reader"]
 ```
 
-Local username/password auth and Google OAuth can coexist on the same login page. RBAC then maps users to roles and roles to path patterns through [`resolve_roles()`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/auth/policy.py) and [`is_allowed()`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/auth/policy.py).
+Local username/password auth, Google, and Microsoft can coexist on the same login page; each provider in [`OAUTH_PROVIDERS`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/auth/oauth_bootstrap.py) adds one button. Every key also reads from `VYASA_<PROVIDER>_<KEY>`, for example `VYASA_MICROSOFT_TENANT_ID`. Each provider's `default_roles` applies only to accounts from that provider.
+
+Microsoft needs a single-tenant app registration with the redirect URI `https://<host>/auth/microsoft/callback`. Vyasa refuses `common`, `organizations`, and `consumers` because a multi-tenant `email` claim is not verified, so any tenant could claim `@example.com`. With a GUID `tenant_id`, Vyasa also checks the token's `tid` claim in [`oauth_account_allowed()`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/auth/flow_helpers.py). RBAC then maps users to roles and roles to path patterns through [`resolve_roles()`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/auth/policy.py) and [`is_allowed()`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/auth/policy.py).
 
 ## Why The Split Exists
 

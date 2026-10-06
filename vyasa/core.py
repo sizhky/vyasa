@@ -50,11 +50,11 @@ from .admin_views import rbac_admin_content
 from .auth.context import get_auth_from_request, get_roles_from_auth, get_roles_from_request
 from .auth.admin_helpers import apply_impersonation_action, parse_rbac_form
 from .auth.flow_helpers import (
-    build_google_auth_payload,
-    fetch_google_userinfo,
-    google_account_allowed,
+    build_oauth_auth_payload,
+    fetch_oauth_userinfo,
+    oauth_account_allowed,
     parse_roles_text,
-    start_google_login,
+    start_oauth_login,
 )
 from .auth.runtime import make_user_auth_before
 from .auth.views import impersonate_content, login_content
@@ -68,7 +68,7 @@ from .content_routes import (
 )
 from .content_tree import ContentTree
 from .extensions import get_extension_runtime, refresh_extension_runtime, set_runtime_context
-from .auth.oauth_bootstrap import build_google_oauth
+from .auth.oauth_bootstrap import OAUTH_PROVIDERS, build_oauth
 from .page_views import not_found_content
 from .rbac_config import normalize_rbac_cfg, render_rbac_toml, write_rbac_to_vyasa
 from .rbac_store import load_rbac_cfg, write_rbac_cfg
@@ -171,7 +171,7 @@ def render_search_preview_page(htmx, request: Request | None, q: str = ""):
     roots = get_content_mounts()
     root = roots[0][1] if roots else get_root_folder()
     auth = request.scope.get("auth") if request else None
-    roles = get_roles_from_auth(auth, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
+    roles = get_roles_from_auth(auth, _rbac_rules, _rbac_cfg, _oauth_cfg, _config._coerce_list)
     previewable, regex_error = _find_search_preview_matches(q, limit=200)
     previewable = _filter_search_matches_by_roles(previewable, roles)
     query = (q or "").strip()
@@ -340,7 +340,7 @@ hdrs = (
 _config = get_config()
 _extension_runtime = refresh_extension_runtime(_config.get_extensions_config())
 _auth_creds = _config.get_auth()
-_google_oauth_cfg = _config.get_google_oauth()
+_oauth_cfg = _config.get_oauth_providers()
 _auth_required = _config.get_auth_required()
 
 
@@ -404,17 +404,17 @@ def _write_rbac_to_vyasa(cfg):
     write_rbac_to_vyasa(cfg, _config._coerce_list, get_config().get_root_folder())
 
 
-_google_oauth, _google_oauth_enabled = build_google_oauth(_google_oauth_cfg, logger)
+_oauth, _oauth_enabled = build_oauth(_oauth_cfg, logger)
 
 _local_auth_enabled = bool(_auth_creds and _auth_creds[0] and _auth_creds[1])
-_auth_enabled = _local_auth_enabled or _google_oauth_enabled
+_auth_enabled = _local_auth_enabled or bool(_oauth_enabled)
 if _auth_required is None:
     _auth_required = _auth_enabled
 
 _rbac_cfg = _load_rbac_cfg_from_store()
 _set_rbac_cfg(_rbac_cfg)
 def _build_beforeware():
-    auth_before = make_user_auth_before(_auth_required, lambda: _rbac_rules, lambda: _rbac_cfg, lambda: _google_oauth_cfg, _config._coerce_list)
+    auth_before = make_user_auth_before(_auth_required, lambda: _rbac_rules, lambda: _rbac_cfg, lambda: _oauth_cfg, _config._coerce_list)
     return build_beforeware(auth_before, bool(_auth_enabled or (_rbac_cfg.get("enabled") and _rbac_rules)))
 
 
@@ -472,7 +472,7 @@ _runtime = RuntimeContext(
     config=_config,
     rbac_rules=lambda: _rbac_rules,
     rbac_cfg=lambda: _rbac_cfg,
-    google_oauth_cfg=lambda: _google_oauth_cfg,
+    oauth_cfg=lambda: _oauth_cfg,
     logger=logger,
     markdown_renderer=from_md,
 )
@@ -1181,7 +1181,7 @@ def _default_page_frame_deps():
         get_roles_from_auth=get_roles_from_auth,
         rbac_rules=_rbac_rules,
         rbac_cfg=_rbac_cfg,
-        google_oauth_cfg=_google_oauth_cfg,
+        oauth_cfg=_oauth_cfg,
         coerce_list=_config._coerce_list,
         cached_posts_sidebar_html=_cached_posts_sidebar_html,
         posts_sidebar_fingerprint=_posts_sidebar_fingerprint,
@@ -1537,19 +1537,20 @@ set_runtime_services({
     "build_post_tree": lambda *args, **kwargs: build_post_tree(*args, **kwargs),
     "sidebar_row_decorators": lambda: _sidebar_row_decorators(),
     "local_auth_enabled": _local_auth_enabled,
-    "google_oauth_enabled": _google_oauth_enabled,
-    "google_oauth": _google_oauth,
-    "google_oauth_cfg": lambda: _google_oauth_cfg,
+    "oauth_enabled": _oauth_enabled,
+    "oauth_providers": OAUTH_PROVIDERS,
+    "oauth": _oauth,
+    "oauth_cfg": lambda: _oauth_cfg,
     "rbac_cfg": lambda: _rbac_cfg,
     "rbac_rules": lambda: _rbac_rules,
     "coerce_list": _config._coerce_list,
     "login_content": login_content,
     "impersonate_content": impersonate_content,
     "handle_login": handle_login,
-    "start_google_login": start_google_login,
-    "fetch_google_userinfo": fetch_google_userinfo,
-    "google_account_allowed": google_account_allowed,
-    "build_google_auth_payload": build_google_auth_payload,
+    "start_oauth_login": start_oauth_login,
+    "fetch_oauth_userinfo": fetch_oauth_userinfo,
+    "oauth_account_allowed": oauth_account_allowed,
+    "build_oauth_auth_payload": build_oauth_auth_payload,
     "handle_admin_impersonate": handle_admin_impersonate,
     "handle_admin_rbac": handle_admin_rbac,
     "apply_impersonation_action": apply_impersonation_action,
@@ -1620,7 +1621,7 @@ def home_feed(offset: int = 0, htmx=None, request: Request | None = None):
         return provider(offset=offset, htmx=htmx, request=request)
     roots = get_content_mounts()
     root = roots[0][1] if roots else get_root_folder()
-    roles = get_roles_from_auth(request.scope.get("auth"), _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list) if request else None
+    roles = get_roles_from_auth(request.scope.get("auth"), _rbac_rules, _rbac_cfg, _oauth_cfg, _config._coerce_list) if request else None
     entries = _sort_blog_home_entries(iter_blog_home_files(roots, roles), root)
     return render_blog_home_feed(entries, root, max(0, offset), wrap=False)
 

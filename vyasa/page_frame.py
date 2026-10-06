@@ -41,7 +41,7 @@ class PageFrameDeps:
     get_roles_from_auth: Callable
     rbac_rules: Any
     rbac_cfg: Any
-    google_oauth_cfg: Any
+    oauth_cfg: Any
     coerce_list: Callable
     cached_posts_sidebar_html: Callable
     posts_sidebar_fingerprint: Callable
