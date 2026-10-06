@@ -67,7 +67,7 @@ from .content_routes import (
     render_post_detail,
 )
 from .content_tree import ContentTree
-from .extensions import get_extension_runtime, refresh_extension_runtime, set_runtime_context
+from .extensions import get_extension_runtime, refresh_extension_runtime, set_runtime_context, unique_route_handlers
 from .auth.oauth_bootstrap import OAUTH_PROVIDERS, build_oauth
 from .page_views import not_found_content
 from .rbac_config import normalize_rbac_cfg, render_rbac_toml, write_rbac_to_vyasa
@@ -483,10 +483,8 @@ def _register_extension_routes():
     runtime = get_extension_runtime()
     if not runtime:
         return
-    for entry in runtime.route_handlers:
-        handler = entry.get("handler")
-        if callable(handler):
-            handler(rt, _runtime)
+    for handler in unique_route_handlers(runtime.route_handlers):
+        handler(rt, _runtime)
 
 
 _register_extension_routes()
