@@ -291,6 +291,16 @@ async function readTasksClipboardText() {
     }
 }
 
+// A widget owns graph shortcuts (j/k and others) after markWidgetActive; a pointer press
+// outside every widget releases it, so page shortcuts such as slide j/k work again.
+if (typeof document !== 'undefined' && !window.__vyasaTasksReleaseBound) {
+    window.__vyasaTasksReleaseBound = true;
+    document.addEventListener('pointerdown', (event) => {
+        if (event.target?.closest?.('.tasks-container[data-tasks-widget="true"]')) return;
+        window.__vyasaTasksActiveWidgetId = '';
+    }, true);
+}
+
 function promptTasksViewInput(defaultContent = '') {
     if (typeof document === 'undefined') return Promise.resolve(null);
     return new Promise((resolve) => {

@@ -27,7 +27,7 @@ def is_allowed(path, roles, rbac_rules):
     return allowed if matched_any else True
 
 
-def resolve_roles(auth, rbac_cfg, google_oauth_cfg, coerce_list):
+def resolve_roles(auth, rbac_cfg, oauth_cfg, coerce_list):
     auth = normalize_auth(auth) or {}
     username = auth.get("username")
     email = auth.get("email")
@@ -47,6 +47,7 @@ def resolve_roles(auth, rbac_cfg, google_oauth_cfg, coerce_list):
             if username and username in users_list:
                 roles.append(role)
     if not roles:
-        roles = rbac_cfg.get("default_roles", []) or google_oauth_cfg.get("default_roles", [])
+        provider_cfg = (oauth_cfg or {}).get(auth.get("provider")) or {}
+        roles = rbac_cfg.get("default_roles", []) or provider_cfg.get("default_roles", [])
     roles = [r for r in roles if r]
     return list(dict.fromkeys(roles)) if roles else []

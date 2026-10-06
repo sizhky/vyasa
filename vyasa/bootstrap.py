@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 import time
 
 from fasthtml.common import Beforeware
@@ -6,8 +7,8 @@ from starlette.staticfiles import StaticFiles
 
 AUTH_SKIP_ROUTES = [
     r"^/login$",
-    r"^/login/google$",
-    r"^/auth/google/callback$",
+    r"^/login/[a-z]+$",
+    r"^/auth/[a-z]+/callback$",
     r"^/_vyasa/.*",
     r"^/_sidebar/.*",
     r"^/static/.*",
@@ -48,7 +49,8 @@ def build_beforeware(handler, enabled: bool):
 def build_app(app_factory, hdrs, beforeware):
     from .vendor import mount_vendor, vendor_hdrs
 
-    app = app_factory(hdrs=hdrs, before=beforeware, exts="ws") if beforeware else app_factory(hdrs=hdrs, exts="ws")
+    secret_key = os.environ.get("VYASA_SESSION_SECRET") or None
+    app = app_factory(hdrs=hdrs, before=beforeware, exts="ws", secret_key=secret_key) if beforeware else app_factory(hdrs=hdrs, exts="ws", secret_key=secret_key)
     mount_vendor(app)
     app.hdrs = vendor_hdrs(app.hdrs)
     return app

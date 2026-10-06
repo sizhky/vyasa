@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
-from fasthtml.common import A, Button, Div, H1, NotStr, Response, Script, Span, to_xml
+from fasthtml.common import A, Button, Div, H1, Kbd, NotStr, Response, Script, Span, to_xml
 from monsterui.all import UkIcon
 from .assets import asset_url, bundle_asset_nodes_for_collector
 from .config import get_config
@@ -339,7 +339,7 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
     return result
 
 
-def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_roles_from_auth, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list, is_allowed, parse_frontmatter, resolve_markdown_title, slug_to_title, effective_abbreviations, from_md, layout):
+def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_roles_from_auth, rbac_rules, rbac_cfg, oauth_cfg, coerce_list, is_allowed, parse_frontmatter, resolve_markdown_title, slug_to_title, effective_abbreviations, from_md, layout):
     trimmed_path = path.rstrip("/")
     match = re.match(r"^(?P<doc>.+?)(?:/slide-(?P<num>\d+))?$", trimmed_path)
     if not match:
@@ -379,7 +379,7 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
         slide_num = max(1, min(slide_num, total))
         doc_href = "/"
     else:
-        roles = get_roles_from_auth(request.scope.get("auth"), rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list)
+        roles = get_roles_from_auth(request.scope.get("auth"), rbac_rules, rbac_cfg, oauth_cfg, coerce_list)
         if not is_allowed(f"/posts/{doc_path}", roles or [], rbac_rules):
             return not_found(auth=request.scope.get("auth"))
         if ref_doc is not None:
@@ -421,12 +421,12 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
         alternate_text=slide_absolute_path, icon_only=True, extra_cls="vyasa-zen-nav-copy",
     ) if slide_relative_path and slide_absolute_path else ()
     nav_controls = Div(
-        nav_step("left", "chevron-left", "Previous slide", nav_state["index"] > 1),
+        nav_step("left", "chevron-left", "Previous (←). Skip slide: h", nav_state["index"] > 1),
         Button(
             Span(str(nav_state["index"])), Span(f'/ {nav_state["total"]}', cls="vyasa-zen-nav-count-total"),
             type="button", data_zen_overview_toggle="true", aria_label="Open slide overview", cls="vyasa-zen-nav-count",
         ),
-        nav_step("right", "chevron-right", "Next slide", nav_state["index"] < nav_state["total"]),
+        nav_step("right", "chevron-right", "Next (→). Skip slide: l", nav_state["index"] < nav_state["total"]),
         cls="vyasa-zen-nav",
     )
     nav = Div(
@@ -496,6 +496,10 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
                     Span(f"{len(deck.slides)} slides") if is_cover else None,
                     cls="vyasa-zen-cover-meta",
                 ),
+                Div(
+                    *(Span(Kbd(key), " ", label) for key, label in (("→", "step"), ("l", "skip slide"), ("?", "all keys"))),
+                    cls="vyasa-zen-cover-meta vyasa-zen-cover-keys",
+                ) if is_cover else None,
                 cls="vyasa-zen-cover",
             ),
             overview_panel,

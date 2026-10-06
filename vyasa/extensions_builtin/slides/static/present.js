@@ -19,7 +19,7 @@ if (!window.__vyasaZenBound) {
     title: 'Slide shortcuts',
     groups: [
       ['Exit', [['Shift+Esc', 'Document']]],
-      ['Slides', [['M / Esc', 'Overview'], ['?', 'Shortcuts'], ['J / K', 'Scroll / Reveal / Rewind'], ['H / L', 'Previous / Next']]],
+      ['Slides', [['M / Esc', 'Overview'], ['?', 'Shortcuts'], ['J / K / Arrows', 'Scroll / Reveal / Rewind'], ['H / L', 'Skip to previous / next slide']]],
       ['Overview', [['J / K', 'Move Selection'], ['H / L', 'Collapse / Expand'], ['Enter', 'Open Slide'], ['Esc', 'Close']]],
     ],
   });
@@ -46,8 +46,16 @@ if (!window.__vyasaZenBound) {
     const cached = slidePageCache.get(new URL(href, location.href).pathname + new URL(href, location.href).search);
     const main = document.getElementById('main-content');
     if (!cached || !main) return false;
-    main.outerHTML = cached;
-    window.history.pushState(null, '', href);
+    // startViewTransition runs swap later; location must change with the DOM, or cacheCurrentSlide stores the old slide under the new path.
+    const swap = () => {
+      main.outerHTML = cached;
+      window.history.pushState(null, '', href);
+      // The cached slide skips initReveal, so it needs its own layout watch and a fresh centre.
+      const body = getRevealBody(document);
+      if (body) watchSlideLayout(body);
+      scheduleRecenter();
+    };
+    if (document.startViewTransition) document.startViewTransition(swap); else swap();
     disableNavbarBoost();
     clearRevealTimers();
     pendingRevealDirection = null;
@@ -574,12 +582,12 @@ if (!window.__vyasaZenBound) {
     unit.dataset.revealState = 'leaving';
     syncSlideProgressBar();
     if (centerPerStep) holdXUntil = performance.now() + (Number.isFinite(duration) ? duration : 420) + revealShiftMs();
-    window.setTimeout(() => {
+    revealTimers.push(window.setTimeout(() => {
       unit.dataset.revealState = 'hidden';
       recenterRevealedUnits();
       const body = getRevealBody(document);
-      if (centerPerStep && body) window.setTimeout(() => recenterSlideX(body, { force: true }), revealShiftMs());
-    }, Number.isFinite(duration) ? duration : 420);
+      if (centerPerStep && body) revealTimers.push(window.setTimeout(() => recenterSlideX(body, { force: true }), revealShiftMs()));
+    }, Number.isFinite(duration) ? duration : 420));
   };
 
   // Late layout (images, diagrams, fonts, tab switches) recentres on the next frame.
@@ -630,6 +638,9 @@ if (!window.__vyasaZenBound) {
       return;
     }
     clearRevealTimers();
+    // A sideways hold and glide belong to the slide that started them; the new slide's first placement must run.
+    holdXUntil = 0;
+    incomingUnits = [];
     const readMs = (value, fallback) => {
       const parsed = parseInt(String(value || '').replace(/ms$/, ''), 10);
       return Number.isFinite(parsed) ? parsed : fallback;
@@ -732,12 +743,25 @@ if (!window.__vyasaZenBound) {
     return `${target.pathname}${target.search}${target.hash}`;
   };
 
+  // Slide change (present.css ::view-transition): the direction picks the keyframes, and the
+  // deck's reveal tokens move to :root because view-transition pseudo-elements inherit from there.
+  const markSlideNav = (direction) => {
+    const root = document.documentElement;
+    const body = getRevealBody(document);
+    root.dataset.slideNav = direction;
+    ['--vyasa-reveal-duration', '--vyasa-reveal-easing'].forEach((name) => {
+      const value = body?.style.getPropertyValue(name).trim();
+      if (value) root.style.setProperty(name, value);
+    });
+  };
+
   const followHref = (href, direction = 'forward', useSegmentCache = false) => {
     if (!href) return false;
     href = retainDebugQuery(href);
     slideDebug('followHref', { href, direction, useSegmentCache });
     pendingRevealDirection = direction;
     pendingSlideBottomScroll = direction === 'back';
+    markSlideNav(direction);
     if (useSegmentCache) {
       cacheCurrentSlide();
       if (restoreCachedSlide(href)) return true;
@@ -745,7 +769,7 @@ if (!window.__vyasaZenBound) {
     if (window.htmx && typeof window.htmx.ajax === 'function') {
       window.htmx.ajax('GET', href, {
         target: '#main-content',
-        swap: 'outerHTML show:window:top settle:0.1s',
+        swap: 'outerHTML transition:true show:window:top settle:0.1s',
       }).then(() => {
         const nextUrl = new URL(href, location.href);
         if (`${window.location.pathname}${window.location.search}` !== `${nextUrl.pathname}${nextUrl.search}`) {
@@ -1004,6 +1028,8 @@ if (!window.__vyasaZenBound) {
     }
   });
 
+  // Arrows step through units like j/k, as the on-screen chevrons do; h/l skip whole slides.
+  const ARROW_AS_VIM = { ArrowLeft: 'k', ArrowDown: 'j', ArrowUp: 'k', ArrowRight: 'j' };
   document.addEventListener('keydown', (event) => {
     slideDebug('keydown', {
       key: event.key, code: event.code, defaultPrevented: event.defaultPrevented,
@@ -1018,7 +1044,7 @@ if (!window.__vyasaZenBound) {
     }
     if (event.metaKey || event.ctrlKey || event.altKey
       || event.target?.matches?.('input, textarea, select') || event.target?.isContentEditable) return;
-    const key = event.key.toLowerCase();
+    const key = ARROW_AS_VIM[event.key] || event.key.toLowerCase();
     if (overviewIsOpen() && (key === 'h' || key === 'l')) {
       if (moveOverviewBranch(key)) event.preventDefault();
       return;
@@ -1035,14 +1061,6 @@ if (!window.__vyasaZenBound) {
     if (key === 'j' && (scrollLastVisibleUnit('down') || revealNextUnit() || follow('right'))) event.preventDefault();
     if (key === 'k' && (scrollLastVisibleUnit('up') || hidePreviousUnit() || follow('left'))) event.preventDefault();
     if (key === 'l' && follow('right', true)) event.preventDefault();
-    if (event.key === 'ArrowLeft' && (hidePreviousUnit() || follow('left'))) {
-      revealLog('keydown ArrowLeft handled');
-      event.preventDefault();
-    }
-    if (event.key === 'ArrowRight' && (revealNextUnit() || follow('right'))) {
-      revealLog('keydown ArrowRight handled');
-      event.preventDefault();
-    }
   });
 
   let touchStartX = null;

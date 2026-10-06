@@ -1,4 +1,4 @@
-from .auth_routes import _register_auth_routes
+from .auth_routes import AUTH_ROUTE_PREFIXES, AUTH_ROUTES, _register_auth_routes
 from .rbac_admin.routes import register_rbac_admin_routes
 from ..extensions import ExtensionMeta, VyasaExtensionBase
 from fasthtml.common import A
@@ -6,12 +6,7 @@ from fasthtml.common import A
 
 class AuthRbacExtension(VyasaExtensionBase):
     def register(self, app) -> None:
-        for prefix, methods in (
-            ("/login", ("GET", "POST")),
-            ("/login/google", ("GET",)),
-            ("/auth/google/callback", ("GET",)),
-            ("/logout", ("GET",)),
-        ):
+        for prefix, methods in AUTH_ROUTES:
             app.routes.add(prefix, _register_auth_routes, methods=methods)
         app.routes.add("/admin/impersonate", register_rbac_admin_routes)
         app.routes.add("/admin/rbac", register_rbac_admin_routes)
@@ -37,10 +32,7 @@ EXTENSION = AuthRbacExtension(
         "route",
         ("cap:route:auth_rbac", "cap:layout:footer_link"),
         route_prefixes=(
-            "/login",
-            "/login/google",
-            "/auth/google/callback",
-            "/logout",
+            *AUTH_ROUTE_PREFIXES,
             "/admin/impersonate",
             "/admin/rbac",
         ),

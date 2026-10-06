@@ -32,7 +32,7 @@ def _slide_renderer(path: str, htmx, request):
         get_roles_from_auth=services.get_roles_from_auth,
         rbac_rules=services.rbac_rules(),
         rbac_cfg=services.rbac_cfg(),
-        google_oauth_cfg=services.google_oauth_cfg(),
+        oauth_cfg=services.oauth_cfg(),
         coerce_list=services.coerce_list,
         is_allowed=services.is_allowed,
         parse_frontmatter=services.parse_frontmatter,

@@ -3,7 +3,7 @@ from starlette.responses import RedirectResponse, Response
 from .policy import is_allowed, normalize_auth, path_requires_roles, resolve_roles
 
 
-def make_user_auth_before(auth_required, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list):
+def make_user_auth_before(auth_required, rbac_rules, rbac_cfg, oauth_cfg, coerce_list):
     value = lambda item: item() if callable(item) else item
 
     def user_auth_before(req, sess):
@@ -21,7 +21,7 @@ def make_user_auth_before(auth_required, rbac_rules, rbac_cfg, google_oauth_cfg,
             return None
         auth = normalize_auth(auth)
         if rules:
-            auth["roles"] = resolve_roles(auth, value(rbac_cfg), value(google_oauth_cfg), coerce_list)
+            auth["roles"] = resolve_roles(auth, value(rbac_cfg), value(oauth_cfg), coerce_list)
             if not is_allowed(req.url.path, auth["roles"], rules):
                 return Response("Forbidden", status_code=403)
         req.scope["auth"] = auth
