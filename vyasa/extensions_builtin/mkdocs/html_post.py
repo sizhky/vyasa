@@ -1,7 +1,7 @@
 """HTML pass that finishes what the source translator marked.
 
 Implements vyasa manual/mkdocs-compatibility.md#markdown: attr_list markers move
-onto the element before them, and abbreviation definitions wrap matching words.
+onto the element before them, and headings get MkDocs slug anchors.
 """
 
 from __future__ import annotations
@@ -11,7 +11,6 @@ import json
 import re
 
 MARKER = re.compile(r'<span class="vyasa-mkdocs-attrs" data-mkdocs-target="(inline|block)" data-mkdocs-attrs="([^"]*)"></span>')
-ABBR_COMMENT = re.compile(r"<!-- vyasa-mkdocs-abbr (.*?) -->", re.DOTALL)
 TAG_ATTR = re.compile(r'\s([\w:-]+)(?:="([^"]*)")?')
 HEADING = re.compile(r'(<h([1-6]) id="([^"]*)"[^>]*>)(.*?<span class="vyasa-heading-text">(.*?)</span>)', re.DOTALL)
 
@@ -101,30 +100,5 @@ def apply_attr_markers(text: str) -> str:
         text = before + after
 
 
-def apply_abbreviations(text: str) -> str:
-    found = ABBR_COMMENT.search(text)
-    if not found:
-        return text
-    text = ABBR_COMMENT.sub("", text)
-    try:
-        abbreviations = json.loads(html.unescape(found.group(1)))
-    except ValueError:
-        return text
-    if not abbreviations:
-        return text
-    pattern = re.compile(r"(?<![\w-])(" + "|".join(re.escape(k) for k in sorted(abbreviations, key=len, reverse=True)) + r")(?![\w-])")
-    parts = re.split(r"(<[^>]+>)", text)
-    skip = 0
-    for index, part in enumerate(parts):
-        if part.startswith("<"):
-            tag = re.match(r"</?\s*([\w-]+)", part)
-            if tag and tag.group(1).lower() in {"code", "pre", "script", "style", "abbr", "svg"}:
-                skip += -1 if part.startswith("</") else (0 if part.endswith("/>") else 1)
-            continue
-        if skip <= 0 and part:
-            parts[index] = pattern.sub(lambda m: f'<abbr title="{html.escape(abbreviations[m.group(1)], quote=True)}">{m.group(1)}</abbr>', part)
-    return "".join(parts)
-
-
 def postprocess(html_fragment: str, context=None, state=None, render_tab_content=None) -> str:
-    return add_slug_aliases(apply_abbreviations(apply_attr_markers(html_fragment)))
+    return add_slug_aliases(apply_attr_markers(html_fragment))

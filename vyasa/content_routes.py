@@ -24,7 +24,7 @@ from .extensions import get_extension_runtime, refresh_extension_runtime
 from .helpers import content_location, content_path_for_slug, content_root_and_relative, content_slug_for_path, content_url_for_slug, expand_markdown_includes_for_reading, get_adjacent_posts, strip_more_marker
 from .runtime_context import traced
 from .extensions_builtin.markdown.renderer import _render_markdown_fragment
-from .extensions_builtin.slides.deck import ZenSlideDeck, build_slide_reveal_units, count_slide_progress_segments, resolve_slide_reveal_config, slide_slug
+from .extensions_builtin.slides.deck import build_slide_reveal_units, deck_for, count_slide_progress_segments, resolve_slide_reveal_config, slide_slug
 
 FALLBACK_HOME_SLUG = "__home__"
 
@@ -376,7 +376,7 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
         reveal_config = resolve_slide_reveal_config({})
         slide_width = None
         slide_relative_path = slide_absolute_path = None
-        deck = ZenSlideDeck(render_content)
+        deck = deck_for(render_content)
         overview = deck.outline(doc_path)
         total = len(deck.slides) + 2
         slide_num = max(1, min(slide_num, total))
@@ -405,7 +405,7 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
             slide_absolute_path = str(file_path.resolve())
         reveal_config = resolve_slide_reveal_config(metadata)
         slide_width = _resolve_slide_width(metadata)
-        deck = ZenSlideDeck(render_content or "")
+        deck = deck_for(render_content or "")
         overview = deck.outline(doc_path)
         total = len(deck.slides) + 2
         slide_num = max(1, min(slide_num, total))

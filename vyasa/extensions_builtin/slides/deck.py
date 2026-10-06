@@ -1,6 +1,6 @@
 import re
 from dataclasses import dataclass
-from ...helpers import _strip_leading_frontmatter_block, content_url_for_slug, resolve_heading_anchor
+from ...helpers import _strip_leading_frontmatter_block, content_url_for_slug, resolve_heading_anchor, split_heading_text_and_id
 from ..tooltip_syntax import extract_tooltips, format_tooltip_definitions
 
 
@@ -255,8 +255,13 @@ def count_slide_progress_segments(markdown_text, *, render_fragment, current_pat
 
 
 class ZenSlideDeck:
+    """Slides of one document. The source is translated first (extension dialects such as
+    MkDocs), so slide boundaries, anchors, and bodies match the rendered document."""
+
     def __init__(self, markdown_text):
-        content, tooltips = extract_tooltips(markdown_text)
+        from ...extensions import translate_markdown_source
+
+        content, tooltips = extract_tooltips(translate_markdown_source(_strip_leading_frontmatter_block(markdown_text)))
         self.tooltip_definitions = format_tooltip_definitions(tooltips)
         self.slides = list(iter_zen_slides(content)) or [["# Empty deck"]]
         self.anchors = self._build_anchors()
@@ -295,7 +300,7 @@ class ZenSlideDeck:
             for block in slide:
                 match = re.match(r"^(#{1,6})\s+(.+)$", block, re.MULTILINE)
                 if match:
-                    crumbs.append(match.group(2).strip())
+                    crumbs.append(split_heading_text_and_id(match.group(2).strip())[0])
             if not crumbs:
                 items.append({
                     "index": index + 1, "label": f"Slide {index + 1}", "depth": 1,
@@ -355,26 +360,80 @@ def iter_zen_slides(markdown_text):
         yield prelude
 
 
-def _split_blocks(markdown_text):
-    blocks, current = [], []
-    in_fence = False
-    tabs_depth = 0
-    for line in markdown_text.strip().splitlines():
-        stripped = line.strip()
-        if re.match(r"^(```+|~~~+)", stripped):
-            in_fence = not in_fence
-        elif not in_fence and stripped == ":::tabs":
-            tabs_depth += 1
-        elif not in_fence and tabs_depth and stripped == ":::":
-            tabs_depth -= 1
-        if current and not in_fence and not tabs_depth and re.match(r"^#{1,6}\s+", line):
-            blocks.append("\n".join(current).strip())
-            current = [line]
+def _html_depth_delta(fragment):
+    """Open elements minus closed elements in a raw HTML block.
+
+    >>> _html_depth_delta('<div class="grid" markdown>'), _html_depth_delta('</div>'), _html_depth_delta('<img src="x"><br/>')
+    (1, -1, 0)
+    """
+    delta = 0
+    for tag in re.findall(r"<!--[\s\S]*?-->|</?[A-Za-z][^>]*>", fragment):
+        if tag.startswith("<!--"):
             continue
-        current.append(line)
-    if current:
-        blocks.append("\n".join(current).strip())
-    return [block for block in blocks if block]
+        if tag.startswith("</"):
+            delta -= 1
+            continue
+        name = re.match(r"<\s*([A-Za-z0-9:_-]+)", tag)
+        if not tag.endswith("/>") and not (name and name.group(1).lower() in _VOID_HTML_TAGS):
+            delta += 1
+    return delta
+
+
+def _slide_headings(lines):
+    """(first line, line count, level, ATX heading line) of each heading that starts a slide.
+
+    A slide starts at a top-level heading as the Markdown parser reads it: headings in
+    fences, lists, quotes, indented bodies, raw HTML elements, and `///` or `:::tabs`
+    blocks do not start a slide. A setext heading is returned in ATX form.
+    """
+    from mistletoe import HTMLRenderer
+    from mistletoe.block_token import Document, Heading, HTMLBlock, SetextHeading
+
+    from ..markdown.pipeline import CALLOUT_BLOCK
+    from ..tabs.render import TABS_BLOCK
+
+    text = "\n".join(lines)
+    opaque = set()
+    for pattern in (CALLOUT_BLOCK, TABS_BLOCK):
+        for match in pattern.finditer(text):
+            first = text.count("\n", 0, match.start())
+            opaque.update(range(first, first + match.group(0).count("\n") + 1))
+    with HTMLRenderer():
+        children = list(Document([line + "\n" for line in lines]).children or [])
+    headings, depth = [], 0
+    for index, token in enumerate(children):
+        start = (getattr(token, "line_number", 0) or 1) - 1
+        if isinstance(token, HTMLBlock):
+            depth = max(0, depth + _html_depth_delta(token.content))
+            continue
+        if depth or start in opaque or not isinstance(token, (Heading, SetextHeading)):
+            continue
+        if isinstance(token, SetextHeading):
+            end = start
+            while end < len(lines) and not re.match(r"^ {0,3}(=+|-+)\s*$", lines[end]):
+                end += 1
+            title = " ".join(line.strip() for line in lines[start:end])
+            headings.append((start, end - start + 1, token.level, f"{'#' * token.level} {title}"))
+        else:
+            headings.append((start, 1, token.level, lines[start].strip()))
+    return headings
+
+
+def _split_blocks(markdown_text):
+    r"""Blocks of a document: text before the first slide heading, then one block per heading.
+
+    >>> _split_blocks("intro\n\n# A\n\n```\n# not a slide\n```\n\nSetext\n------\nbody")
+    ['intro', '# A\n```\n# not a slide\n```', '## Setext\nbody']
+    """
+    lines = markdown_text.strip().splitlines()
+    headings = _slide_headings(lines)
+    prelude = "\n".join(lines[: headings[0][0] if headings else len(lines)]).strip()
+    blocks = [prelude] if prelude else []
+    for index, (start, count, _level, head) in enumerate(headings):
+        end = headings[index + 1][0] if index + 1 < len(headings) else len(lines)
+        body = "\n".join(lines[start + count:end]).strip()
+        blocks.append(f"{head}\n{body}" if body else head)
+    return blocks
 
 
 def _heading_level(block):
@@ -396,8 +455,23 @@ def slide_slug(index):
     return f"slide-{index}"
 
 
+_DECKS: dict[tuple, ZenSlideDeck] = {}
+
+
+def deck_for(markdown_text):
+    """Cached deck for a document's text; a document render asks once per heading."""
+    from ...config import config_generation
+
+    key = (markdown_text, config_generation())
+    if key not in _DECKS:
+        if len(_DECKS) > 64:
+            _DECKS.clear()
+        _DECKS[key] = ZenSlideDeck(markdown_text)
+    return _DECKS[key]
+
+
 def present_href_for_anchor(markdown_text, doc_path, target_anchor):
-    deck = ZenSlideDeck(markdown_text)
+    deck = deck_for(markdown_text)
     for index, anchor in enumerate(deck.anchors, start=2):
         if anchor == target_anchor:
             return content_url_for_slug(doc_path, prefix="/slides", suffix=f"/{slide_slug(index)}")

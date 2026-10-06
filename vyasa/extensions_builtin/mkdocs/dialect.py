@@ -138,8 +138,6 @@ class Translator:
         text = self.inline("\n".join(lines))
         if self.has("toc") and re.search(r"(?m)^\[TOC\][ \t]*$", text):
             text = self.toc_marker(text)
-        if self.abbreviations:
-            text += f"\n\n<!-- vyasa-mkdocs-abbr {html.escape(json.dumps(self.abbreviations), quote=False)} -->\n"
         return text
 
     @staticmethod
@@ -590,6 +588,7 @@ class Translator:
 
         text = re.sub(r"(?ms)^(\s*)(`{3,}|~{3,}).*?^\s*\2`*\s*$", protect, text)
         text = re.sub(r"<!--.*?-->", protect, text, flags=re.DOTALL)
+        text = re.sub(r"<abbr\b[^>]*>.*?</abbr>", protect, text, flags=re.DOTALL)
         text = re.sub(r"</?[a-zA-Z][^>\n]*>", protect, text)
         text = re.sub(r"(`+)(.+?)\1", lambda m: protect(m) if not self.has("pymdownx.inlinehilite") else (protected.append(self._inline_code(m)) or f"@@VYASA_MKDOCS_P{len(protected) - 1}@@"), text)
         if self.has("pymdownx.emoji"):
@@ -611,6 +610,8 @@ class Translator:
             text = re.sub(r"(?<=\w)~([A-Za-z0-9.+-]{1,32})~(?!~)", r"<sub>\1</sub>", text)
         if self.has("pymdownx.progressbar"):
             text = re.sub(r'\[=\s*(\d+(?:\.\d+)?%|\d+(?:\.\d+)?/\d+(?:\.\d+)?)(?:\s+"([^"]*)")?\s*\](\{[^}\n]*\})?', self._progress, text)
+        # Markup generated above is final; typographic rewrites below must not touch it.
+        text = re.sub(r"<([a-zA-Z]+)\b[^>\n]*>[^<\n]*</\1>|</?[a-zA-Z][^>\n]*>", protect, text)
         if self.has("smarty"):
             text = "\n".join(line if re.fullmatch(r"[\s|:+*=-]*", line) else re.sub(r"(?<![-<!])--(?![->])", "&ndash;", re.sub(r"(?<![-<!])---(?![->])", "&mdash;", line)) for line in text.split("\n"))
             text = re.sub(r"(?<=\S)\.\.\.(?!\.)", "&hellip;", text)
@@ -620,6 +621,11 @@ class Translator:
             for pattern, symbol in ((r"\(tm\)", "&trade;"), (r"\(c\)", "&copy;"), (r"\(r\)", "&reg;"), (r"(?<![\w/])c/o(?![\w/])", "&#8453;"), (r"\+/-", "&plusmn;"), (r"<-->", "&harr;"), (r"(?<!-)-->", "&rarr;"), (r"<--(?!-)", "&larr;"), (r"=/=", "&ne;"), (r"(?<![\d/])1/2(?![\d/])", "&frac12;"), (r"(?<![\d/])1/4(?![\d/])", "&frac14;"), (r"(?<![\d/])3/4(?![\d/])", "&frac34;")):
                 text = re.sub(pattern, symbol, text)
             text = re.sub(r"\b(\d+)(st|nd|rd|th)\b", r"\1<sup>\2</sup>", text)
+        if self.abbreviations:
+            # Abbreviations are written into the text, so any slice of the page (a slide) keeps them.
+            text = re.sub(r"\]\([^)\n]*\)", protect, text)
+            pattern = re.compile(r"(?<![\w-])(" + "|".join(re.escape(k) for k in sorted(self.abbreviations, key=len, reverse=True)) + r")(?![\w-])")
+            text = pattern.sub(lambda m: f'<abbr title="{html.escape(self.abbreviations[m.group(1)], quote=True)}">{m.group(1)}</abbr>', text)
         for index in range(len(protected) - 1, -1, -1):
             text = text.replace(f"@@VYASA_MKDOCS_P{index}@@", protected[index])
         return text

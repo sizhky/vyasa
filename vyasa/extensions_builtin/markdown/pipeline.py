@@ -77,11 +77,14 @@ def extract_footnotes(content):
 def preserve_newlines(md):
     return md
 
+# A `/// kind` callout block; slide splitting treats its lines as one block.
+CALLOUT_BLOCK = re.compile(r"^///\s*([a-zA-Z][a-zA-Z0-9_-]*)\s*\n(.*?)^///\s*$", re.MULTILINE | re.DOTALL)
+
+
 def preprocess_callouts(content):
     callout_store = {}
     protected = []
     content = re.sub(r"(```+|~~~+)[\s\S]*?\1", lambda m: protected.append(m.group(0)) or f"@@VYASA_CALLOUT_BLOCK_{len(protected)-1}@@", content, flags=re.MULTILINE)
-    pattern = re.compile(r"^///\s*([a-zA-Z][a-zA-Z0-9_-]*)\s*\n(.*?)^///\s*$", re.MULTILINE | re.DOTALL)
     obsidian_header = re.compile(r"^(\s{0,3}(?:>\s*)+)\[!([A-Za-z][A-Za-z0-9_-]*)\]([+-])?\s*(.*)$")
     quote_line = re.compile(r"^(\s{0,3}(?:>\s*)+)(.*)$")
 
@@ -94,7 +97,7 @@ def preprocess_callouts(content):
         callout_store[callout_id] = {"kind": kind, "body": body, "title": None, "fold": None}
         return f'\n\n<div class="vyasa-callout-placeholder" data-callout-id="{callout_id}"></div>\n\n'
 
-    content = pattern.sub(replace, content)
+    content = CALLOUT_BLOCK.sub(replace, content)
     lines, out, i = content.splitlines(), [], 0
     while i < len(lines):
         header = obsidian_header.match(lines[i])

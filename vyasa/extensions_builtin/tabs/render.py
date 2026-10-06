@@ -1,9 +1,12 @@
 import re
 
 
+# A `:::tabs` block; slide splitting treats its lines as one block.
+TABS_BLOCK = re.compile(r"^:::tabs\s*\n(.*?)^:::", re.MULTILINE | re.DOTALL)
+
+
 def preprocess_tabs(content):
     tab_data_store = {}
-    tabs_pattern = re.compile(r"^:::tabs\s*\n(.*?)^:::", re.MULTILINE | re.DOTALL)
     def replace_tabs_block(match):
         tabs = []
         for tab_match in re.finditer(r"^::tab\{([^\}]+)\}\s*\n(.*?)(?=^::tab\{|\Z)", match.group(1), re.MULTILINE | re.DOTALL):
@@ -32,7 +35,7 @@ def preprocess_tabs(content):
         tab_id = __import__("hashlib").md5(match.group(0).encode()).hexdigest()[:8]
         tab_data_store[tab_id] = [(tab["title"], tab["content"]) for tab in tabs]
         return f'<div class="tab-placeholder" data-tab-id="{tab_id}"></div>'
-    return tabs_pattern.sub(replace_tabs_block, content), tab_data_store
+    return TABS_BLOCK.sub(replace_tabs_block, content), tab_data_store
 
 
 def render_tabs_html(tab_id, titles, panels, active=0):

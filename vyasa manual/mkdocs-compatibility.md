@@ -45,7 +45,7 @@ Prev/next links follow nav order. A page that is not in the nav gets no prev/nex
 
 ## Markdown
 
-[`dialect.py`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/extensions_builtin/mkdocs/dialect.py) rewrites MkDocs syntax into Vyasa Markdown before Vyasa parses a page. The table of contents uses the same rewritten text. A construct is rewritten only when its extension is listed in `markdown_extensions`. [`html_post.py`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/extensions_builtin/mkdocs/html_post.py) finishes two constructs after rendering: attribute lists and abbreviations.
+[`dialect.py`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/extensions_builtin/mkdocs/dialect.py) rewrites MkDocs syntax into Vyasa Markdown before Vyasa parses a page. The table of contents uses the same rewritten text. A construct is rewritten only when its extension is listed in `markdown_extensions`. [`html_post.py`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/extensions_builtin/mkdocs/html_post.py) moves attribute-list attributes onto their elements after rendering and adds MkDocs slug anchors to headings. Abbreviations are written into the text as `<abbr>` elements, so every slide of a page keeps them.
 
 | Extension | Syntax | Vyasa output |
 |---|---|---|
