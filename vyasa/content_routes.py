@@ -339,7 +339,7 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
     return result
 
 
-def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_roles_from_auth, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list, is_allowed, parse_frontmatter, resolve_markdown_title, slug_to_title, effective_abbreviations, from_md, layout):
+def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_roles_from_auth, rbac_rules, rbac_cfg, oauth_cfg, coerce_list, is_allowed, parse_frontmatter, resolve_markdown_title, slug_to_title, effective_abbreviations, from_md, layout):
     trimmed_path = path.rstrip("/")
     match = re.match(r"^(?P<doc>.+?)(?:/slide-(?P<num>\d+))?$", trimmed_path)
     if not match:
@@ -379,7 +379,7 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
         slide_num = max(1, min(slide_num, total))
         doc_href = "/"
     else:
-        roles = get_roles_from_auth(request.scope.get("auth"), rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list)
+        roles = get_roles_from_auth(request.scope.get("auth"), rbac_rules, rbac_cfg, oauth_cfg, coerce_list)
         if not is_allowed(f"/posts/{doc_path}", roles or [], rbac_rules):
             return not_found(auth=request.scope.get("auth"))
         if ref_doc is not None:

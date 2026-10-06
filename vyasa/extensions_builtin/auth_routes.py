@@ -2,12 +2,19 @@ from ..extensions import ExtensionMeta, VyasaExtensionBase
 from ..runtime_services import get_runtime_services
 
 
+AUTH_ROUTES = (
+    ("/login", ("GET", "POST")),
+    ("/login/{provider}", ("GET",)),
+    ("/auth/{provider}/callback", ("GET",)),
+    ("/logout", ("GET",)),
+)
+AUTH_ROUTE_PREFIXES = tuple(prefix for prefix, _methods in AUTH_ROUTES)
+
+
 class AuthRoutesExtension(VyasaExtensionBase):
     def register(self, app) -> None:
-        app.routes.add("/login", _register_auth_routes, methods=("GET", "POST"))
-        app.routes.add("/login/google", _register_auth_routes)
-        app.routes.add("/auth/google/callback", _register_auth_routes)
-        app.routes.add("/logout", _register_auth_routes)
+        for prefix, methods in AUTH_ROUTES:
+            app.routes.add(prefix, _register_auth_routes, methods=methods)
 
 
 def _register_auth_routes(rt, runtime) -> None:
@@ -23,34 +30,35 @@ def _register_auth_routes(rt, runtime) -> None:
             local_auth_enabled=services.local_auth_enabled,
             resolve_roles=services.resolve_roles,
             rbac_cfg=services.rbac_cfg(),
-            google_oauth_cfg=services.google_oauth_cfg(),
+            oauth_cfg=services.oauth_cfg(),
             coerce_list=services.coerce_list,
             login_content=services.login_content,
-            google_oauth_enabled=services.google_oauth_enabled,
+            oauth_buttons=[(name, services.oauth_providers[name].label) for name in services.oauth_enabled],
         )
 
-    @rt("/login/google")
-    async def login_google(request):
+    @rt("/login/{provider}")
+    async def login_oauth(request, provider: str):
         services = get_runtime_services()
-        if not services.google_oauth_enabled:
+        if provider not in services.oauth_enabled:
             return Response(status_code=404)
-        return await services.start_google_login(request, services.google_oauth)
+        return await services.start_oauth_login(request, services.oauth, provider)
 
-    @rt("/auth/google/callback")
-    async def google_auth_callback(request):
+    @rt("/auth/{provider}/callback")
+    async def oauth_callback(request, provider: str):
         services = get_runtime_services()
-        if not services.google_oauth_enabled:
+        if provider not in services.oauth_enabled:
             return Response(status_code=404)
+        label = services.oauth_providers[provider].label
         try:
-            userinfo = await services.fetch_google_userinfo(request, services.google_oauth, services.logger)
+            userinfo = await services.fetch_oauth_userinfo(request, services.oauth, provider, services.logger)
         except Exception as exc:
-            services.logger.warning(f"Google OAuth failed: {exc}")
-            return RedirectResponse("/login?error=Google+authentication+failed", status_code=303)
-        email = userinfo.get("email") if isinstance(userinfo, dict) else None
-        if not services.google_account_allowed(email, services.google_oauth_cfg()):
-            return RedirectResponse("/login?error=Google+account+not+allowed", status_code=303)
-        auth = services.build_google_auth_payload(userinfo)
-        auth["roles"] = services.resolve_roles(auth, services.rbac_cfg(), services.google_oauth_cfg(), services.coerce_list)
+            services.logger.warning(f"{label} OAuth failed: {exc}")
+            return RedirectResponse(f"/login?error={label}+authentication+failed", status_code=303)
+        provider_cfg = services.oauth_cfg().get(provider) or {}
+        if not services.oauth_account_allowed(userinfo, provider_cfg):
+            return RedirectResponse(f"/login?error={label}+account+not+allowed", status_code=303)
+        auth = services.build_oauth_auth_payload(provider, userinfo)
+        auth["roles"] = services.resolve_roles(auth, services.rbac_cfg(), services.oauth_cfg(), services.coerce_list)
         request.session["auth"] = auth
         return RedirectResponse(request.session.pop("next", "/"), status_code=303)
 
@@ -66,7 +74,7 @@ EXTENSION = AuthRoutesExtension(
         "auth_routes",
         "route",
         ("cap:route:auth_routes",),
-        route_prefixes=("/login", "/login/google", "/auth/google/callback", "/logout"),
+        route_prefixes=AUTH_ROUTE_PREFIXES,
         scope_disable=True,
     )
 )

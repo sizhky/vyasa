@@ -24,7 +24,7 @@ def _register_sidebar_routes(rt, runtime) -> None:
     @rt("/_sidebar/posts")
     def posts_sidebar_lazy(request=None, current_path: str = ""):
         services = get_runtime_services()
-        roles = services.get_roles_from_request(request, services.rbac_rules(), services.rbac_cfg(), services.google_oauth_cfg(), services.coerce_list)
+        roles = services.get_roles_from_request(request, services.rbac_rules(), services.rbac_cfg(), services.oauth_cfg(), services.coerce_list)
         html = services.cached_posts_sidebar_html(
             services.posts_sidebar_fingerprint(),
             tuple(roles or []),
@@ -40,7 +40,7 @@ def _register_sidebar_routes(rt, runtime) -> None:
     @rt("/_sidebar/posts/branch")
     def posts_sidebar_branch(path: str = "", request=None):
         services = get_runtime_services()
-        roles = services.get_roles_from_request(request, services.rbac_rules(), services.rbac_cfg(), services.google_oauth_cfg(), services.coerce_list)
+        roles = services.get_roles_from_request(request, services.rbac_rules(), services.rbac_cfg(), services.oauth_cfg(), services.coerce_list)
         folder = services.content_path_for_slug(path)
         if not folder or not folder.is_dir():
             services.logger.debug("Sidebar branch invalid path={}", path)

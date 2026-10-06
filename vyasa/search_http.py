@@ -2,9 +2,9 @@ from fasthtml.common import Div, H1, P
 from .helpers import content_slug_for_path
 
 
-def gather_search_page(htmx, q="", request=None, *, find_search_matches, get_roles_from_request, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list, get_root_folder, is_allowed, gather_search_content, layout):
+def gather_search_page(htmx, q="", request=None, *, find_search_matches, get_roles_from_request, rbac_rules, rbac_cfg, oauth_cfg, coerce_list, get_root_folder, is_allowed, gather_search_content, layout):
     matches, regex_error = find_search_matches(q, limit=200)
-    roles = get_roles_from_request(request, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list)
+    roles = get_roles_from_request(request, rbac_rules, rbac_cfg, oauth_cfg, coerce_list)
     if roles is not None:
         matches = [
             item for item in matches
