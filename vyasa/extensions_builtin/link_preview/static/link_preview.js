@@ -241,6 +241,7 @@ function createPreviewView({ point, link, onClose }) {
         '</span>',
         '</div>',
         '<div class="vyasa-link-preview-tabs" role="tablist" aria-label="Code URLs" hidden></div>',
+        '<div class="vyasa-link-preview-sections" hidden><div role="tablist" aria-label="Sections in this file"></div><span class="vyasa-link-preview-sections-keys" aria-hidden="true">↑↓</span></div>',
         '<div data-vyasa-link-preview-content class="vyasa-link-preview-content vyasa-link-preview-loading">Loading preview...</div>',
         '</div>',
     ].join('');
@@ -257,7 +258,10 @@ function createPreviewView({ point, link, onClose }) {
     popover.append(dimpleCanvas);
     const bar = popover.querySelector('.vyasa-link-preview-bar');
     const tabs = popover.querySelector('.vyasa-link-preview-tabs');
+    const sections = popover.querySelector('.vyasa-link-preview-sections');
+    const sectionList = sections.querySelector('[role="tablist"]');
     let tabSignature = '';
+    let sectionSignature = '';
     let selectTab = () => {};
     const sourceLabel = popover.querySelector('[data-vyasa-link-preview-origin]');
     const sourceOrigin = popover.querySelector('[data-vyasa-link-preview-source]');
@@ -432,24 +436,31 @@ function createPreviewView({ point, link, onClose }) {
             }
             raise();
         },
-        setTabs: (links, activeIndex, onSelect, tabKinds = []) => {
+        // One tab per file; the strip below lists the sections inside the active file.
+        setTabs: (items, activeTab, activeSection, onSelect) => {
             selectTab = onSelect;
-            const nextSignature = links.map((item, index) => `${item.getAttribute('href') || ''}\n${tabKinds[index] || 'code'}`).join('\n');
+            const nextSignature = items.map((item) => `${item.link.getAttribute('href') || ''}\n${item.kind || 'code'}\n${item.sections.length}`).join('\n');
             if (nextSignature !== tabSignature) {
                 tabs.replaceChildren();
-                links.forEach((item, index) => {
+                items.forEach((item, index) => {
                     const button = document.createElement('button');
-                    const href = item.getAttribute('href') || '';
+                    const href = item.link.getAttribute('href') || '';
                     button.type = 'button';
                     button.setAttribute('role', 'tab');
-                    button.classList.add(`vyasa-link-preview-tab-${tabKinds[index] || 'code'}`);
+                    button.classList.add(`vyasa-link-preview-tab-${item.kind || 'code'}`);
                     button.textContent = decodeURIComponent(href.split(/[?#]/)[0].split('/').pop() || href);
+                    if (item.sections.length > 1) {
+                        const count = document.createElement('span');
+                        count.className = 'vyasa-link-preview-tab-count';
+                        count.textContent = String(item.sections.length);
+                        button.append(count);
+                    }
                     button.title = href;
                     button.addEventListener('click', () => selectTab(index));
                     button.addEventListener('keydown', (event) => {
                         const delta = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
                         if (!delta) return;
-                        const target = (index + delta + links.length) % links.length;
+                        const target = (index + delta + items.length) % items.length;
                         selectTab(target);
                         tabs.children[target]?.focus();
                         event.preventDefault();
@@ -460,10 +471,31 @@ function createPreviewView({ point, link, onClose }) {
                 tabSignature = nextSignature;
             }
             Array.from(tabs.children).forEach((button, index) => {
-                button.setAttribute('aria-selected', String(index === activeIndex));
-                button.tabIndex = index === activeIndex ? 0 : -1;
+                button.setAttribute('aria-selected', String(index === activeTab));
+                button.tabIndex = index === activeTab ? 0 : -1;
             });
-            tabs.hidden = links.length < 2;
+            tabs.hidden = items.length < 2;
+            const labels = items[activeTab]?.sections || [];
+            const nextSections = `${activeTab}\n${labels.join('\n')}`;
+            if (nextSections !== sectionSignature) {
+                sectionList.replaceChildren(...labels.map((label, index) => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.setAttribute('role', 'tab');
+                    button.textContent = label;
+                    button.title = label;
+                    button.addEventListener('click', () => selectTab(activeTab, index));
+                    return button;
+                }));
+                sectionSignature = nextSections;
+            }
+            Array.from(sectionList.children).forEach((button, index) => {
+                const selected = index === activeSection;
+                button.setAttribute('aria-selected', String(selected));
+                button.tabIndex = selected ? 0 : -1;
+                if (selected) sectionList.scrollLeft = Math.max(0, button.offsetLeft - (sectionList.clientWidth - button.offsetWidth) / 2);
+            });
+            sections.hidden = labels.length < 2;
         },
         setLink: (nextLink) => {
             activeLink = nextLink;
@@ -694,7 +726,7 @@ window.vyasaLinkPreview = {
     close: (entry) => previews.close(entry),
     isOpen: (entry) => previews.has(entry),
     replace: (entry, link) => previews.replace(entry, link),
-    setTabs: (entry, links, activeIndex, onSelect, tabKinds) => entry?.view?.setTabs?.(links, activeIndex, onSelect, tabKinds),
+    setTabs: (entry, items, activeTab, activeSection, onSelect) => entry?.view?.setTabs?.(items, activeTab, activeSection, onSelect),
     scrollBy: (entry, deltaX, deltaY) => entry?.view?.scrollBy?.(deltaX, deltaY) === true,
     stepCodeBlock: (entry, delta) => entry?.view?.stepCodeBlock?.(delta) === true,
 };

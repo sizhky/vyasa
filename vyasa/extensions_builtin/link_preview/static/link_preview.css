@@ -223,6 +223,68 @@
     box-shadow: inset 0 -2px 0 var(--vyasa-warning);
 }
 
+.vyasa-link-preview-tab-count {
+    display: inline-block;
+    margin-left: var(--vyasa-space-1);
+    padding: 0 0.35em;
+    border-radius: var(--vyasa-radius-pill);
+    background: var(--vyasa-link-preview-border);
+    color: var(--vyasa-text-muted);
+    font-size: 0.75em;
+    font-variant-numeric: tabular-nums;
+}
+.vyasa-link-preview-tabs button[aria-selected="true"] .vyasa-link-preview-tab-count {
+    background: var(--vyasa-accent-9);
+    color: var(--vyasa-accent-contrast);
+}
+
+/* Sections sit on the active tab's surface, so they read as inside that file. */
+.vyasa-link-preview-sections {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: var(--vyasa-space-2);
+    padding: var(--vyasa-space-1) var(--vyasa-space-2);
+    border-bottom: 1px solid var(--vyasa-link-preview-border);
+    background: var(--vyasa-accent-3);
+}
+.vyasa-link-preview-tabs:not([hidden]) + .vyasa-link-preview-sections { border-top: 0; margin-top: -1px; }
+.vyasa-link-preview-sections[hidden] { display: none; }
+.vyasa-link-preview-sections > [role="tablist"] {
+    position: relative;
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: var(--vyasa-space-1);
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.vyasa-link-preview-sections button {
+    flex: 0 0 auto;
+    max-width: 14rem;
+    overflow: hidden;
+    border: 0;
+    border-radius: var(--vyasa-radius-pill);
+    padding: 0.1rem var(--vyasa-space-2);
+    background: transparent;
+    color: var(--vyasa-text-muted);
+    font: var(--vyasa-text-xs)/var(--vyasa-leading-snug) var(--vyasa-font-mono);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.vyasa-link-preview-sections button:hover { background: var(--vyasa-hover); color: var(--vyasa-text); }
+.vyasa-link-preview-sections button[aria-selected="true"] {
+    background: var(--vyasa-link-preview-surface);
+    box-shadow: 0 0 0 1px var(--vyasa-accent-7);
+    color: var(--vyasa-text);
+}
+.vyasa-link-preview-sections-keys {
+    flex: 0 0 auto;
+    color: var(--vyasa-text-faint);
+    font: var(--vyasa-text-xs)/1 var(--vyasa-font-ui);
+}
+
 .vyasa-link-preview-content {
     display: flex;
     flex: 1 1 auto;

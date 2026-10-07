@@ -1,6 +1,6 @@
 import {
     copyTasksText, tasksAttributeLinks, tasksGroupPreviewLinks, tasksHeldKeyApplies, tasksInlineReferenceHtml,
-    tasksNodeLinkKinds,
+    tasksNodeLinkKinds, tasksPreviewSectionLabel,
 } from './tasks_cards.js';
 import {
     initializeTasksDiagnostics, logTasksDebug, logTasksDebugVerbose, logTasksPerf,
@@ -1438,10 +1438,14 @@ async function renderTasksGraphs(rootElement = document) {
                     const active = groups.findIndex((group) => group.links.includes(links[index]));
                     window.vyasaLinkPreview?.setTabs?.(
                         entry,
-                        groups.map((group) => group.links[0]),
+                        groups.map((group) => ({
+                            link: group.links[0],
+                            kind: group.links[0].dataset.vyasaLinkPreviewTabKind || 'attribute',
+                            sections: group.links.map(tasksPreviewSectionLabel),
+                        })),
                         active,
-                        (target) => switchCodeLink(groups[target].index),
-                        groups.map((group) => group.links[0].dataset.vyasaLinkPreviewTabKind || 'attribute'),
+                        groups[active]?.links.indexOf(links[index]) ?? -1,
+                        (tab, section = 0) => switchCodeLink(links.indexOf(groups[tab].links[section])),
                     );
                 };
                 const openCodePreviewAt = (links, index, pinned = false) => {

@@ -344,6 +344,22 @@ export function tasksGroupPreviewLinks(links) {
 
 export const tasksGroupCodeLinks = tasksGroupPreviewLinks;
 
+// A section pill names the code reference inside a file tab, so it reads the
+// reference payload first; the file name would only repeat the tab.
+export function tasksPreviewSectionLabel(link, index = 0) {
+    let reference = {};
+    try { reference = JSON.parse(link?.dataset?.vyasaCodeReference || '{}') || {}; } catch { reference = {}; }
+    const href = link?.getAttribute?.('href') || '';
+    const file = decodeURIComponent(href.split(/[?#]/)[0].split('/').pop() || '');
+    const text = String(link?.textContent || '').trim();
+    return reference.symbol
+        || (reference.region && `region ${reference.region}`)
+        || (reference.lines && `lines ${reference.lines}`)
+        || reference.focus
+        || (text && text !== href && text !== file ? text : '')
+        || `Section ${index + 1}`;
+}
+
 function tasksHrefKind(href) {
     const text = String(href || '').trim();
     if (!text) return '';
