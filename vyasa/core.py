@@ -947,7 +947,7 @@ def _uncommitted_row_decorator(node, *, slug=None, title="", context="tree"):
     if not slug or slug not in _current_uncommitted_slugs():
         return node
     dot = Span("●", cls="vyasa-uncommitted-dot text-amber-500 text-[0.6rem] ml-1 shrink-0", title="Uncommitted changes")
-    return Span(node, dot, cls="inline-flex items-center min-w-0")
+    return node(dot)
 
 
 def _sidebar_row_decorators():
