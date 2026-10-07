@@ -304,8 +304,8 @@ def test_sidebar_controls_toggle_closed_and_open_states():
     assert "html:not([data-vyasa-hide-toc-sidebar])" in css
     # The resizer writes widths on #page-container, so the reserved space must
     # be declared there; declared on html, var() keeps html's fallback width.
-    assert "html:not([data-vyasa-hide-posts-sidebar]) #page-container {" in css
-    assert "html:not([data-vyasa-hide-toc-sidebar]) #page-container {" in css
+    assert "html:not([data-vyasa-hide-posts-sidebar]) #page-container:has(.vyasa-posts-sidebar) {" in css
+    assert "html:not([data-vyasa-hide-toc-sidebar]) #page-container:has(.vyasa-toc-sidebar) {" in css
 
 
 def test_sidebar_open_state_persists_across_a_refresh():
