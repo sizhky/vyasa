@@ -1908,6 +1908,130 @@ export async function deriveSquishedExpandedLayout(baseGraph, model, expandedSet
     };
 }
 
+/**
+ * Place every visible node and route every edge in one ELK pass over the whole
+ * hierarchy, so a leaf is ordered by the edges that leave its group as well as
+ * by the edges inside it. Each open group keeps the padding the squished layout
+ * gave it, title band included. Routes are absolute points keyed by edge id.
+ *
+ * An edge that closes a cycle is laid out reversed, so it flows with the
+ * others and enters its group on the side facing its source; its route is
+ * turned back afterwards. If ELK fails, the squished layout stands.
+ *
+ * >>> await tasksElkRelayout({ nodes: [a, b], edges: [{ id: 'e', source: 'a', target: 'b' }] })
+ * { derived: { nodes: [...], edges: [...] }, routes: Map { 'e' => [{x,y}, ...] } }
+ */
+export async function tasksElkRelayout(derived, layoutConfig = {}) {
+    try {
+        return await tasksElkRelayoutUnchecked(derived, layoutConfig);
+    } catch (error) {
+        logTasksDebug('elkRelayoutError', { message: String(error?.message || error) });
+        return { derived, routes: null };
+    }
+}
+
+/**
+ * Edges that close a cycle. Edges are taken in listed order, and an edge whose
+ * target already reaches its source through earlier edges closes a cycle. An
+ * edge listed earlier therefore wins: base edges come before view-merged
+ * edges such as a sequence's calls and returns. A self-loop closes none.
+ *
+ * >>> tasksBackEdgeIds(['w', 'r', 'x'], [{ id: 'wr', source: 'w', target: 'r' }, { id: 'rx', source: 'r', target: 'x' }, { id: 'xw', source: 'x', target: 'w' }])
+ * Set { 'xw' }
+ */
+export function tasksBackEdgeIds(nodeIds, edges) {
+    const accepted = new Map(nodeIds.map((id) => [id, []]));
+    const reaches = (from, to) => {
+        const seen = new Set([from]);
+        const stack = [from];
+        while (stack.length) {
+            const id = stack.pop();
+            if (id === to) return true;
+            for (const next of accepted.get(id)) {
+                if (!seen.has(next)) seen.add(next) && stack.push(next);
+            }
+        }
+        return false;
+    };
+    const back = new Set();
+    for (const edge of edges) {
+        if (edge.source === edge.target || !accepted.has(edge.source) || !accepted.has(edge.target)) continue;
+        if (reaches(edge.target, edge.source)) back.add(edge.id);
+        else accepted.get(edge.source).push(edge.target);
+    }
+    return back;
+}
+
+async function tasksElkRelayoutUnchecked(derived, layoutConfig) {
+    const byParent = new Map();
+    for (const node of derived.nodes || []) {
+        const key = node.parentId || '';
+        if (!byParent.has(key)) byParent.set(key, []);
+        byParent.get(key).push(node);
+    }
+    const options = {
+        'elk.algorithm': 'layered',
+        'elk.direction': layoutConfig.elkDirection || 'DOWN',
+        'elk.edgeRouting': 'ORTHOGONAL',
+        'elk.spacing.nodeNode': `${layoutConfig.nodeSpacing || TASKS_ROOT_SPACING.node}`,
+        'elk.layered.spacing.nodeNodeBetweenLayers': `${layoutConfig.layerSpacing || TASKS_ROOT_SPACING.layer}`,
+        'elk.spacing.edgeNode': '20',
+        'elk.spacing.edgeEdge': '12',
+        'elk.layered.spacing.edgeNodeBetweenLayers': '20',
+        'elk.layered.spacing.edgeEdgeBetweenLayers': '12',
+    };
+    const paddingOf = (children) => {
+        const top = Math.min(...children.map((child) => child.position.y));
+        const side = Math.min(...children.map((child) => child.position.x));
+        return `[top=${top},left=${side},bottom=${side},right=${side}]`;
+    };
+    const toElk = (node) => {
+        const children = byParent.get(node.id) || [];
+        if (!children.length) return { id: node.id, width: node.width || 0, height: node.height || 0 };
+        return { id: node.id, layoutOptions: { ...options, 'elk.padding': paddingOf(children) }, children: children.map(toElk) };
+    };
+    const back = tasksBackEdgeIds((derived.nodes || []).map((node) => node.id), derived.edges || []);
+    const laidOut = await layoutWithElk({
+        id: 'elk-root',
+        layoutOptions: { ...options, 'elk.hierarchyHandling': 'INCLUDE_CHILDREN', 'elk.json.edgeCoords': 'ROOT' },
+        children: (byParent.get('') || []).map(toElk),
+        edges: (derived.edges || []).map((edge) => (back.has(edge.id)
+            ? { id: edge.id, sources: [edge.target], targets: [edge.source] }
+            : { id: edge.id, sources: [edge.source], targets: [edge.target] })),
+    });
+    const rects = {};
+    const routes = new Map();
+    const collect = (elkNode) => {
+        for (const child of elkNode.children || []) {
+            rects[child.id] = { x: child.x || 0, y: child.y || 0, width: child.width || 0, height: child.height || 0 };
+            collect(child);
+        }
+        for (const edge of elkNode.edges || []) {
+            const points = (edge.sections || []).flatMap((section) => [section.startPoint, ...(section.bendPoints || []), section.endPoint]);
+            if (points.length >= 2) routes.set(edge.id, tasksElkRouteEnd(back.has(edge.id) ? points.reverse() : points));
+        }
+    };
+    collect(laidOut);
+    logTasksDebug('elkRelayout', { rects: Object.fromEntries(Object.entries(rects).map(([id, rect]) => [id, rectSummary(rect)])), routed: routes.size, reversed: [...back] });
+    const nodes = (derived.nodes || []).map((node) => {
+        const rect = rects[node.id];
+        return rect ? { ...node, position: { x: rect.x, y: rect.y }, width: rect.width, height: rect.height } : node;
+    });
+    return { derived: { ...derived, nodes }, routes };
+}
+
+// An arrow stops short of its box, as tasksOrthogonalRoute's targetGap does.
+function tasksElkRouteEnd(points, gap = 3) {
+    const end = points[points.length - 1];
+    const prev = points[points.length - 2];
+    const length = Math.hypot(end.x - prev.x, end.y - prev.y) || 1;
+    const back = Math.min(gap, length);
+    return [...points.slice(0, -1).map(({ x, y }) => ({ x, y })), {
+        x: end.x - ((end.x - prev.x) / length) * back,
+        y: end.y - ((end.y - prev.y) / length) * back,
+    }];
+}
+
 export function buildTasksViewState(sourceModel, sourceGraph, projectionId, viewMode, groupByEnabled = false, groupByHierarchy = [], preserveGrouping = false) {
     const projectionState = selectTasksProjectionState(sourceModel, sourceGraph, projectionId);
     const projection = tasksProjectionById(sourceModel, projectionId) || {};
