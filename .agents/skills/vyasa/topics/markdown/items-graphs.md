@@ -548,6 +548,9 @@ e2: n2 -> n3 creates
 - Use another edge for another semantic relation between the same nodes.
 - Keep unique edge attrs inline only when UI/CLI can query or display them; otherwise omit dead text attrs.
 - `dashed=true` draws the edge dashed. Use it for a feedback path or an optional step.
+- Edge order sets direction in a free graph. ELK lays out every node and edge in one pass; an edge that closes a cycle is laid out reversed, and the edge listed later is the one reversed. List structural edges before feedback edges such as `records` or a sequence's `returns`, or a writer node drops below the nodes that record into it.
+- A view with no `@views` entry selected merges every source. A sequence source then adds its calls and returns to the structure graph, so give the structure view its own `source=`.
+- In a free graph, `edge_path=orthogonal` follows the lanes ELK reserved; `ribbon` (the default) uses ELK's node positions only. Use `orthogonal` when edges cross groups.
 
 ## Attrs
 
