@@ -89,11 +89,6 @@ if (!window.__vyasaZenBound) {
   const initialRevealUnits = (units) => (AUTO_REVEAL_FIRST_SECTION
     ? units.slice(0, Math.min(units.length, leadingHeadingCount(units) + 1))
     : units.slice(0, baselineCount(units)));
-  const showInitialUnit = (body, unit) => {
-    // The old branch's first section follows the same L as a stepped reveal.
-    if (AUTO_REVEAL_FIRST_SECTION && !isHeadingUnit(unit)) glideSidewaysThen(body, [unit], () => showUnit(unit));
-    else showUnit(unit);
-  };
 
   const leadingHeadingCount = (units) => {
     const firstContent = units.findIndex((unit) => unit.dataset.revealKind !== 'heading');
@@ -243,13 +238,29 @@ if (!window.__vyasaZenBound) {
   ['wheel', 'touchstart'].forEach((type) =>
     window.addEventListener(type, () => { window.cancelAnimationFrame(glideFrame); glideTarget = null; }, { passive: true }));
 
-  const getRevealViewportInsets = () => {
-    const navbarBottom = document.getElementById('site-navbar')?.getBoundingClientRect().bottom || 0;
-    return {
-      top: Math.max(24, Math.ceil(navbarBottom + 16)),
-      bottom: activeReserve,
-    };
+  // The slide area is the window minus the top band (nav chrome) and the bottom band
+  // (progress bars); both bands are opaque and occlude content scrolled under them.
+  const getRevealViewportInsets = () => ({ top: activeReserve, bottom: activeReserve });
+
+  // Soft shadows on a band while revealed content is hidden under it.
+  let clipFrame = 0;
+  const syncClipShadows = () => {
+    window.cancelAnimationFrame(clipFrame);
+    clipFrame = window.requestAnimationFrame(() => {
+      const body = getRevealBody(document);
+      const content = body?.closest('.vyasa-zen-content');
+      if (!content) return;
+      const ink = unionRect(shownInk(body).map(({ r }) => r));
+      const { top, bottom } = getRevealViewportInsets();
+      content.toggleAttribute('data-zen-clip-top', Number.isFinite(ink.top) && ink.top < top - 1);
+      content.toggleAttribute('data-zen-clip-bottom', Number.isFinite(ink.bottom) && ink.bottom > window.innerHeight - bottom + 1);
+    });
   };
+  window.addEventListener('scroll', syncClipShadows, { passive: true });
+  window.addEventListener('resize', syncClipShadows);
+  document.addEventListener('transitionend', (event) => {
+    if (event.target instanceof Element && event.target.closest('.vyasa-zen-slide-body')) syncClipShadows();
+  });
 
   const keepUnitInView = (unit) => {
     if (!unit?.isConnected) return;
@@ -505,10 +516,14 @@ if (!window.__vyasaZenBound) {
     const navBottom = document.getElementById('site-navbar')?.getBoundingClientRect().bottom || 0;
     const bandFor = (reserve) => ({ reserve, top: navBottom + reserve, height: window.innerHeight - 2 * reserve - navBottom });
     const chromeBand = bandFor(slideReserve());
-    const band = contentHeight <= chromeBand.height ? chromeBand : bandFor(REVEAL_MIN_RESERVE);
+    // Content taller than the slide area scrolls inside it; it never moves into the bands.
+    const band = chromeBand;
     setVar(body, '--vyasa-zen-band-h', `${Math.round(chromeBand.height)}px`);
     const { reserve, top: bandTop, height: bandHeight } = band;
     activeReserve = reserve;
+    const content = body.closest('.vyasa-zen-content');
+    if (content) setVar(content, '--vyasa-zen-band-reserve', `${reserve}px`);
+    syncClipShadows();
     const desiredTop = bandTop + (bandHeight - contentHeight) / 2;
     const fits = contentHeight <= bandHeight;
     // Content below its centre gets a top margin; content that would need to rise
@@ -528,7 +543,9 @@ if (!window.__vyasaZenBound) {
     if (firstPlacement) {
       void body.offsetHeight;
       body.style.transition = '';
-      body.dataset.centerPlaced = '1';
+      // Like the sideways placement, the first vertical placement is the first one with ink:
+      // a recentre before any unit shows must not turn the first heading's placement into a glide.
+      if (hasInk) body.dataset.centerPlaced = '1';
     }
     if (scrollTarget !== null) {
       if (firstPlacement) window.scrollTo(0, scrollTarget);
@@ -619,8 +636,9 @@ if (!window.__vyasaZenBound) {
   document.fonts?.ready.then(scheduleRecenter);
 
   // Nested bullets fade in one by one after their unit reveals; CSS reads the index.
+  // Cards of a card grid (MkDocs `grid cards`) fade in the same way, in grid order.
   const markNestedBullets = (units) => units.forEach((unit) => {
-    unit.querySelectorAll('li li').forEach((item, index) => {
+    unit.querySelectorAll('li li, .grid.cards > :is(ul, ol) > li, .grid > .card').forEach((item, index) => {
       item.dataset.nestedReveal = '';
       item.style.setProperty('--vyasa-nested-index', String(index + 1));
     });
@@ -693,17 +711,20 @@ if (!window.__vyasaZenBound) {
       }
     }
     if (!backNavMode && policy === 'step') {
-      initialRevealUnits(units).forEach((unit, index) => {
-        revealTimers.push(window.setTimeout(() => {
-          if (unit.dataset.revealState !== 'visible') {
-            showInitialUnit(body, unit);
-            revealLog('initial reveal timer fired', {
-              index: unit.dataset.revealIndex,
-              kind: unit.dataset.revealKind,
-            });
-          }
-        }, baseDelay + index * stagger));
-      });
+      // One unit at a time, each finishing its L (sideways, then reveal and recentre
+      // vertically) before the next starts; overlapping steps would move diagonally.
+      const queue = initialRevealUnits(units);
+      const revealNext = () => {
+        const unit = queue.shift();
+        if (!unit) return;
+        if (unit.dataset.revealState === 'visible') return revealNext();
+        glideSidewaysThen(body, [unit], () => {
+          showUnit(unit);
+          revealLog('initial reveal step', { index: unit.dataset.revealIndex, kind: unit.dataset.revealKind });
+          revealTimers.push(window.setTimeout(revealNext, Math.max(stagger, revealShiftMs())));
+        });
+      };
+      revealTimers.push(window.setTimeout(revealNext, baseDelay));
     }
     body.dataset.revealInitialized = '1';
     const state = units.map((unit) => ({
@@ -919,15 +940,69 @@ if (!window.__vyasaZenBound) {
   };
   const overviewRows = () =>
     Array.from(document.querySelectorAll('#slide-overview [data-zen-overview-node]'));
-  const refreshOverviewVisibility = () => {
+  // Expanding or collapsing a section resizes the card smoothly: leaving rows fade out first,
+  // then the card glides from its old size to its new one (FLIP) while entering rows fade in.
+  const OVERVIEW_RESIZE_MS = 220;
+  const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  let overviewResizeTimer = 0;
+  const resizeOverviewCard = (applyChange) => {
+    const card = document.querySelector('#slide-overview .vyasa-zen-overview-card');
+    if (!card || reducedMotion()) {
+      applyChange();
+      return;
+    }
+    window.clearTimeout(overviewResizeTimer);
+    card.style.transition = 'none';
+    card.style.width = '';
+    card.style.height = '';
+    const before = card.getBoundingClientRect();
+    applyChange();
+    const after = card.getBoundingClientRect();
+    if (Math.abs(after.width - before.width) < 1 && Math.abs(after.height - before.height) < 1) {
+      card.style.transition = '';
+      return;
+    }
+    card.style.width = `${before.width}px`;
+    card.style.height = `${before.height}px`;
+    card.style.overflowY = 'hidden';
+    void card.offsetHeight;
+    card.style.transition = `width ${OVERVIEW_RESIZE_MS}ms var(--vyasa-ease), height ${OVERVIEW_RESIZE_MS}ms var(--vyasa-ease)`;
+    card.style.width = `${after.width}px`;
+    card.style.height = `${after.height}px`;
+    overviewResizeTimer = window.setTimeout(() => {
+      card.style.transition = '';
+      card.style.width = '';
+      card.style.height = '';
+      card.style.overflowY = '';
+    }, OVERVIEW_RESIZE_MS + 20);
+  };
+  const overviewRowVisibility = () => {
     const collapsedDepths = [];
-    overviewRows().forEach((row) => {
+    return overviewRows().map((row) => {
       const depth = Number(row.dataset.depth);
       while (collapsedDepths.length && collapsedDepths.at(-1) >= depth) collapsedDepths.pop();
-      row.hidden = collapsedDepths.length > 0;
-      if (!row.hidden && row.dataset.collapsed === 'true') collapsedDepths.push(depth);
+      const hidden = collapsedDepths.length > 0;
+      if (!hidden && row.dataset.collapsed === 'true') collapsedDepths.push(depth);
+      return [row, hidden];
     });
-    fitOverview();
+  };
+  let overviewLeaveTimer = 0;
+  const refreshOverviewVisibility = () => {
+    window.clearTimeout(overviewLeaveTimer);
+    const plan = overviewRowVisibility();
+    const leaving = plan.filter(([row, hidden]) => hidden && !row.hidden).map(([row]) => row);
+    const entering = plan.filter(([row, hidden]) => !hidden && row.hidden).map(([row]) => row);
+    const apply = () => resizeOverviewCard(() => {
+      plan.forEach(([row, hidden]) => { row.hidden = hidden; delete row.dataset.overviewLeaving; });
+      entering.forEach((row) => {
+        row.dataset.overviewEntering = '';
+        window.setTimeout(() => { delete row.dataset.overviewEntering; }, OVERVIEW_RESIZE_MS * 2);
+      });
+      fitOverview();
+    });
+    if (!leaving.length || reducedMotion()) return apply();
+    leaving.forEach((row) => { row.dataset.overviewLeaving = ''; });
+    overviewLeaveTimer = window.setTimeout(apply, OVERVIEW_RESIZE_MS * 0.6);
   };
   const moveOverviewSelection = (delta) => {
     const links = overviewRows()

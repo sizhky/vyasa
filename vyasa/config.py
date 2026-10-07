@@ -83,6 +83,7 @@ class VyasaConfig:
         _config_generation += 1
         self._config = {}
         self._loaded_config_path: Optional[Path] = None
+        self._mkdocs_root: Optional[Path] = None
         self._explicit_config_path = config_path is not None
         self._load_config(config_path)
     
@@ -108,7 +109,22 @@ class VyasaConfig:
                 cwd_config = Path.cwd() / '.vyasa'
                 if cwd_config.exists():
                     config_file = cwd_config
-        
+
+            # vyasa manual/mkdocs-compatibility.md#configuration
+            if not config_file and not str(os.getenv('VYASA_IGNORE_MKDOCS', '')).lower() in ('true', '1', 'yes', 'on'):
+                from .extensions_builtin.mkdocs.config import find_mkdocs_config, vyasa_config_from_mkdocs
+
+                search_dir = Path(os.getenv('VYASA_CLI_ROOT') or Path.cwd())
+                mkdocs_file = find_mkdocs_config(search_dir) if not (search_dir / '.vyasa').exists() else None
+                if mkdocs_file:
+                    try:
+                        self._config = vyasa_config_from_mkdocs(mkdocs_file)
+                        self._loaded_config_path = mkdocs_file
+                        self._mkdocs_root = Path(self._config['root'])
+                    except Exception as exc:
+                        from loguru import logger
+                        logger.warning("mkdocs config {} could not be read: {}", mkdocs_file, exc)
+
         # Load the config file if found
         if config_file:
             try:
@@ -156,6 +172,8 @@ class VyasaConfig:
     
     def get_root_folder(self) -> Path:
         """Get the blog root folder path."""
+        if self._mkdocs_root is not None:
+            return self._mkdocs_root
         cli_root = os.getenv('VYASA_CLI_ROOT')
         if cli_root:
             return Path(cli_root).expanduser().resolve()

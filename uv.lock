@@ -2584,7 +2584,7 @@ wheels = [
 
 [[package]]
 name = "vyasa"
-version = "0.6.132"
+version = "0.6.133"
 source = { editable = "." }
 dependencies = [
     { name = "dulwich" },
@@ -2598,6 +2598,7 @@ dependencies = [
     { name = "pillow" },
     { name = "python-fasthtml" },
     { name = "python-frontmatter" },
+    { name = "pyyaml" },
     { name = "shapely" },
     { name = "tree-sitter" },
     { name = "tree-sitter-language-pack" },
@@ -2633,6 +2634,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "python-fasthtml", specifier = ">=0.6.9" },
     { name = "python-frontmatter", specifier = ">=1.1.0" },
+    { name = "pyyaml", specifier = ">=6.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.5.0" },
     { name = "safepyrun", marker = "python_full_version >= '3.12' and extra == 'altair'", specifier = ">=0.2.7" },
     { name = "shapely", specifier = ">=2.0.0" },

@@ -3,9 +3,11 @@ import {
     installLinkPreviewPanTracking,
     linkPreviewDimpleDisplacement,
     linkPreviewDimplePath,
+    linkPreviewHorizontalScroller,
     linkPreviewPreferredHeight,
     linkPreviewPreferredPosition,
     linkPreviewPreferredWidth,
+    linkPreviewSpringStep,
     linkPreviewPointerGeometry,
     linkPreviewStoredPosition,
     rememberLinkPreviewHeight,
@@ -100,7 +102,7 @@ function createDimpleFilter() {
     return { id, svg, filter, image, displacement };
 }
 
-function updateDimpleFilter(effect, popupRect, dimple, inside) {
+function updateDimpleFilter(effect, popupRect, dimple, inside, scale) {
     const radius = inside ? 76 : 58;
     const x = dimple.x - popupRect.left;
     const y = dimple.y - popupRect.top;
@@ -112,7 +114,7 @@ function updateDimpleFilter(effect, popupRect, dimple, inside) {
     effect.image.setAttribute('y', String(y - radius));
     effect.image.setAttribute('width', String(radius * 2));
     effect.image.setAttribute('height', String(radius * 2));
-    effect.displacement.setAttribute('scale', inside ? '18' : '13');
+    effect.displacement.setAttribute('scale', String(scale));
 }
 
 function inferCurrentPath() {
@@ -166,17 +168,13 @@ function positionPopover(popover, point) {
 }
 
 
-// One owner decides which element inside a popover scrolls. The wheel handler
-// below and the graph's code mode both ask here, so a change to the preview
-// markup moves one line, not two.
+// KG code mode scrolls a preview from outside it, so it cannot rely on the
+// browser routing the wheel. Pointer wheels inside a popover scroll natively.
 function scrollPreviewBody(popover, deltaX, deltaY) {
     const body = popover?.querySelector?.('.vyasa-link-preview-body');
     if (!body) return false;
-    const tables = [...body.querySelectorAll('.vyasa-table-scroll')]
-        .filter((table) => table.scrollWidth > table.clientWidth);
     body.scrollTop += deltaY;
-    if (tables.length) tables.forEach((table) => { table.scrollLeft += deltaX; });
-    else body.scrollLeft += deltaX;
+    linkPreviewHorizontalScroller(body, body.querySelectorAll('.vyasa-table-scroll')).scrollLeft += deltaX;
     return true;
 }
 
@@ -194,17 +192,17 @@ function prepareDimpleCanvas(canvas, width, height, dpr) {
     return context;
 }
 
-function drawDimpleCanvas(canvas, pinchCanvas, popupRect, dimple, inside) {
+function drawDimpleCanvas(canvas, popupRect, dimple, inside, strength) {
     const dpr = window.devicePixelRatio || 1;
     const width = Math.max(1, Math.round(popupRect.width));
     const height = Math.max(1, Math.round(popupRect.height));
     const context = prepareDimpleCanvas(canvas, width, height, dpr);
-    const pinchContext = prepareDimpleCanvas(pinchCanvas, width, height, dpr);
-    if (!context || !pinchContext) return;
+    if (!context) return;
     const x = dimple.x - popupRect.left;
     const y = dimple.y - popupRect.top;
     const radius = inside ? 76 : 58;
     context.save();
+    context.globalAlpha = Math.min(1, strength);
     context.beginPath();
     context.arc(x, y, radius, 0, Math.PI * 2);
     context.clip();
@@ -215,22 +213,6 @@ function drawDimpleCanvas(canvas, pinchCanvas, popupRect, dimple, inside) {
     context.fillStyle = contact;
     context.fillRect(x - radius, y - radius, radius * 2, radius * 2);
     context.restore();
-    pinchContext.save();
-    pinchContext.beginPath();
-    pinchContext.arc(x, y, radius, 0, Math.PI * 2);
-    pinchContext.clip();
-    const pinch = pinchContext.createRadialGradient(x, y, 0, x, y, radius * 0.3);
-    pinch.addColorStop(0, 'rgba(0,0,0,1)');
-    pinch.addColorStop(0.3, 'rgba(10,10,10,0.5)');
-    pinch.addColorStop(0.8, 'rgba(10,10,10,0.0)');
-    pinch.addColorStop(1, 'rgba(10,10,10,0)');
-    pinchContext.fillStyle = pinch;
-    pinchContext.fillRect(x - radius, y - radius, radius * 2, radius * 2);
-    pinchContext.fillStyle = 'rgba(0,0,0,1)';
-    pinchContext.beginPath();
-    pinchContext.arc(x, y, 1.8, 0, Math.PI * 2);
-    pinchContext.fill();
-    pinchContext.restore();
 }
 
 function createPreviewView({ point, link, onClose }) {
@@ -241,7 +223,6 @@ function createPreviewView({ point, link, onClose }) {
     const pointerOutline = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     const pointerDimple = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     const dimpleCanvas = document.createElement('canvas');
-    const pinchCanvas = document.createElement('canvas');
     const dimpleEffect = createDimpleFilter();
     popover.className = 'vyasa-link-preview-popover is-open';
     popover.setAttribute('role', 'dialog');
@@ -260,6 +241,7 @@ function createPreviewView({ point, link, onClose }) {
         '</span>',
         '</div>',
         '<div class="vyasa-link-preview-tabs" role="tablist" aria-label="Code URLs" hidden></div>',
+        '<div class="vyasa-link-preview-sections" hidden><div role="tablist" aria-label="Sections in this file"></div><span class="vyasa-link-preview-sections-keys" aria-hidden="true">↑↓</span></div>',
         '<div data-vyasa-link-preview-content class="vyasa-link-preview-content vyasa-link-preview-loading">Loading preview...</div>',
         '</div>',
     ].join('');
@@ -271,14 +253,15 @@ function createPreviewView({ point, link, onClose }) {
     pointer.appendChild(pointerDimple);
     dimpleCanvas.className = 'vyasa-link-preview-dimple-canvas';
     dimpleCanvas.setAttribute('aria-hidden', 'true');
-    pinchCanvas.className = 'vyasa-link-preview-pinch-canvas';
-    pinchCanvas.setAttribute('aria-hidden', 'true');
     const content = popover.querySelector('[data-vyasa-link-preview-content]');
     const card = popover.querySelector('.vyasa-link-preview-card');
-    popover.append(dimpleCanvas, pinchCanvas);
+    popover.append(dimpleCanvas);
     const bar = popover.querySelector('.vyasa-link-preview-bar');
     const tabs = popover.querySelector('.vyasa-link-preview-tabs');
+    const sections = popover.querySelector('.vyasa-link-preview-sections');
+    const sectionList = sections.querySelector('[role="tablist"]');
     let tabSignature = '';
+    let sectionSignature = '';
     let selectTab = () => {};
     const sourceLabel = popover.querySelector('[data-vyasa-link-preview-origin]');
     const sourceOrigin = popover.querySelector('[data-vyasa-link-preview-source]');
@@ -320,6 +303,50 @@ function createPreviewView({ point, link, onClose }) {
         pointer.style.zIndex = String(z + 1);
         popover.style.zIndex = String(z);
     };
+    let shownDimple = null;
+    let depth = { value: 0, velocity: 0, settled: true };
+    let depthTarget = 0;
+    let depthFrame = null;
+    let depthTime = 0;
+    let lastPopupRect = null;
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const dimpleScale = (inside) => Number.parseFloat(getComputedStyle(popover).getPropertyValue(
+        inside ? '--vyasa-link-preview-dimple-inside-scale' : '--vyasa-link-preview-dimple-scale')) || (inside ? 44 : 32);
+    const wakeDepth = () => {
+        if (depthFrame !== null || depth.settled) return;
+        depthTime = performance.now();
+        depthFrame = window.requestAnimationFrame((now) => {
+            depthFrame = null;
+            depth = reducedMotion.matches
+                ? { value: depthTarget, velocity: 0, settled: true }
+                : linkPreviewSpringStep(depth, depthTarget, (now - depthTime) / 1000);
+            updatePointer();
+        });
+    };
+    // A moving popup kicks the dimple deeper; the spring pulls it back after.
+    const pushDepth = (target, popupRect) => {
+        const now = performance.now();
+        const moved = lastPopupRect ? Math.hypot(popupRect.left - lastPopupRect.left, popupRect.top - lastPopupRect.top) : 0;
+        const speed = lastPopupRect ? moved / Math.max(16, now - lastPopupRect.time) * 1000 : 0;
+        lastPopupRect = { left: popupRect.left, top: popupRect.top, time: now };
+        if (target && speed > 0) depth = { ...depth, velocity: depth.velocity + Math.min(1.5, speed * 0.0015), settled: false };
+        if (target !== depthTarget) depth = { ...depth, settled: false };
+        depthTarget = target;
+        wakeDepth();
+    };
+    const drawDimple = (popupRect) => {
+        const visible = Boolean(popupRect && shownDimple) && !(depth.settled && depthTarget === 0);
+        dimpleCanvas.hidden = !visible;
+        if (!visible) {
+            card.style.removeProperty('filter');
+            dimpleCanvas.getContext('2d')?.clearRect(0, 0, dimpleCanvas.width, dimpleCanvas.height);
+            return;
+        }
+        const strength = Math.min(2, depth.value);
+        updateDimpleFilter(dimpleEffect, popupRect, shownDimple.dimple, shownDimple.inside, strength * dimpleScale(shownDimple.inside));
+        card.style.filter = `url(#${dimpleEffect.id})`;
+        drawDimpleCanvas(dimpleCanvas, popupRect, shownDimple.dimple, shownDimple.inside, Math.max(0, strength));
+    };
     const updatePointer = () => {
         const origin = externalPreviewOrigins.get(activeLink);
         const source = origin?.frame || activeLink;
@@ -329,8 +356,10 @@ function createPreviewView({ point, link, onClose }) {
         if (!source.isConnected || (origin && (origin.width <= 0 || origin.height <= 0
             || origin.x + origin.width < 0 || origin.y + origin.height < 0 || origin.x > bounds.width || origin.y > bounds.height))) {
             pointer.hidden = true;
-            card.style.removeProperty('filter');
-            dimpleCanvas.hidden = pinchCanvas.hidden = true;
+            shownDimple = null;
+            depth = { value: 0, velocity: 0, settled: true };
+            depthTarget = 0;
+            drawDimple(null);
             return;
         }
         const popupRect = popover.getBoundingClientRect();
@@ -345,28 +374,17 @@ function createPreviewView({ point, link, onClose }) {
         });
         pointer.hidden = false;
         const dimple = geometry.kind === 'dimple' || geometry.kind === 'dimple-inside';
-        const insideDimple = geometry.kind === 'dimple-inside';
+        if (dimple) shownDimple = { dimple: geometry.dimple, inside: geometry.kind === 'dimple-inside' };
+        pushDepth(dimple ? 1 : 0, popupRect);
         popover.classList.toggle('has-origin-dimple', dimple);
-        popover.classList.toggle('has-origin-dimple-inside', insideDimple);
-        dimpleCanvas.hidden = !dimple;
-        pinchCanvas.hidden = !dimple;
+        popover.classList.toggle('has-origin-dimple-inside', dimple && shownDimple.inside);
         pointerShape.style.display = dimple ? 'none' : '';
         pointerOutline.style.display = dimple ? 'none' : '';
-        if (dimple) {
-            const path = linkPreviewDimplePath(geometry.dimple);
-            pointerDimple.style.display = path ? '' : 'none';
-            pointerDimple.setAttribute('d', path);
-            updateDimpleFilter(dimpleEffect, popupRect, geometry.dimple, insideDimple);
-            card.style.filter = `url(#${dimpleEffect.id})`;
-            drawDimpleCanvas(dimpleCanvas, pinchCanvas, popupRect, geometry.dimple, insideDimple);
-            return;
-        }
-        pointerDimple.style.display = 'none';
-        card.style.removeProperty('filter');
-        dimpleCanvas.hidden = true;
-        pinchCanvas.hidden = true;
-        dimpleCanvas.getContext('2d')?.clearRect(0, 0, dimpleCanvas.width, dimpleCanvas.height);
-        pinchCanvas.getContext('2d')?.clearRect(0, 0, pinchCanvas.width, pinchCanvas.height);
+        const path = dimple ? linkPreviewDimplePath({ ...geometry.dimple, depth: (geometry.dimple.depth || 0) * depth.value }) : '';
+        pointerDimple.style.display = path ? '' : 'none';
+        pointerDimple.setAttribute('d', path);
+        drawDimple(popupRect);
+        if (dimple) return;
         pointerShape.setAttribute('points', geometry.fill.map(([x, y]) => `${x},${y}`).join(' '));
         pointerOutline.setAttribute('d', `M ${geometry.outline[0]} L ${geometry.outline[1]} M ${geometry.outline[0]} L ${geometry.outline[2]}`);
     };
@@ -412,26 +430,37 @@ function createPreviewView({ point, link, onClose }) {
                 () => popover.classList.remove('vyasa-link-preview-pin-bloom'),
                 3520,
             );
+            if (shownDimple) {
+                depth = { ...depth, velocity: depth.velocity + 5, settled: false };
+                wakeDepth();
+            }
             raise();
         },
-        setTabs: (links, activeIndex, onSelect, tabKinds = []) => {
+        // One tab per file; the strip below lists the sections inside the active file.
+        setTabs: (items, activeTab, activeSection, onSelect) => {
             selectTab = onSelect;
-            const nextSignature = links.map((item, index) => `${item.getAttribute('href') || ''}\n${tabKinds[index] || 'code'}`).join('\n');
+            const nextSignature = items.map((item) => `${item.link.getAttribute('href') || ''}\n${item.kind || 'code'}\n${item.sections.length}`).join('\n');
             if (nextSignature !== tabSignature) {
                 tabs.replaceChildren();
-                links.forEach((item, index) => {
+                items.forEach((item, index) => {
                     const button = document.createElement('button');
-                    const href = item.getAttribute('href') || '';
+                    const href = item.link.getAttribute('href') || '';
                     button.type = 'button';
                     button.setAttribute('role', 'tab');
-                    button.classList.add(`vyasa-link-preview-tab-${tabKinds[index] || 'code'}`);
+                    button.classList.add(`vyasa-link-preview-tab-${item.kind || 'code'}`);
                     button.textContent = decodeURIComponent(href.split(/[?#]/)[0].split('/').pop() || href);
+                    if (item.sections.length > 1) {
+                        const count = document.createElement('span');
+                        count.className = 'vyasa-link-preview-tab-count';
+                        count.textContent = String(item.sections.length);
+                        button.append(count);
+                    }
                     button.title = href;
                     button.addEventListener('click', () => selectTab(index));
                     button.addEventListener('keydown', (event) => {
                         const delta = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
                         if (!delta) return;
-                        const target = (index + delta + links.length) % links.length;
+                        const target = (index + delta + items.length) % items.length;
                         selectTab(target);
                         tabs.children[target]?.focus();
                         event.preventDefault();
@@ -442,10 +471,31 @@ function createPreviewView({ point, link, onClose }) {
                 tabSignature = nextSignature;
             }
             Array.from(tabs.children).forEach((button, index) => {
-                button.setAttribute('aria-selected', String(index === activeIndex));
-                button.tabIndex = index === activeIndex ? 0 : -1;
+                button.setAttribute('aria-selected', String(index === activeTab));
+                button.tabIndex = index === activeTab ? 0 : -1;
             });
-            tabs.hidden = links.length < 2;
+            tabs.hidden = items.length < 2;
+            const labels = items[activeTab]?.sections || [];
+            const nextSections = `${activeTab}\n${labels.join('\n')}`;
+            if (nextSections !== sectionSignature) {
+                sectionList.replaceChildren(...labels.map((label, index) => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.setAttribute('role', 'tab');
+                    button.textContent = label;
+                    button.title = label;
+                    button.addEventListener('click', () => selectTab(activeTab, index));
+                    return button;
+                }));
+                sectionSignature = nextSections;
+            }
+            Array.from(sectionList.children).forEach((button, index) => {
+                const selected = index === activeSection;
+                button.setAttribute('aria-selected', String(selected));
+                button.tabIndex = selected ? 0 : -1;
+                if (selected) sectionList.scrollLeft = Math.max(0, button.offsetLeft - (sectionList.clientWidth - button.offsetWidth) / 2);
+            });
+            sections.hidden = labels.length < 2;
         },
         setLink: (nextLink) => {
             activeLink = nextLink;
@@ -467,6 +517,7 @@ function createPreviewView({ point, link, onClose }) {
         },
         remove: () => {
             window.clearTimeout(pinBloomTimer);
+            if (depthFrame !== null) window.cancelAnimationFrame(depthFrame);
             resizeObserver.disconnect();
             forgetPositionAnchor(popover);
             previewViews.delete(view);
@@ -675,7 +726,7 @@ window.vyasaLinkPreview = {
     close: (entry) => previews.close(entry),
     isOpen: (entry) => previews.has(entry),
     replace: (entry, link) => previews.replace(entry, link),
-    setTabs: (entry, links, activeIndex, onSelect, tabKinds) => entry?.view?.setTabs?.(links, activeIndex, onSelect, tabKinds),
+    setTabs: (entry, items, activeTab, activeSection, onSelect) => entry?.view?.setTabs?.(items, activeTab, activeSection, onSelect),
     scrollBy: (entry, deltaX, deltaY) => entry?.view?.scrollBy?.(deltaX, deltaY) === true,
     stepCodeBlock: (entry, delta) => entry?.view?.stepCodeBlock?.(delta) === true,
 };
@@ -741,12 +792,6 @@ document.body.addEventListener('pointerout', (event) => {
         if (hoveredLink === link) hoveredLink = null;
     }
 }, true);
-document.body.addEventListener('wheel', (event) => {
-    const popover = event.target?.closest?.('.vyasa-link-preview-popover');
-    if (!popover || !scrollPreviewBody(popover, event.deltaX, event.deltaY)) return;
-    event.preventDefault();
-    event.stopPropagation();
-}, { capture: true, passive: false });
 window.addEventListener('keydown', handleKeydown, true);
 window.addEventListener('keyup', trackModifier, true);
 window.addEventListener('blur', () => { modifierDown = false; });

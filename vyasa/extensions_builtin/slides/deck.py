@@ -1,6 +1,6 @@
 import re
 from dataclasses import dataclass
-from ...helpers import _strip_leading_frontmatter_block, content_url_for_slug, resolve_heading_anchor
+from ...helpers import _strip_leading_frontmatter_block, content_url_for_slug, resolve_heading_anchor, split_heading_text_and_id
 from ..tooltip_syntax import extract_tooltips, format_tooltip_definitions
 
 
@@ -142,162 +142,126 @@ def split_top_level_html(fragment):
     return chunks
 
 
-def split_markdown_paragraph_groups(markdown_text):
-    groups, current = [], []
-    in_fence = False
-    tabs_depth = 0
-    for line in markdown_text.splitlines():
-        stripped = line.strip()
-        if re.match(r"^(```+|~~~+)", stripped):
-            in_fence = not in_fence
-        elif not in_fence and stripped == ":::tabs":
-            tabs_depth += 1
-        elif not in_fence and tabs_depth and stripped == ":::":
-            tabs_depth -= 1
-        if not in_fence and stripped == "---":
-            continue
-        if not in_fence and not tabs_depth and not stripped:
-            if current:
-                groups.append("\n".join(current).strip())
-                current = []
-            continue
-        current.append(line)
-    if current:
-        groups.append("\n".join(current).strip())
-    groups = [group for group in groups if group]
-    exploded = []
-    for group in groups:
-        if _contains_tabs_group(group):
-            exploded.append(group)
-        elif _contains_list_group(group) and not _contains_fenced_block(group):
-            exploded.extend(_split_mixed_list_group(group))
-        else:
-            exploded.append(group)
-    return exploded
-
-
-def _is_heading_only_group(group):
-    lines = [line.strip() for line in (group or "").splitlines() if line.strip()]
-    return len(lines) == 1 and bool(re.match(r"^#{1,6}\s+", lines[0]))
-
-
-def _is_list_group(group):
-    lines = [line.strip() for line in (group or "").splitlines() if line.strip()]
-    return bool(lines) and all(
-        re.match(r"^\s*([-*+]\s+|\d+\.\s+)", line) for line in lines
-    )
-
-
-def _split_mixed_list_group(group):
-    parts = []
-    prelude = []
-    current_item = []
-    for line in (group or "").splitlines():
-        if re.match(r"^([-*+]\s+|\d+\.\s+)", line):
-            if current_item:
-                parts.append("\n".join(current_item).strip())
-            elif prelude:
-                parts.append("\n".join(prelude).strip())
-                prelude = []
-            current_item = [line]
-            continue
-        if current_item:
-            current_item.append(line)
-        else:
-            prelude.append(line)
-    if current_item:
-        parts.append("\n".join(current_item).strip())
-    elif prelude:
-        parts.append("\n".join(prelude).strip())
-    return [part for part in parts if part]
-
-
-def _contains_list_group(group):
-    lines = [line.strip() for line in (group or "").splitlines() if line.strip()]
-    return any(re.match(r"^([-*+]\s+|\d+\.\s+)", line) for line in lines)
-
-
-def _contains_fenced_block(group):
-    return any(re.match(r"^\s*(```+|~~~+)", line) for line in (group or "").splitlines())
-
-
-def _contains_tabs_group(group):
-    text = group or ""
-    return ":::tabs" in text or "::tab{" in text
+_DIRECTIVE = re.compile(r"^(?:<p\b[^>]*>\s*)?<vyasa-reveal(?P<attrs>[^>]*)></vyasa-reveal>(?:\s*</p>)?$")
+_LIST = re.compile(r"^<(ul|ol)\b([^>]*)>(.*)</\1>$", re.DOTALL)
+_SUPPORT_ONLY = re.compile(r"^<(script|style|link)\b", re.IGNORECASE)
+_POPOVER = re.compile(r"^<\w+\b[^>]*\bid=\"([^\"]+)\"[^>]*\bpopover\b")
 
 
 def _parse_reveal_directive_chunk(chunk):
-    match = re.fullmatch(r"<vyasa-reveal(?P<attrs>[^>]*)></vyasa-reveal>", chunk.strip())
+    match = _DIRECTIVE.match(chunk.strip())
     if not match:
         return None
-    attrs = {}
-    for key, value in re.findall(r'data-([a-z]+)="([^"]+)"', match.group("attrs")):
-        attrs[key] = value
-    return attrs
+    return dict(re.findall(r'data-([a-z]+)="([^"]+)"', match.group("attrs")))
+
+
+def split_list_items(chunk):
+    """One chunk per top-level item of a rendered list; an ordered list keeps its numbering.
+
+    >>> split_list_items('<ol class="x"><li>a</li><li>b<ul><li>c</li></ul></li></ol>')
+    ['<ol class="x" start="1"><li>a</li></ol>', '<ol class="x" start="2"><li>b<ul><li>c</li></ul></li></ol>']
+    >>> split_list_items('<p>text</p>')
+    ['<p>text</p>']
+    """
+    match = _LIST.match(chunk.strip())
+    if not match:
+        return [chunk]
+    tag, attrs, inner = match.groups()
+    items = [item for item in split_top_level_html(inner) if item.startswith("<li")]
+    if len(items) < 2:
+        return [chunk]
+    start_match = re.search(r'\bstart="(\d+)"', attrs)
+    first = int(start_match.group(1)) if start_match else 1
+    attrs = re.sub(r'\s*\bstart="\d+"', "", attrs)
+    if tag == "ol":
+        return [f'<ol{attrs} start="{first + index}">{item}</ol>' for index, item in enumerate(items)]
+    return [f"<ul{attrs}>{item}</ul>" for item in items]
+
+
+def _is_anchor(chunk):
+    """True for an empty `<a>` or `<span>`, such as a link target with no content.
+
+    >>> _is_anchor('<span id="a"></span>'), _is_anchor('<a id="b"> </a>'), _is_anchor('<div class="d2"></div>')
+    (True, True, False)
+    """
+    return bool(re.fullmatch(r"<(a|span)\b[^>]*>\s*</\1>", chunk.strip(), re.IGNORECASE))
+
+
+def _unit_kind(chunk):
+    if re.match(r"^<h[1-6]\b", chunk):
+        return "heading"
+    return "list" if re.match(r"^<(ul|ol)\b", chunk) else "content"
 
 
 def build_slide_reveal_units(markdown_text, *, render_fragment, current_path, config: SlideRevealConfig):
+    """Reveal units from the rendered slide: one per top-level HTML element.
+
+    The renderer alone decides where a block ends, so callouts, tabs, card grids, and
+    footnotes stay whole. `paragraph-groups` also reveals a list one item at a time.
+    Support elements join a unit: scripts and styles join the unit before them, and a
+    popover joins the unit that holds its trigger.
+    """
     if not config.enabled:
         return []
-    pending = {}
-    units = []
-    if config.unit == "paragraph-groups":
-        content, tooltips = extract_tooltips(inject_reveal_directives(markdown_text))
-        definitions = format_tooltip_definitions(tooltips)
-        for group in split_markdown_paragraph_groups(content):
-            directive = _parse_reveal_directive_chunk(group)
-            if directive:
-                pending.update(directive)
-                continue
-            kind = "content"
-            if _is_heading_only_group(group):
-                kind = "heading"
-            elif _contains_list_group(group):
-                kind = "list"
-            units.append({
-                "html": render_fragment(
-                    f"{group}\n\n{definitions}" if definitions else group,
-                    current_path=current_path,
-                    slide_mode=True,
-                ),
-                "kind": kind,
-                **pending,
-            })
-            pending = {}
-        return [unit for unit in units if unit.get("html", "").strip()]
-
     fragment = render_fragment(inject_reveal_directives(markdown_text), current_path=current_path, slide_mode=True)
-    for chunk in split_top_level_html(fragment):
+    chunks = split_top_level_html(fragment)
+    if config.unit == "paragraph-groups":
+        chunks = [piece for chunk in chunks for piece in split_list_items(chunk)]
+    units, pending, popovers, lead = [], {}, [], ""
+    for chunk in chunks:
         directive = _parse_reveal_directive_chunk(chunk)
+        if directive is None and _is_anchor(chunk):
+            lead += chunk  # a link target belongs to the block after it
+            continue
         if directive is not None:
             pending.update(directive)
+        elif re.match(r"^<hr\b", chunk):
             continue
-        units.append({"html": chunk, "kind": "content", **pending})
-        pending = {}
+        elif popover := _POPOVER.match(chunk):
+            popovers.append((popover.group(1), chunk))
+        elif _SUPPORT_ONLY.match(chunk) and units:
+            units[-1]["html"] += chunk
+        else:
+            units.append({"html": lead + chunk, "kind": _unit_kind(chunk), **pending})
+            pending, lead = {}, ""
+    if lead and units:
+        units[-1]["html"] += lead
+    for popover_id, chunk in popovers:
+        owner = next((unit for unit in units if f'popovertarget="{popover_id}"' in unit["html"]), units[-1] if units else None)
+        if owner is not None:
+            owner["html"] += chunk
     return [unit for unit in units if unit.get("html", "").strip()]
 
 
+_SEGMENT_COUNTS: dict[tuple, int] = {}
+
+
 def count_slide_progress_segments(markdown_text, *, render_fragment, current_path, config):
-    counter_render = render_fragment if config.unit == "top-level-blocks" else (
-        lambda text, current_path=None, slide_mode=False: text
-    )
-    units = build_slide_reveal_units(
-        markdown_text, render_fragment=counter_render, current_path=current_path, config=config,
-    )
-    step_units = [
-        unit for unit in units
-        if (unit.get("style") or config.style) not in {"none", "instant"}
-    ]
-    first_content = next(
-        (index for index, unit in enumerate(step_units) if unit.get("kind") != "heading"),
-        len(step_units),
-    )
-    return sum(1 for unit in step_units[first_content:] if unit.get("kind") != "heading")
+    """Revealable non-heading units after a slide's leading headings.
+
+    Counting needs the rendered units, so counts are cached per slide text and config.
+    """
+    from ...config import config_generation
+
+    key = (markdown_text, current_path, config, config_generation())
+    if key not in _SEGMENT_COUNTS:
+        if len(_SEGMENT_COUNTS) > 4096:
+            _SEGMENT_COUNTS.clear()
+        units = build_slide_reveal_units(markdown_text, render_fragment=render_fragment, current_path=current_path, config=config)
+        step_units = [unit for unit in units if (unit.get("style") or config.style) not in {"none", "instant"}]
+        first_content = next((index for index, unit in enumerate(step_units) if unit.get("kind") != "heading"), len(step_units))
+        _SEGMENT_COUNTS[key] = sum(1 for unit in step_units[first_content:] if unit.get("kind") != "heading")
+    return _SEGMENT_COUNTS[key]
 
 
 class ZenSlideDeck:
+    """Slides of one document. The source is translated first (extension dialects such as
+    MkDocs), so slide boundaries, anchors, and bodies match the rendered document."""
+
     def __init__(self, markdown_text):
-        content, tooltips = extract_tooltips(markdown_text)
+        from ...extensions import translate_markdown_source
+
+        content, tooltips = extract_tooltips(translate_markdown_source(_strip_leading_frontmatter_block(markdown_text)))
         self.tooltip_definitions = format_tooltip_definitions(tooltips)
         self.slides = list(iter_zen_slides(content)) or [["# Empty deck"]]
         self.anchors = self._build_anchors()
@@ -336,10 +300,10 @@ class ZenSlideDeck:
             for block in slide:
                 match = re.match(r"^(#{1,6})\s+(.+)$", block, re.MULTILINE)
                 if match:
-                    crumbs.append(match.group(2).strip())
+                    crumbs.append(split_heading_text_and_id(match.group(2).strip())[0])
             if not crumbs:
                 items.append({
-                    "index": index + 1, "label": f"Slide {index + 1}", "depth": 1,
+                    "index": index + 1, "label": "Introduction" if index == 1 else f"Slide {index + 1}", "depth": 1,
                     "href": content_url_for_slug(doc_path, prefix="/slides", suffix=f"/{slide_slug(index + 1)}"),
                 })
                 continue
@@ -396,26 +360,80 @@ def iter_zen_slides(markdown_text):
         yield prelude
 
 
-def _split_blocks(markdown_text):
-    blocks, current = [], []
-    in_fence = False
-    tabs_depth = 0
-    for line in markdown_text.strip().splitlines():
-        stripped = line.strip()
-        if re.match(r"^(```+|~~~+)", stripped):
-            in_fence = not in_fence
-        elif not in_fence and stripped == ":::tabs":
-            tabs_depth += 1
-        elif not in_fence and tabs_depth and stripped == ":::":
-            tabs_depth -= 1
-        if current and not in_fence and not tabs_depth and re.match(r"^#{1,6}\s+", line):
-            blocks.append("\n".join(current).strip())
-            current = [line]
+def _html_depth_delta(fragment):
+    """Open elements minus closed elements in a raw HTML block.
+
+    >>> _html_depth_delta('<div class="grid" markdown>'), _html_depth_delta('</div>'), _html_depth_delta('<img src="x"><br/>')
+    (1, -1, 0)
+    """
+    delta = 0
+    for tag in re.findall(r"<!--[\s\S]*?-->|</?[A-Za-z][^>]*>", fragment):
+        if tag.startswith("<!--"):
             continue
-        current.append(line)
-    if current:
-        blocks.append("\n".join(current).strip())
-    return [block for block in blocks if block]
+        if tag.startswith("</"):
+            delta -= 1
+            continue
+        name = re.match(r"<\s*([A-Za-z0-9:_-]+)", tag)
+        if not tag.endswith("/>") and not (name and name.group(1).lower() in _VOID_HTML_TAGS):
+            delta += 1
+    return delta
+
+
+def _slide_headings(lines):
+    """(first line, line count, level, ATX heading line) of each heading that starts a slide.
+
+    A slide starts at a top-level heading as the Markdown parser reads it: headings in
+    fences, lists, quotes, indented bodies, raw HTML elements, and `///` or `:::tabs`
+    blocks do not start a slide. A setext heading is returned in ATX form.
+    """
+    from mistletoe import HTMLRenderer
+    from mistletoe.block_token import Document, Heading, HTMLBlock, SetextHeading
+
+    from ..markdown.pipeline import CALLOUT_BLOCK
+    from ..tabs.render import TABS_BLOCK
+
+    text = "\n".join(lines)
+    opaque = set()
+    for pattern in (CALLOUT_BLOCK, TABS_BLOCK):
+        for match in pattern.finditer(text):
+            first = text.count("\n", 0, match.start())
+            opaque.update(range(first, first + match.group(0).count("\n") + 1))
+    with HTMLRenderer():
+        children = list(Document([line + "\n" for line in lines]).children or [])
+    headings, depth = [], 0
+    for index, token in enumerate(children):
+        start = (getattr(token, "line_number", 0) or 1) - 1
+        if isinstance(token, HTMLBlock):
+            depth = max(0, depth + _html_depth_delta(token.content))
+            continue
+        if depth or start in opaque or not isinstance(token, (Heading, SetextHeading)):
+            continue
+        if isinstance(token, SetextHeading):
+            end = start
+            while end < len(lines) and not re.match(r"^ {0,3}(=+|-+)\s*$", lines[end]):
+                end += 1
+            title = " ".join(line.strip() for line in lines[start:end])
+            headings.append((start, end - start + 1, token.level, f"{'#' * token.level} {title}"))
+        else:
+            headings.append((start, 1, token.level, lines[start].strip()))
+    return headings
+
+
+def _split_blocks(markdown_text):
+    r"""Blocks of a document: text before the first slide heading, then one block per heading.
+
+    >>> _split_blocks("intro\n\n# A\n\n```\n# not a slide\n```\n\nSetext\n------\nbody")
+    ['intro', '# A\n```\n# not a slide\n```', '## Setext\nbody']
+    """
+    lines = markdown_text.strip().splitlines()
+    headings = _slide_headings(lines)
+    prelude = "\n".join(lines[: headings[0][0] if headings else len(lines)]).strip()
+    blocks = [prelude] if prelude else []
+    for index, (start, count, _level, head) in enumerate(headings):
+        end = headings[index + 1][0] if index + 1 < len(headings) else len(lines)
+        body = "\n".join(lines[start + count:end]).strip()
+        blocks.append(f"{head}\n{body}" if body else head)
+    return blocks
 
 
 def _heading_level(block):
@@ -437,8 +455,23 @@ def slide_slug(index):
     return f"slide-{index}"
 
 
+_DECKS: dict[tuple, ZenSlideDeck] = {}
+
+
+def deck_for(markdown_text):
+    """Cached deck for a document's text; a document render asks once per heading."""
+    from ...config import config_generation
+
+    key = (markdown_text, config_generation())
+    if key not in _DECKS:
+        if len(_DECKS) > 64:
+            _DECKS.clear()
+        _DECKS[key] = ZenSlideDeck(markdown_text)
+    return _DECKS[key]
+
+
 def present_href_for_anchor(markdown_text, doc_path, target_anchor):
-    deck = ZenSlideDeck(markdown_text)
+    deck = deck_for(markdown_text)
     for index, anchor in enumerate(deck.anchors, start=2):
         if anchor == target_anchor:
             return content_url_for_slug(doc_path, prefix="/slides", suffix=f"/{slide_slug(index)}")

@@ -147,3 +147,28 @@ export function linkPreviewPointerPoints(sourceRect, popupRect, baseWidth = 28) 
 export function resizeLinkPreviewRect(rect, edge, dx, dy, viewport, margin = 8) {
     return resizePanelRect(rect, edge, dx, dy, viewport, margin);
 }
+
+// KG code mode scrolls a preview the pointer is not over, so no native scroller
+// is under the pointer. Horizontal delta goes to the one wide scroller nearest
+// the vertical centre of the body viewport, or to the body when none is wide.
+export function linkPreviewHorizontalScroller(body, scrollers) {
+    const view = body.getBoundingClientRect();
+    const centre = (view.top + view.bottom) / 2;
+    const distance = (el) => {
+        const box = el.getBoundingClientRect();
+        return Math.max(0, box.top - centre, centre - box.bottom);
+    };
+    const wide = [...scrollers].filter((el) => el.scrollWidth > el.clientWidth);
+    return wide.sort((a, b) => distance(a) - distance(b))[0] || body;
+}
+
+// Dimple depth follows an underdamped spring (zeta ~ 0.5): it overshoots its
+// target once, then settles. Semi-implicit Euler; dt is capped so a stalled
+// tab resumes without a jump.
+export function linkPreviewSpringStep(state, target, dt, stiffness = 260, damping = 16) {
+    const step = Math.min(Math.max(dt, 0), 1 / 30);
+    const velocity = state.velocity + (stiffness * (target - state.value) - damping * state.velocity) * step;
+    const value = state.value + velocity * step;
+    if (Math.abs(velocity) < 0.01 && Math.abs(target - value) < 0.002) return { value: target, velocity: 0, settled: true };
+    return { value, velocity, settled: false };
+}

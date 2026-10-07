@@ -459,9 +459,23 @@ def test_link_preview_keeps_wide_tables_scrollable_inside_the_popup():
     table_rule = css.split(".vyasa-link-preview-body .vyasa-table-scroll > table", 1)[1].split("}", 1)[0]
     assert "width: max-content !important;" in table_rule
     assert "min-width: 100%;" in table_rule
-    assert "const tables = [...body.querySelectorAll('.vyasa-table-scroll')]" in source
-    assert "tables.forEach((table) => { table.scrollLeft += deltaX; });" in source
-    assert "body.querySelectorAll('.vyasa-table-scroll')" in source
+    assert "overscroll-behavior-x: contain;" in css.split(".vyasa-link-preview-body .vyasa-table-scroll.vyasa-table-breakout", 1)[1].split("}", 1)[0]
+    assert "addEventListener('wheel'" not in source
+
+
+def test_link_preview_code_mode_scrolls_one_table_nearest_the_body_centre():
+    script = """
+        import { linkPreviewHorizontalScroller } from './vyasa/extensions_builtin/link_preview/static/link_preview_geometry.js';
+        const box = (top, bottom, wide) => ({ getBoundingClientRect: () => ({ top, bottom }),
+            scrollWidth: wide ? 900 : 300, clientWidth: 300 });
+        const body = box(0, 600, false);
+        const above = box(-400, -100, true);
+        const centred = box(250, 400, true);
+        const narrow = box(280, 320, false);
+        if (linkPreviewHorizontalScroller(body, [above, narrow, centred]) !== centred) throw new Error('expected centred table');
+        if (linkPreviewHorizontalScroller(body, [narrow]) !== body) throw new Error('expected body fallback');
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
 
 
 def test_link_preview_pointer_joins_source_to_nearest_popup_edge():
@@ -553,14 +567,32 @@ def test_link_preview_dimple_uses_a_localized_elastic_displacement_field():
     assert "feTurbulence" not in source
     assert "card.style.filter" in source
     assert "pointerDimple.style.display" in source
-    assert "const pinch = pinchContext.createRadialGradient(x, y, 0, x, y, radius * 0.3)" in source
-    assert "pinchContext.arc(x, y, 1.8, 0, Math.PI * 2)" in source
-    assert "vyasa-link-preview-pinch-canvas" in source
+    assert "pinch" not in source
     dimple_draw = source.split("function drawDimpleCanvas", 1)[1].split("function createPreviewView", 1)[0]
     assert "createLinearGradient" not in dimple_draw
     css = Path("vyasa/extensions_builtin/link_preview/static/link_preview.css").read_text()
-    pinch_rule = css.rsplit(".vyasa-link-preview-pinch-canvas", 1)[1].split("}", 1)[0]
-    assert "mix-blend-mode: normal;" in pinch_rule
+    assert "--vyasa-link-preview-dimple-scale: 32;" in css
+    assert "pinch" not in css
+
+
+def test_link_preview_dimple_depth_overshoots_then_settles():
+    script = """
+        import { linkPreviewSpringStep } from './vyasa/extensions_builtin/link_preview/static/link_preview_geometry.js';
+        let state = { value: 0, velocity: 0, settled: false };
+        let peak = 0;
+        let frames = 0;
+        while (!state.settled && frames < 600) {
+            state = linkPreviewSpringStep(state, 1, 1 / 60);
+            peak = Math.max(peak, state.value);
+            frames += 1;
+        }
+        if (peak < 1.1 || peak > 1.35) throw new Error(`expected one visible overshoot, peak ${peak}`);
+        if (!state.settled || state.value !== 1) throw new Error('spring did not settle on its target');
+        if (frames > 120) throw new Error(`spring took ${frames} frames to settle`);
+        const stalled = linkPreviewSpringStep({ value: 0, velocity: 0 }, 1, 5);
+        if (stalled.value > 0.3) throw new Error('a stalled frame jumped the spring');
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
 
 
 def test_link_preview_refreshes_pointer_during_canvas_pan():

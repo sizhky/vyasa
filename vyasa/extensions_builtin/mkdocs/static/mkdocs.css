@@ -1,0 +1,153 @@
+/* vyasa manual/mkdocs-compatibility.md#navigation — header tabs. */
+.vyasa-mkdocs-tabs {
+    background: color-mix(in srgb, var(--vyasa-bg) 88%, transparent);
+    -webkit-backdrop-filter: saturate(1.8) blur(12px);
+    backdrop-filter: saturate(1.8) blur(12px);
+    border-bottom: 1px solid var(--vyasa-border);
+}
+.vyasa-mkdocs-tabs-inner {
+    display: flex;
+    gap: var(--vyasa-space-1);
+    overflow-x: auto;
+    padding: 0 var(--vyasa-space-4);
+    scrollbar-width: none;
+}
+.vyasa-mkdocs-tab {
+    position: relative;
+    padding: var(--vyasa-space-2) var(--vyasa-space-3);
+    font-family: var(--vyasa-font-ui);
+    font-size: var(--vyasa-text-sm);
+    font-weight: var(--vyasa-weight-medium);
+    color: var(--vyasa-text-muted);
+    white-space: nowrap;
+    text-decoration: none;
+    transition: color var(--vyasa-duration-fast) var(--vyasa-ease);
+}
+.vyasa-mkdocs-tab:hover { color: var(--vyasa-ink); }
+.vyasa-mkdocs-tab.is-active { color: var(--vyasa-primary); }
+.vyasa-mkdocs-tab.is-active::after {
+    content: "";
+    position: absolute;
+    left: var(--vyasa-space-3);
+    right: var(--vyasa-space-3);
+    bottom: -1px;
+    height: 2px;
+    background: var(--vyasa-primary);
+    border-radius: var(--vyasa-radius-pill);
+}
+
+/* With tabs, the desktop sidebar shows only the active tab's subtree (Material's lifted nav). */
+@media (min-width: 1280px) {
+    html[data-mkdocs-tabs] #posts-sidebar li[data-mkdocs-tab]:not(.is-active-tab) { display: none; }
+    html[data-mkdocs-tabs] #posts-sidebar li[data-mkdocs-tab] > details > summary { display: none; }
+    html[data-mkdocs-tabs] #posts-sidebar li[data-mkdocs-tab] > details > ul { margin-left: 0; padding-left: 0; border-left: 0; }
+}
+
+/* navigation.sections: a group label that stays expanded. */
+details[data-mkdocs-section] > summary { pointer-events: none; }
+details[data-mkdocs-section] > summary .folder-chevron,
+details[data-mkdocs-section] > summary .folder-chevron + * { display: none; }
+details[data-mkdocs-section] > summary a { pointer-events: auto; }
+details[data-mkdocs-section] > summary {
+    font-size: var(--vyasa-text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--vyasa-text-muted);
+}
+
+.vyasa-mkdocs-missing { opacity: 0.5; text-decoration: line-through; cursor: not-allowed; }
+
+/* vyasa manual/mkdocs-compatibility.md#markdown — Material content components. */
+.vyasa-mkdocs-icon {
+    display: inline-block;
+    width: 1.125em;
+    height: 1.125em;
+    vertical-align: -0.2em;
+    background-color: currentColor;
+    -webkit-mask: var(--vyasa-mkdocs-icon) center / contain no-repeat;
+    mask: var(--vyasa-mkdocs-icon) center / contain no-repeat;
+}
+.twemoji.lg, .vyasa-mkdocs-icon.lg { width: 1.5em; height: 1.5em; }
+.twemoji.xl, .vyasa-mkdocs-icon.xl { width: 2.25em; height: 2.25em; }
+.twemoji.middle, .vyasa-mkdocs-icon.middle { vertical-align: middle; }
+
+.md-button {
+    display: inline-block;
+    padding: var(--vyasa-space-2) var(--vyasa-space-4);
+    border: 2px solid var(--vyasa-primary);
+    border-radius: var(--vyasa-button-radius, var(--vyasa-radius-md));
+    color: var(--vyasa-primary) !important;
+    font-weight: var(--vyasa-weight-semibold);
+    text-decoration: none !important;
+    transition: background var(--vyasa-duration-fast) var(--vyasa-ease), color var(--vyasa-duration-fast) var(--vyasa-ease);
+}
+.md-button:hover, .md-button--primary { background: var(--vyasa-primary); color: var(--vyasa-accent-contrast, #fff) !important; }
+.md-button--primary:hover { filter: brightness(1.08); }
+
+.grid { display: grid; gap: var(--vyasa-space-4); grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); margin: var(--vyasa-space-5) 0; }
+.grid.cards > ul, .grid.cards > ol { display: contents; }
+.grid.cards > ul > li, .grid.cards > ol > li, .grid > .card {
+    list-style: none;
+    margin: 0 !important;
+    padding: var(--vyasa-space-4);
+    border: 1px solid var(--vyasa-border);
+    border-radius: var(--vyasa-radius-lg);
+    background: var(--vyasa-surface);
+    transition: border-color var(--vyasa-duration-fast) var(--vyasa-ease), box-shadow var(--vyasa-duration-fast) var(--vyasa-ease);
+}
+.grid.cards > ul > li::before, .grid.cards > ol > li::before { content: none !important; display: none !important; }
+.grid.cards > ul > li:hover, .grid > .card:hover { border-color: var(--vyasa-primary); box-shadow: var(--vyasa-shadow-sm); }
+.grid.cards hr { margin: var(--vyasa-space-3) 0; border: 0; border-top: 1px solid var(--vyasa-border); height: 0; }
+.grid.cards p:last-child { margin-bottom: 0; }
+
+.keys kbd {
+    display: inline-block;
+    padding: 0 0.4em;
+    border: 1px solid var(--vyasa-border-strong);
+    border-bottom-width: 2px;
+    border-radius: var(--vyasa-radius-sm);
+    background: var(--vyasa-surface);
+    font-family: var(--vyasa-font-mono);
+    font-size: 0.85em;
+}
+.keys > span { padding: 0 0.2em; color: var(--vyasa-text-muted); }
+
+.progress { display: block; position: relative; height: 1.4em; margin: var(--vyasa-space-3) 0; border: 1px solid var(--vyasa-border); border-radius: var(--vyasa-radius-sm); background: var(--vyasa-bg-subtle); overflow: hidden; }
+.progress.thin { height: 0.5em; }
+.progress-bar { display: block; height: 100%; background: var(--vyasa-primary); }
+.progress-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: var(--vyasa-text-xs); font-weight: var(--vyasa-weight-semibold); color: var(--vyasa-ink); }
+
+.vyasa-mkdocs-dl { margin: var(--vyasa-space-4) 0; }
+.vyasa-mkdocs-dl dt { font-weight: var(--vyasa-weight-semibold); }
+.vyasa-mkdocs-dl dt > p { margin: 0 !important; }
+.vyasa-mkdocs-dl dd { margin: var(--vyasa-space-1) 0 var(--vyasa-space-3) var(--vyasa-space-6); }
+.vyasa-mkdocs-dl dd > p:last-child { margin-bottom: 0 !important; }
+
+ins.critic { text-decoration: none; background: color-mix(in srgb, var(--vyasa-success) 20%, transparent); }
+del.critic { background: color-mix(in srgb, var(--vyasa-danger) 18%, transparent); }
+mark.critic { background: var(--vyasa-highlight); }
+.critic.comment { color: var(--vyasa-text-muted); font-style: italic; }
+.critic.comment::before { content: "("; } .critic.comment::after { content: ")"; }
+abbr[title] { text-decoration: underline dotted; cursor: help; }
+.vyasa-mkdocs-anchor { position: relative; top: -5rem; height: 0; }
+.lead { font-size: var(--vyasa-text-lg); }
+@media (max-width: 1279px) { .vyasa-mkdocs-tab-index { display: none; } }
+
+/* Material image variants: `![](a.png#only-light)` and `#only-dark`. */
+img[src$="#only-dark"], img[src$="#gh-dark-mode-only"] { display: none; }
+.dark img[src$="#only-dark"], .dark img[src$="#gh-dark-mode-only"] { display: inline; }
+.dark img[src$="#only-light"], .dark img[src$="#gh-light-mode-only"] { display: none; }
+.vyasa-mkdocs-caption { text-align: center; font-size: var(--vyasa-text-sm); color: var(--vyasa-text-muted); margin-top: calc(-1 * var(--vyasa-space-3)); }
+.vyasa-mkdocs-caption p { margin-bottom: 0 !important; }
+
+/* pymdownx.fancylists: the `type` attribute loses to the list utility classes. */
+ol[type="a"] { list-style-type: lower-alpha !important; }
+ol[type="A"] { list-style-type: upper-alpha !important; }
+ol[type="i"] { list-style-type: lower-roman !important; }
+ol[type="I"] { list-style-type: upper-roman !important; }
+
+/* Slides: the slide list rules (present.css) must not turn grid cards back into bullets. */
+.vyasa-zen-slide-body .grid.cards > :is(ul, ol) { padding-left: 0 !important; list-style: none !important; }
+.vyasa-zen-slide-body .grid.cards > :is(ul, ol) > li { display: block !important; padding: var(--vyasa-space-4) !important; list-style: none !important; }
+.vyasa-zen-slide-body .grid.cards > :is(ul, ol) > li + li { margin-top: 0 !important; }
+.vyasa-zen-slide-body .grid.cards > :is(ul, ol) > li::marker { content: none; }

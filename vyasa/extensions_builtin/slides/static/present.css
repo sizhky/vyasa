@@ -1,7 +1,11 @@
-/* Stage: the largest 16:9 box that fits below the navbar. Text size, margins and
-   gaps are fractions of the stage, so a slide keeps its proportions on any screen. */
+/* Stage: the largest 16:9 box that fits the window; slide mode renders no navbar.
+   Text size, margins and gaps are fractions of the stage, so a slide keeps its
+   proportions on any screen. */
 .vyasa-zen-present {
-  --vyasa-zen-avail-h: calc(100dvh - var(--vyasa-navbar-height, 3.75rem));
+  --vyasa-navbar-height: 0px;
+  --vyasa-zen-avail-h: 100dvh;
+  /* Space above and below the nav chrome; equal, so the chrome sits centred in the top band. */
+  --vyasa-zen-chrome-gap: calc(var(--vyasa-zen-stage-h) * 0.06);
   --vyasa-zen-stage-w: min(100vw, calc(var(--vyasa-zen-avail-h) * 16 / 9));
   --vyasa-zen-stage-h: calc(var(--vyasa-zen-stage-w) * 9 / 16);
   --vyasa-zen-pad-x: calc(var(--vyasa-zen-stage-w) * 0.07);
@@ -16,7 +20,7 @@
 }
 .vyasa-main-shell.vyasa-zen-present {
   padding-inline: 0 !important;
-  padding-top: calc(var(--vyasa-zen-stage-h) * 0.04) !important;
+  padding-top: var(--vyasa-zen-chrome-gap) !important;
   overflow-x: clip;
 }
 .vyasa-zen-present .vyasa-fold-all-button { display: none !important; }
@@ -42,14 +46,18 @@
   max-width: min(100%, var(--vyasa-zen-slide-max-width, var(--vyasa-zen-measure)));
 }
 
-/* Chrome: the nav sits alone at the stage's right edge; the slide starts a fixed distance below it. */
+/* Chrome: the nav sits alone at the stage's right edge; the slide starts a fixed distance below it.
+   It stays in place while overflowing content scrolls under the top band. */
 .vyasa-zen-chrome {
+  position: sticky;
+  top: var(--vyasa-zen-chrome-gap);
+  z-index: 11;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--vyasa-space-4);
   min-height: 2.5rem;
-  margin-bottom: calc(var(--vyasa-zen-stage-h) * 0.08);
+  margin-bottom: var(--vyasa-zen-chrome-gap);
   font-size: var(--vyasa-text-sm);
 }
 .vyasa-zen-nav {
@@ -280,9 +288,11 @@
   min-width: 100%;
   max-width: var(--vyasa-zen-inner-w);
 }
+/* A code block is as wide as its longest line, like a table; short snippets do not span the column. */
 .vyasa-zen-slide-body .code-block {
   position: relative;
   overflow: hidden;
+  min-width: min(100%, 24em);
 }
 .vyasa-zen-slide-body .code-block pre {
   max-width: 100%;
@@ -416,8 +426,9 @@
   pointer-events: none;
   transform: translateX(-50%);
 }
-.vyasa-zen-slide-progress { bottom: 1.55rem; }
-.vyasa-zen-deck-progress { bottom: var(--vyasa-space-3); }
+/* The two bars (0.8rem apart, 0.25rem tall: 1.05rem in all) sit centred in the bottom band. */
+.vyasa-zen-deck-progress { bottom: calc(var(--vyasa-zen-band-reserve, 2.6rem) / 2 - 0.525rem); }
+.vyasa-zen-slide-progress { bottom: calc(var(--vyasa-zen-band-reserve, 2.6rem) / 2 + 0.275rem); }
 .vyasa-zen-slide-progress-track,
 .vyasa-zen-deck-progress-track {
   width: 100%;
@@ -525,16 +536,25 @@
   vertical-align: middle;
   transition: background-color var(--vyasa-duration-fast) var(--vyasa-ease);
 }
+/* A row reads like a table of contents: the tree on the left, the slide number right-aligned. */
 #slide-overview [data-zen-overview-node] td:first-child {
-  width: 1%;
   border-radius: var(--vyasa-radius-md) 0 0 var(--vyasa-radius-md);
+  padding-left: calc(var(--vyasa-space-2) + (var(--vyasa-overview-depth) - 1) * var(--vyasa-space-5));
+}
+#slide-overview [data-zen-overview-node] td.vyasa-zen-overview-number {
+  width: 1%;
+  padding-left: var(--vyasa-space-6);
+  border-radius: 0 var(--vyasa-radius-md) var(--vyasa-radius-md) 0;
   color: var(--vyasa-text-muted);
   font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
 }
-#slide-overview [data-zen-overview-node] td:last-child {
-  border-radius: 0 var(--vyasa-radius-md) var(--vyasa-radius-md) 0;
-  padding-left: calc(var(--vyasa-space-3) + (var(--vyasa-overview-depth) - 1) * var(--vyasa-space-5));
-}
+#slide-overview .vyasa-zen-overview-tree { display: flex; align-items: center; gap: var(--vyasa-space-2); }
+#slide-overview .vyasa-zen-overview-icon { display: inline-flex; flex: none; color: var(--vyasa-text-muted); }
+@keyframes vyasa-overview-row-in { from { opacity: 0; transform: translateY(-0.25rem); } }
+#slide-overview [data-zen-overview-node][data-overview-entering] td { animation: vyasa-overview-row-in 220ms var(--vyasa-ease) both; }
+#slide-overview [data-zen-overview-node][data-overview-leaving] td { opacity: 0; transition: opacity 130ms var(--vyasa-ease); }
 #slide-overview [data-zen-overview-node]:hover td { background: var(--vyasa-hover); }
 #slide-overview [data-zen-overview-node]:focus-within td { background: var(--vyasa-active); }
 #slide-overview .vyasa-zen-overview-margin {
@@ -542,12 +562,34 @@
   pointer-events: none;
 }
 #slide-overview .is-compact .vyasa-zen-overview-margin { height: auto; }
+#slide-overview .is-compact .vyasa-zen-overview-margin:last-child > td { padding: 0; }
+/* Title text and the last row's text both sit card padding + one row padding from the card edge. */
 #slide-overview .vyasa-zen-overview-margin > td {
-  padding: 0 var(--vyasa-space-3) var(--vyasa-space-3);
+  padding: var(--vyasa-space-2) var(--vyasa-space-3) var(--vyasa-space-3);
   border: 0;
   background: transparent !important;
   vertical-align: bottom;
 }
+#slide-overview .vyasa-zen-overview-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--vyasa-space-5);
+}
+#slide-overview .vyasa-zen-overview-exit {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--vyasa-space-2);
+  padding: var(--vyasa-space-1) var(--vyasa-space-2);
+  border-radius: var(--vyasa-radius-md);
+  color: var(--vyasa-link);
+  font-size: var(--vyasa-text-sm);
+  text-decoration: none;
+  pointer-events: auto;
+  transition: background-color var(--vyasa-duration-fast) var(--vyasa-ease), color var(--vyasa-duration-fast) var(--vyasa-ease);
+}
+#slide-overview .vyasa-zen-overview-exit:hover { background: var(--vyasa-hover); color: var(--vyasa-link-hover); }
 #slide-overview .vyasa-zen-overview-title {
   margin: 0;
   color: var(--vyasa-ink);
@@ -564,10 +606,11 @@
 #slide-overview a[data-zen-overview-focus] { text-decoration: none; }
 #slide-overview .vyasa-zen-overview-chevron,
 #slide-overview .vyasa-zen-overview-chevron-space {
-  display: inline-block;
-  width: 1.25rem;
-  margin-right: var(--vyasa-space-2);
-  vertical-align: middle;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
 }
 #slide-overview .vyasa-zen-overview-chevron::before {
   display: inline-block;
@@ -714,3 +757,23 @@
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-old(vyasa-slide), ::view-transition-new(vyasa-slide) { animation: none; }
 }
+
+/* Slide area: present.js sets --vyasa-zen-band-reserve to the top and bottom band height.
+   The bands are opaque, like a header and footer, so content scrolled out of the slide
+   area is hidden; a soft shadow marks the band that hides content. */
+.vyasa-zen-content::before,
+.vyasa-zen-content::after {
+  content: "";
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: 9;
+  height: var(--vyasa-zen-band-reserve, 0px);
+  background: var(--vyasa-bg);
+  pointer-events: none;
+  transition: box-shadow var(--vyasa-duration-fast) var(--vyasa-ease);
+}
+.vyasa-zen-content::before { top: 0; }
+.vyasa-zen-content::after { bottom: 0; }
+.vyasa-zen-content[data-zen-clip-top]::before { box-shadow: 0 12px 16px -12px color-mix(in srgb, var(--vyasa-ink) 35%, transparent); }
+.vyasa-zen-content[data-zen-clip-bottom]::after { box-shadow: 0 -12px 16px -12px color-mix(in srgb, var(--vyasa-ink) 35%, transparent); }

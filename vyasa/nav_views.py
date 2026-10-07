@@ -25,9 +25,9 @@ class NavigationRow:
         self.folder_note = folder_note
 
 
-def navigation_row_view(row, *, cls, onclick=None, show_icon=True):
+def navigation_row_view(row, *, cls, onclick=None, show_icon=True, external=False):
     link_cls = f"vyasa-tree-link inline-flex items-center min-w-0 whitespace-nowrap {cls}".strip()
-    attrs = {
+    attrs = {"href": row.href, "cls": link_cls, "target": "_blank", "rel": "noopener"} if external else {
         "href": row.href,
         "hx_get": row.href,
         "hx_target": "#main-content",

@@ -5,6 +5,7 @@ from typing import Any
 from fasthtml.common import *
 from monsterui.all import *
 from .helpers import content_root_and_relative, content_slug_for_path, content_url_for_slug
+from .extensions import translate_markdown_source
 from .sections import markdown_headings
 
 
@@ -123,7 +124,7 @@ def sidebar_section(title, *content, is_open=True, data_section=None, body_cls="
 def extract_toc(content, strip_inline_markdown, text_to_anchor, unique_anchor):
     return [
         (level, strip_inline_markdown(text), anchor)
-        for level, text, anchor in markdown_headings(content)
+        for level, text, anchor in markdown_headings(translate_markdown_source(content))
     ]
 
 

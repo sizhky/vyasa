@@ -1031,8 +1031,7 @@ document.addEventListener('toggle', (event) => {
 let standaloneMetaKey = false;
 
 function toggleHoveredDetails() {
-    const details = [...document.querySelectorAll('details:hover')].pop();
-    const summary = details?.querySelector(':scope > summary');
+    const summary = [...document.querySelectorAll('details > summary:hover')].pop();
     if (!summary) return false;
     summary.click();
     return true;

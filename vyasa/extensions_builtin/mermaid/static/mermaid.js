@@ -422,26 +422,26 @@ function getDynamicGanttWidth() {
     return GANTT_WIDTH;
 }
 
+function initializeMermaid() {
+    mermaid.initialize({
+        startOnLoad: false,
+        theme: getCurrentTheme(),
+        fontSize: 16,
+        htmlLabels: false,
+        gantt: {
+            useWidth: getDynamicGanttWidth(),
+            useMaxWidth: false
+        }
+    });
+}
+
 function reinitializeMermaid() {
     // Skip if this is the initial load (let it render naturally first)
     if (isInitialLoad) {
         return;
     }
     
-    const dynamicWidth = getDynamicGanttWidth();
-    
-    mermaid.initialize({ 
-        startOnLoad: false,
-        theme: getCurrentTheme(),
-        fontSize: 16,
-        flowchart: {
-            htmlLabels: false
-        },
-        gantt: {
-            useWidth: dynamicWidth,
-            useMaxWidth: false
-        }
-    });
+    initializeMermaid();
     
     // Find all mermaid wrappers and re-render them
     const shouldLockHeight = (wrapper) => {
@@ -491,20 +491,7 @@ function reinitializeMermaid() {
     });
 }
 
-const initialGanttWidth = getDynamicGanttWidth();
-
-mermaid.initialize({ 
-    startOnLoad: false,
-    theme: getCurrentTheme(),
-    fontSize: 16,
-    flowchart: {
-        htmlLabels: false
-    },
-    gantt: {
-        useWidth: initialGanttWidth,
-        useMaxWidth: false
-    }
-});
+initializeMermaid();
 
 // Track if this is the initial load
 let isInitialLoad = true;

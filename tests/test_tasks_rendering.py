@@ -997,8 +997,33 @@ def test_tasks_attribute_preview_orders_code_urls_before_other_attributes():
     source = tasks_static_source("tasks_cards.js", "tasks.js")
     css = Path("vyasa/extensions_builtin/link_preview/static/link_preview.css").read_text()
     assert "tasksAttributeLinks(codeModeRecord())" in source
-    assert "groups.map((group) => group.links[0].dataset.vyasaLinkPreviewTabKind" in source
+    assert "kind: group.links[0].dataset.vyasaLinkPreviewTabKind" in source
     assert ".vyasa-link-preview-tab-attribute" in css
+
+
+def test_code_preview_sections_are_named_by_their_reference():
+    script = r'''
+        globalThis.document = { createElement: () => ({ dataset: {}, setAttribute() {}, getAttribute() { return ''; } }) };
+        const { tasksPreviewSectionLabel } = await import('./vyasa/extensions_builtin/tasks/static/tasks_cards.js');
+        const link = (text, reference) => ({
+            textContent: text,
+            getAttribute: () => 'vyasa/core.py',
+            dataset: reference ? { vyasaCodeReference: JSON.stringify(reference) } : {},
+        });
+        const labels = [
+            tasksPreviewSectionLabel(link('core.py', { show: 'symbol', symbol: 'build_tree' })),
+            tasksPreviewSectionLabel(link('core.py', { show: 'lines', lines: '10-20' })),
+            tasksPreviewSectionLabel(link('pin toggle')),
+            tasksPreviewSectionLabel(link('core.py'), 2),
+        ].join('|');
+        if (labels !== 'build_tree|lines 10-20|pin toggle|Section 3') throw new Error(labels);
+    '''
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+    source = tasks_static_source("tasks.js")
+    preview = Path("vyasa/extensions_builtin/link_preview/static/link_preview.js").read_text()
+    assert "sections: group.links.map(tasksPreviewSectionLabel)" in source
+    assert "groups[active]?.links.indexOf(links[index])" in source
+    assert "sections.hidden = labels.length < 2;" in preview
 
 
 def test_tasks_filter_reset_button_stays_in_filter_card_header():

@@ -1226,7 +1226,8 @@ function tasksRouteRect(node, rect) {
 
 // Solve every routed edge against the current node rects. A box a route must
 // go around is a task or a collapsed group; an open group contains its routes.
-export function tasksRouteEdges(nodes, edges, gutter = 44) {
+// A preset route, keyed by edge id, came from a layout that already routed it.
+export function tasksRouteEdges(nodes, edges, gutter = 44, presetRoutes = null) {
     const boxes = absoluteNodeRects(nodes);
     const rects = Object.fromEntries((nodes || []).map((node) => [node.id, tasksRouteRect(node, boxes[node.id])]));
     const obstacles = (nodes || [])
@@ -1254,9 +1255,9 @@ export function tasksRouteEdges(nodes, edges, gutter = 44) {
             const [sourcePort, targetPort] = portsOf(edge);
             // Edges out of one node may share a run, so a fan-out reads as one trunk.
             const reserved = routed.filter((prior) => prior.source !== edge.source);
-            const route = sourcePort || targetPort
+            const route = presetRoutes?.get(edge.id) || (sourcePort || targetPort
                 ? tasksPortRoute('orthogonal', rects[edge.source], rects[edge.target], sourcePort, targetPort, obstacles, gutter, reserved, targetGapOf(edge))
-                : tasksSimplifyRoute(tasksOrthogonalRoute(rects[edge.source], rects[edge.target], obstacles, gutter, targetGapOf(edge), reserved));
+                : tasksSimplifyRoute(tasksOrthogonalRoute(rects[edge.source], rects[edge.target], obstacles, gutter, targetGapOf(edge), reserved)));
             orthogonalRoutes.set(index, route);
             routed.push({ points: route, source: edge.source });
         });

@@ -31,6 +31,7 @@ ADDITIVE_CAPABILITIES = frozenset({
     "cap:layout:footer_link",
     "cap:layout:main_attrs",
     "cap:layout:navbar_mobile_action",
+    "cap:layout:navbar_band",
 })
 
 SINGULAR_CATEGORIES: dict[ExtensionCategory, str] = {
@@ -158,6 +159,7 @@ class ContentRootRequest:
 class ExtensionRuntime:
     plan: ExtensionPlan
     catalog: dict[str, ExtensionMeta]
+    markdown_source_translators: list[Callable] = field(default_factory=list)
     markdown_preprocessors: list[Callable] = field(default_factory=list)
     markdown_postprocessors: list[Callable] = field(default_factory=list)
     markdown_fences: dict[str, Callable] = field(default_factory=dict)
@@ -183,6 +185,7 @@ class ExtensionRuntime:
     search_result_row_actions: list[Callable] = field(default_factory=list)
     navbar_control_providers: list[Callable] = field(default_factory=list)
     document_action_providers: list[Callable] = field(default_factory=list)
+    document_page_option_providers: list[Callable] = field(default_factory=list)
     content_mount_providers: list[Callable] = field(default_factory=list)
     content_root_resolvers: list[Callable] = field(default_factory=list)
     trace_handlers: list[Callable] = field(default_factory=list)
@@ -192,6 +195,9 @@ class ExtensionRuntime:
     shell_body_fragment_providers: list[Callable] = field(default_factory=list)
     shell_footer_link_providers: list[Callable] = field(default_factory=list)
     navbar_mobile_action_providers: list[Callable] = field(default_factory=list)
+    navbar_band_providers: list[Callable] = field(default_factory=list)
+    posts_tree_provider: Callable | None = None
+    adjacent_provider: Callable | None = None
     favicon_href_provider: Callable | None = None
     search_match_finder: Callable | None = None
     search_preview_match_finder: Callable | None = None
@@ -281,6 +287,11 @@ class _MarkdownRegistrar:
         self.guard.require_capability(f"cap:markdown:fence:{name}")
         self.runtime.markdown_fences[name] = handler
 
+    def translator(self, handler: Callable) -> None:
+        """`handler(markdown) -> markdown` rewrites another dialect into Vyasa
+        markdown before any parsing, including TOC heading extraction."""
+        self.runtime.markdown_source_translators.append(handler)
+
     def preprocessor(self, handler: Callable) -> None:
         self.runtime.markdown_preprocessors.append(handler)
 
@@ -358,6 +369,11 @@ class _LayoutRegistrar:
     def navbar_mobile_action(self, provider: Callable) -> None:
         self.guard.require_capability("cap:layout:navbar_mobile_action")
         self.runtime.navbar_mobile_action_providers.append(provider)
+
+    def navbar_band(self, provider: Callable) -> None:
+        """`provider(context) -> node | None` renders a full-width row below the navbar."""
+        self.guard.require_capability("cap:layout:navbar_band")
+        self.runtime.navbar_band_providers.append(provider)
 
 
 class _RouteRegistrar:
@@ -467,6 +483,10 @@ class _DocumentRegistrar:
     def action(self, provider: Callable) -> None:
         self.runtime.document_action_providers.append(provider)
 
+    def page_options(self, provider: Callable) -> None:
+        """`provider(metadata, current_path) -> dict` of DocumentPage overrides (show_toc, show_sidebar)."""
+        self.runtime.document_page_option_providers.append(provider)
+
     def document_type(self, document_type: DocumentType) -> None:
         self.guard.require_capability(f"cap:document_type:{document_type.kind}")
         self.runtime.document_types[document_type.suffix] = document_type
@@ -494,6 +514,16 @@ class _ContentSourceRegistrar:
 
     def root_resolver(self, provider: Callable) -> None:
         self.runtime.content_root_resolvers.append(provider)
+
+    def posts_tree(self, provider: Callable) -> None:
+        """`provider(roles=, current_path=, can_read=, row_decorators=) -> list[Li] | None` replaces the
+        filesystem posts tree; None falls back to the filesystem tree."""
+        self.runtime.posts_tree_provider = provider
+
+    def adjacent(self, provider: Callable) -> None:
+        """`provider(current_path) -> (prev, next) | None`; each side is {"title", "href"} or None.
+        None falls back to filesystem order."""
+        self.runtime.adjacent_provider = provider
 
 
 class _SearchRegistrar:
@@ -548,6 +578,14 @@ _CURRENT_ASSET_COLLECTOR: ContextVar[AssetCollector | None] = ContextVar(
 
 def get_extension_runtime() -> ExtensionRuntime | None:
     return _ACTIVE_RUNTIME
+
+
+def translate_markdown_source(markdown: str) -> str:
+    """Apply every registered source translator; identity when none are enabled."""
+    runtime = _ACTIVE_RUNTIME
+    for translator in runtime.markdown_source_translators if runtime else ():
+        markdown = translator(markdown)
+    return markdown
 
 
 def set_extension_runtime(runtime: ExtensionRuntime | None) -> ExtensionRuntime | None:

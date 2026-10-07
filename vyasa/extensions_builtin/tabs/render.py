@@ -1,9 +1,12 @@
 import re
 
 
+# A `:::tabs` block; slide splitting treats its lines as one block.
+TABS_BLOCK = re.compile(r"^:::tabs\s*\n(.*?)^:::", re.MULTILINE | re.DOTALL)
+
+
 def preprocess_tabs(content):
     tab_data_store = {}
-    tabs_pattern = re.compile(r"^:::tabs\s*\n(.*?)^:::", re.MULTILINE | re.DOTALL)
     def replace_tabs_block(match):
         tabs = []
         for tab_match in re.finditer(r"^::tab\{([^\}]+)\}\s*\n(.*?)(?=^::tab\{|\Z)", match.group(1), re.MULTILINE | re.DOTALL):
@@ -32,17 +35,23 @@ def preprocess_tabs(content):
         tab_id = __import__("hashlib").md5(match.group(0).encode()).hexdigest()[:8]
         tab_data_store[tab_id] = [(tab["title"], tab["content"]) for tab in tabs]
         return f'<div class="tab-placeholder" data-tab-id="{tab_id}"></div>'
-    return tabs_pattern.sub(replace_tabs_block, content), tab_data_store
+    return TABS_BLOCK.sub(replace_tabs_block, content), tab_data_store
+
+
+def render_tabs_html(tab_id, titles, panels, active=0):
+    """Tab set markup; `panels[i]` is the already-rendered body of `titles[i]`."""
+    parts = [f'<div class="tabs-container" data-tabs-id="{tab_id}">', '<div class="tabs-header">']
+    for i, title in enumerate(titles):
+        parts.append(f'<button class="tab-button {"active" if i == active else ""}" onclick="switchTab(\'{tab_id}\', {i})">{title}</button>')
+    parts.append("</div><div class=\"tabs-content\">")
+    for i, panel in enumerate(panels):
+        parts.append(f'<div class="tab-panel {"active" if i == active else ""}" data-tab-index="{i}">{panel}</div>')
+    parts.append("</div></div>")
+    return "\n".join(parts)
 
 
 def postprocess_tabs(html, tab_data_store, render_tab_content):
     for tab_id, tabs in tab_data_store.items():
-        parts = [f'<div class="tabs-container" data-tabs-id="{tab_id}">', '<div class="tabs-header">']
-        for i, (title, _) in enumerate(tabs):
-            parts.append(f'<button class="tab-button {"active" if i == 0 else ""}" onclick="switchTab(\'{tab_id}\', {i})">{title}</button>')
-        parts.append("</div><div class=\"tabs-content\">")
-        for i, (_, tab_content) in enumerate(tabs):
-            parts.append(f'<div class="tab-panel {"active" if i == 0 else ""}" data-tab-index="{i}">{render_tab_content(tab_content)}</div>')
-        parts.append("</div></div>")
-        html = html.replace(f'<div class="tab-placeholder" data-tab-id="{tab_id}"></div>', "\n".join(parts))
+        rendered = render_tabs_html(tab_id, [title for title, _ in tabs], [render_tab_content(content) for _, content in tabs])
+        html = html.replace(f'<div class="tab-placeholder" data-tab-id="{tab_id}"></div>', rendered)
     return html
