@@ -251,7 +251,7 @@
   color: var(--vyasa-text-muted);
   font-style: normal;
 }
-.vyasa-zen-slide-body .vyasa-callout { font-size: 0.85em !important; }
+.vyasa-zen-slide-body .vyasa-callout { font-size: 0.85em !important; width: fit-content; max-width: 100%; }
 .vyasa-zen-slide-body table,
 .vyasa-zen-slide-body .uk-table { font-size: 0.9em !important; }
 .vyasa-zen-slide-body .uk-table thead th { font-size: inherit; }
