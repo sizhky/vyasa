@@ -38,7 +38,7 @@ import {
 } from './tasks_graph_model.js';
 import {
     buildProjectedRootTasksGraph, buildTasksViewState, deriveSquishedExpandedLayout, layoutBaseTasksGraph,
-    layoutExpandedGroups, readTasksDirection, tasksApplyEdgePairs, tasksFixedLayout,
+    layoutExpandedGroups, readTasksDirection, tasksElkRelayout, tasksApplyEdgePairs, tasksFixedLayout,
     tasksIsFixedMode, tasksLayoutById, tasksLayoutChromeKinds, tasksMergeHandleLayouts,
 } from './tasks_layouts.js';
 import { createTasksNodeRenderer, renderTasksSequenceLaneCap } from './tasks_nodes.js';
@@ -2957,7 +2957,8 @@ async function renderTasksGraphs(rootElement = document) {
                 groupLayoutsRef.current = await layoutExpandedGroups(layoutModel, effectiveExpandedSet, jitterConfig, layoutConfig, true);
                 const groupsDone = tasksPerfNow();
                 const rootGraph = { ...buildProjectedRootTasksGraph(layoutRawGraph, layoutModel), enforceRootRank: true };
-                const derived = await deriveSquishedExpandedLayout(rootGraph, layoutModel, effectiveExpandedSet, baseLayout, groupLayoutsRef.current, layoutConfig);
+                const squished = await deriveSquishedExpandedLayout(rootGraph, layoutModel, effectiveExpandedSet, baseLayout, groupLayoutsRef.current, layoutConfig);
+                const { derived, routes: elkRoutes } = await tasksElkRelayout(squished, layoutConfig);
                 const derivedDone = tasksPerfNow();
                 const derivedById = Object.fromEntries((derived.nodes || []).map((node) => [node.id, node]));
                 const unspecifiedProjectionGroupIds = new Set(
@@ -3157,7 +3158,7 @@ async function renderTasksGraphs(rootElement = document) {
                 });
                 // ELK has placed every node, so routed edges are solved against
                 // those rects; a drag solves them again.
-                const baseEdges = tasksRouteEdges(baseNodes, styledEdges, tasksFreeRouteGutter(layoutConfig));
+                const baseEdges = tasksRouteEdges(baseNodes, styledEdges, tasksFreeRouteGutter(layoutConfig), elkRoutes);
                 const anchoredNodes = baseNodes.map((node) => ({
                     ...node,
                     data: {
