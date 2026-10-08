@@ -35,12 +35,14 @@ Bad: `[Guide](guide.md#install)`.
 | Debug/performance tracing | `routes/debug-perf.md` |
 | Extensions or new features | `routes/extensions.md` |
 | Slides/decks | `routes/slides.md` |
+| Live marimo cells in a document (experimental) | `topics/story-telling-with-interactivity/SKILL.md` |
 
 ## Hard Rules
 
 - Do not invent unsupported frontmatter, config keys, sort modes, or fence syntax.
 - Use `Knowledge Graph` as the user-facing product term for `items`/`tasks` graph blocks. Treat `KG` as an alias for the same feature.
 - When an abstract question is best answered as a Knowledge Graph, route to the `story-telling-with-graphs` skill first, then come back and emit Vyasa syntax.
+- The `marimo` extension is experimental. It works only when Vyasa and the marimo server are on the same machine, or behind a reverse proxy that makes them look like one site. Do not promise a remote marimo server behind a password.
 - New feature logic usually belongs in an extension, not `core.py`.
 - Runtime and static build output must agree.
 - Never emit real secret values; use explicit placeholders.
