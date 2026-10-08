@@ -52,7 +52,10 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
     left: 0;
     width: 1px;
     height: 1px;
+    transition: opacity 2s ease;
 }
+
+.vyasa-scroll-proxy-effects.is-faded { opacity: 0; }
 
 .vyasa-scroll-proxy-effects > span {
     position: absolute;
@@ -91,5 +94,5 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
     .vyasa-scroll-proxy-effects { display: none; }
-    .vyasa-scroll-proxy-tip, .vyasa-scroll-proxy-tip img, .vyasa-scroll-proxy-flag { transition: none; }
+    .vyasa-scroll-proxy-tip, .vyasa-scroll-proxy-tip img, .vyasa-scroll-proxy-flag, .vyasa-scroll-proxy-effects { transition: none; }
 }
