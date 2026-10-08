@@ -375,8 +375,8 @@ def _load_rbac_cfg_from_store():
 def _set_rbac_cfg(cfg):
     global _rbac_cfg, _rbac_rules
     _rbac_cfg = _normalize_rbac_cfg(cfg)
-    if _rbac_cfg.get("enabled") and not _auth_enabled:
-        logger.warning("RBAC configured without any auth provider; RBAC disabled.")
+    if _rbac_cfg.get("enabled") and not (_auth_enabled or _unlock_enabled):
+        logger.warning("RBAC configured without any auth provider or role password; RBAC disabled.")
         _rbac_cfg["enabled"] = False
     _rbac_rules = []
     if _rbac_cfg.get("enabled"):
@@ -410,11 +410,13 @@ _local_auth_enabled = bool(_auth_creds and _auth_creds[0] and _auth_creds[1])
 _auth_enabled = _local_auth_enabled or bool(_oauth_enabled)
 if _auth_required is None:
     _auth_required = _auth_enabled
+# Shared role passwords let RBAC rules work without accounts; they never make the whole site require login.
+_unlock_enabled = bool(_config.get_role_passwords())
 
 _rbac_cfg = _load_rbac_cfg_from_store()
 _set_rbac_cfg(_rbac_cfg)
 def _build_beforeware():
-    auth_before = make_user_auth_before(_auth_required, lambda: _rbac_rules, lambda: _rbac_cfg, lambda: _oauth_cfg, _config._coerce_list)
+    auth_before = make_user_auth_before(_auth_required, lambda: _rbac_rules, lambda: _rbac_cfg, lambda: _oauth_cfg, _config._coerce_list, lambda: get_config().get_role_passwords())
     return build_beforeware(auth_before, bool(_auth_enabled or (_rbac_cfg.get("enabled") and _rbac_rules)))
 
 

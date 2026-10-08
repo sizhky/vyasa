@@ -7,6 +7,8 @@ AUTH_ROUTES = (
     ("/login/{provider}", ("GET",)),
     ("/auth/{provider}/callback", ("GET",)),
     ("/logout", ("GET",)),
+    ("/unlock", ("GET", "POST")),
+    ("/unlock/lock", ("POST",)),
 )
 AUTH_ROUTE_PREFIXES = tuple(prefix for prefix, _methods in AUTH_ROUTES)
 
@@ -61,6 +63,38 @@ def _register_auth_routes(rt, runtime) -> None:
         auth["roles"] = services.resolve_roles(auth, services.rbac_cfg(), services.oauth_cfg(), services.coerce_list)
         request.session["auth"] = auth
         return RedirectResponse(request.session.pop("next", "/"), status_code=303)
+
+    @rt("/unlock", methods=["GET", "POST"])
+    async def unlock(request):
+        from ..auth import unlock as gate
+        from ..auth.views import unlock_content
+
+        from ..config import get_config
+
+        passwords = get_config().get_role_passwords()
+        if not passwords:
+            return Response(status_code=404)
+        error = None
+        if request.method == "POST":
+            client = request.client.host if request.client else "unknown"
+            if gate.throttled(client):
+                error = "Too many attempts. Wait a minute, then try again."
+            else:
+                password = str((await request.form()).get("password", ""))
+                roles = gate.matching_roles(password, passwords)
+                if roles:
+                    gate.grant(request.session, roles, passwords)
+                    return RedirectResponse(request.session.pop("next", "/"), status_code=303)
+                gate.record_failure(client)
+                error = "That password does not unlock anything."
+        return unlock_content(error, gate.unlocked_roles(request.session, passwords))
+
+    @rt("/unlock/lock", methods=["POST"])
+    async def unlock_lock(request):
+        from ..auth import unlock as gate
+
+        gate.lock(request.session)
+        return RedirectResponse("/unlock", status_code=303)
 
     @rt("/logout")
     async def logout(request):

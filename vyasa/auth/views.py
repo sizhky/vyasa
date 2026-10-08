@@ -26,3 +26,24 @@ def impersonate_content(error, success, impersonating_email):
         ),
         cls="max-w-xl mx-auto py-10 px-6",
     )
+
+
+def unlock_content(error, unlocked):
+    """The shared-password gate. `unlocked` lists the roles this session already holds."""
+    return Div(
+        H2("Unlock", cls="uk-h2"),
+        P("Enter a password to see the documents it opens. Other documents stay open to everyone.", cls="text-vyasa-muted"),
+        Form(
+            Div(Input(type="password", name="password", required=True, id="password", autofocus=True, autocomplete="current-password",
+                      cls="uk-input input input-bordered w-full", placeholder="Password", aria_label="Password"), cls="my-4"),
+            Button("Unlock", type="submit", cls="uk-btn btn btn-primary w-full"),
+            method="post", cls="max-w-sm mx-auto",
+        ),
+        P(error, cls="text-red-500 mt-4", role="alert") if error else None,
+        Div(
+            P(f"This session has unlocked: {', '.join(unlocked)}.", cls="text-sm text-vyasa-muted"),
+            Form(Button("Lock again", type="submit", cls="uk-btn btn w-full"), method="post", action="/unlock/lock", cls="max-w-sm mx-auto"),
+            cls="mt-8",
+        ) if unlocked else None,
+        cls="prose mx-auto mt-24 text-center",
+    )

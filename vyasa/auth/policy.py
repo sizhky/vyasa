@@ -1,4 +1,7 @@
-def normalize_auth(auth):
+from typing import Any
+
+
+def normalize_auth(auth) -> dict[str, Any] | None:
     if not auth:
         return None
     if isinstance(auth, dict):

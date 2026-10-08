@@ -7,6 +7,9 @@ from starlette.staticfiles import StaticFiles
 
 AUTH_SKIP_ROUTES = [
     r"^/login$",
+    r"^/unlock(/lock)?$",
+    # Studio capability requests come from a sandboxed frame without cookies; Studio validates them.
+    r"^/marimo/[^/]+/_marimo-studio/presentation/.*",
     r"^/login/[a-z]+$",
     r"^/auth/[a-z]+/callback$",
     r"^/_vyasa/.*",
