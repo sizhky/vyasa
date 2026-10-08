@@ -4,3 +4,21 @@ folders_always_first = true
 
 [drawings_passwords]
 "demo-drawing" = "secret123"
+# Experiments behind a shared password. Demo password: averages
+[rbac]
+enabled = true
+
+[[rbac.rules]]
+pattern = "^/posts/marimo-demo(/|$)"
+roles = ["expt"]
+
+[[rbac.rules]]
+pattern = "^/marimo/lln(/|$)"
+roles = ["expt"]
+
+[role_passwords]
+expt = "scrypt$16384$8$1$Q1qDWj1yCpFZ2Hg4TFEZOQ==$FPRt41rb3tBV67ee8+jsDY6gGz/DOX0y8/oMPGly4a8="
+
+[marimo_servers.lln]
+upstream = "http://127.0.0.1:2721"
+token_file = "~/.config/vyasa/marimo-lln.token"

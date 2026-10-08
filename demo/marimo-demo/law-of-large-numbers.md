@@ -3,14 +3,14 @@ title: Why averages settle
 marimo:
   notebook: ./notebooks/law_of_large_numbers.py
   view: lln
-  url: http://localhost:2720
+  server: lln
 ---
 
 # Why averages settle
 
 The average of many independent draws moves toward the true mean, and its distance from the mean shrinks like 1/√n. This is the law of large numbers. This page shows it with a fair coin, then shows where it fails.
 
-This page is a demo of the experimental `marimo` extension. Vyasa renders the prose. A marimo server on `localhost:2720` runs the cells in `notebooks/law_of_large_numbers.py`, and each group of adjacent cells is one frame.
+This page is a demo of the experimental `marimo` extension. Vyasa renders the prose. A private marimo server runs the cells in `notebooks/law_of_large_numbers.py`, and Vyasa forwards each frame to it through `/marimo/lln/`. Each group of adjacent cells is one frame. The page sits behind the shared password at `/unlock`, so only readers with the password can run Python.
 
 ## One coin, many flips
 
@@ -56,5 +56,6 @@ Pick a distribution and a sample count. Pick **Cauchy** to see the running mean 
 | Dropdown | Where the law stops |
 | Required blocks: kept as warnings when the server is down | The first two sections |
 | Optional block: removed when the server is down | Where the law stops |
+| Shared password at `/unlock`, and frames proxied through `/marimo/lln/` | The whole page |
 
 To see the offline version, stop the marimo server and reload this page. The page then opens with an error callout that gives the start command. The two required sections keep their prose and show one warning each. The optional section disappears, and its claim still stands in the prose above it.

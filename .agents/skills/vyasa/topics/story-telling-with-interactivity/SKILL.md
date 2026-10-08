@@ -1,6 +1,6 @@
 ---
 name: story-telling-with-interactivity
-description: "Use when a Vyasa document needs live Python cells from a marimo notebook (experimental): bounded controls next to a claim, marimo-studio views, optional and required blocks, and the same-machine or reverse-proxy limit."
+description: "Use when a Vyasa document needs live Python cells from a marimo notebook (experimental): bounded controls next to a claim, marimo-studio views, optional and required blocks, the /marimo proxy, and shared passwords at /unlock that keep experiment compute private."
 metadata:
   version: "0.1.0"
   status: experimental
@@ -12,14 +12,12 @@ The document tells the story. The notebook computes. A reader who touches nothin
 
 ## Status: Experimental
 
-The `marimo` extension works only when the Vyasa server and the marimo server look like one machine to the reader's browser:
+The marimo server must look like the same site as Vyasa to the reader's browser. Two setups work:
 
-- Both run on the same machine, for example Vyasa on `localhost:36443` and marimo on `localhost:2719`.
-- Or a reverse proxy serves both under one site, so the frames are not third-party frames.
+- **Proxied (recommended).** Vyasa forwards `/marimo/<name>/...` to a marimo server on a private address. Readers never see the marimo address, and Vyasa's access rules guard it. See "Protecting compute" below.
+- **Direct.** The marimo server is on the same machine and readers' browsers reach its port, for example Vyasa on `localhost:5099` and marimo on `localhost:2720`. Anyone who can reach the port can run the notebook.
 
-It does not work with a marimo server on another site behind a password. Browsers withhold marimo's `SameSite=Lax` login cookie in third-party frames, and marimo's login page refuses to load in a frame. Vyasa also writes the view file into the notebook folder on its own disk, so the notebook folder must be on the Vyasa machine.
-
-Do not promise a shared remote compute server. Say that it needs a reverse proxy and that the proxy is not built.
+It does not work with a marimo server on another site behind its own password. Browsers withhold marimo's `SameSite=Lax` login cookie in third-party frames, and marimo's login page refuses to load in a frame. Vyasa also writes the view file into the notebook folder on its own disk, so the notebook folder must be on the Vyasa machine.
 
 ## Core Idea
 
@@ -41,7 +39,8 @@ title: OCR benchmark datasets
 marimo:
   notebook: ../../notebooks/datasets_explorer.py   # relative to this document
   view: datasets                                   # an existing marimo-studio view of that notebook
-  url: http://localhost:2719                       # the `marimo run` server for that notebook
+  server: datasets                                 # proxied: a `[marimo_servers.datasets]` entry in .vyasa
+  # url: http://localhost:2719                     # direct: a server readers' browsers reach themselves
 ---
 
 <!-- marimo-block required -->
@@ -92,6 +91,46 @@ When the server is down, the page opens with an error callout that gives the sta
 
 Check the port first. Port 2718 is marimo's default and is often taken by another notebook server, and the health check then passes against the wrong server.
 
+## Protecting Compute
+
+Most documents stay open. Experiments that run Python go behind a shared password, so strangers cannot load the server. Readers enter the password once at `/unlock`, and every document that password opens appears in the sidebar and search. The footer has an "Unlock" link.
+
+1. Hash a password for a role. The command prompts twice and prints the TOML line:
+   ```bash
+   vyasa hash-password expt
+   ```
+2. Add the rules, the hash, and the proxied server to `.vyasa`:
+   ```toml
+   [[rbac.rules]]
+   pattern = "^/posts/experiments(/|$)"   # the documents
+   roles = ["expt"]
+
+   [[rbac.rules]]
+   pattern = "^/marimo/lln(/|$)"           # the proxied server's view pages
+   roles = ["expt"]
+
+   [role_passwords]
+   expt = "scrypt$16384$8$1$<salt>$<hash>"
+
+   [marimo_servers.lln]
+   upstream = "http://127.0.0.1:2721"
+   token_file = "~/.config/vyasa/marimo-lln.token"   # chmod 600, outside the repo
+   ```
+3. Start marimo on the private address, with the base URL and the same token file:
+   ```bash
+   uvx --with marimo-studio==0.2.3 marimo run <notebook.py> --sandbox --headless --host 127.0.0.1 --port 2721 --base-url /marimo/lln --token-password-file ~/.config/vyasa/marimo-lln.token
+   ```
+4. Set the document's frontmatter to `server: lln`.
+
+Facts behind this setup:
+
+- Paths that match no rule stay open. A shared password unlocks roles for the session only. It never satisfies a site-wide login requirement, and it can never grant the admin role `full`.
+- Changing a role's hash locks every session that used the old password.
+- Studio serves its view pages without checking marimo's token. The RBAC rule on `/marimo/<name>/` is the real gate. Without it, anyone can run the notebook through the proxy.
+- The sandboxed frame sends no cookies. Locked requests may use only Studio capability paths (`/_marimo-studio/presentation/...`), which only an unlocked page can mint. Websockets are allowed only on those paths.
+- Locking again stops new pages. A frame that is already open keeps working until its Studio session ends.
+- marimo prints its access token in its startup log. Keep those logs private.
+
 ## Craft Rules
 
 ### Choosing blocks
@@ -117,7 +156,7 @@ Check the port first. Port 2718 is marimo's default and is often taken by anothe
 
 ## Limits
 
-- Same machine or reverse proxy only. See the status section above.
+- Same machine or Vyasa's proxy only. See the status section above.
 - One session per frame per reader. No shared state across frames.
 - Vyasa's module scripts, such as code copy and link previews, do not reach the frames.
 - Page CSS reaches a cell only through Studio's `--marimo-cell-*` projection variables, because each cell renders in a shadow root. Vyasa maps fonts, text, border, and accent color, and sends the page's light or dark mode to each frame. Marimo's own widgets follow the OS color scheme, so they can differ when Vyasa's toggle differs from the OS.
@@ -136,4 +175,7 @@ Check the port first. Port 2718 is marimo's default and is often taken by anothe
 ## Implementation
 
 - `vyasa/extensions_builtin/marimo/render.py`: document kind, view generation, frames, offline callouts.
+- `vyasa/extensions_builtin/marimo/proxy.py`: the `/marimo/<name>/` proxy and its access rules.
+- `vyasa/auth/unlock.py`: role password hashing, `/unlock` sessions, and `vyasa hash-password`.
+- `tests/test_unlock.py`: the auth gate with shared passwords.
 - `tests/test_marimo.py`: kind resolution, offline Markdown, and the view contract.

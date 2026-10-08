@@ -42,7 +42,8 @@ Bad: `[Guide](guide.md#install)`.
 - Do not invent unsupported frontmatter, config keys, sort modes, or fence syntax.
 - Use `Knowledge Graph` as the user-facing product term for `items`/`tasks` graph blocks. Treat `KG` as an alias for the same feature.
 - When an abstract question is best answered as a Knowledge Graph, route to the `story-telling-with-graphs` skill first, then come back and emit Vyasa syntax.
-- The `marimo` extension is experimental. It works only when Vyasa and the marimo server are on the same machine, or behind a reverse proxy that makes them look like one site. Do not promise a remote marimo server behind a password.
+- The `marimo` extension is experimental. The marimo server must be on the Vyasa machine, either reached directly or through Vyasa's `/marimo/<name>/` proxy. Do not promise a marimo server on another site behind its own password.
+- `[role_passwords]` in `.vyasa` holds salted scrypt hashes made by `vyasa hash-password`. Readers unlock roles at `/unlock`; paths that match no RBAC rule stay open.
 - New feature logic usually belongs in an extension, not `core.py`.
 - Runtime and static build output must agree.
 - Never emit real secret values; use explicit placeholders.
