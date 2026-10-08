@@ -107,6 +107,7 @@ Check the port first. Port 2718 is marimo's default and is often taken by anothe
 - When a button sets state that its own cell displays, create the state with `mo.state(value, allow_self_loops=True)`. Otherwise the cell does not rerun, and the field shows a stale value.
 - Prefer a stable id field with a 🔀 button over a slider for browsing a dataset. An id names the same item in every session, so readers can cite it.
 - Embed images as data URLs, for example base64 JPEG in `mo.image(...)`. Marimo virtual files (`./@file/...`) return 404 inside a Studio view.
+- Give charts a transparent background and neutral axes, for example Altair `.configure(background="transparent")` with mid-grey axis colors. Marimo applies its own Vega theme, which draws a grey box on a dark page, and page CSS cannot reach into a chart.
 - Size images relative to the column, for example `style={"max-width": "50%", "height": "auto"}`. Do not use `vh`, because inside an auto-height frame it tracks the frame, and the frame grows.
 
 ### Compute
@@ -118,7 +119,8 @@ Check the port first. Port 2718 is marimo's default and is often taken by anothe
 
 - Same machine or reverse proxy only. See the status section above.
 - One session per frame per reader. No shared state across frames.
-- Vyasa's module scripts, such as code copy and link previews, and its dark-mode toggle do not reach the frames.
+- Vyasa's module scripts, such as code copy and link previews, do not reach the frames.
+- Page CSS reaches a cell only through Studio's `--marimo-cell-*` projection variables, because each cell renders in a shadow root. Vyasa maps fonts, text, border, and accent color, and sends the page's light or dark mode to each frame. Marimo's own widgets follow the OS color scheme, so they can differ when Vyasa's toggle differs from the OS.
 - marimo-studio is pinned to 0.2.3, which pins marimo 0.25.0, and it calls itself experimental.
 - Vyasa writes the view on page load. A read-only deployment cannot write it, so commit the generated file.
 
