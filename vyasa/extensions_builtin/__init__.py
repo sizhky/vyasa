@@ -26,6 +26,7 @@ def load_builtin_extensions():
     from . import link_preview
     from . import mermaid
     from . import mkdocs
+    from . import marimo
     from . import mdx
     from . import rbac_admin
     from . import scoped_custom_css
@@ -57,6 +58,7 @@ def load_builtin_extensions():
         cytograph.EXTENSION,
         cryptograph.EXTENSION,
         tasks.EXTENSION,
+        marimo.EXTENSION,
         mdx.EXTENSION,
         html_viewer.EXTENSION,
         pdf_viewer.EXTENSION,
