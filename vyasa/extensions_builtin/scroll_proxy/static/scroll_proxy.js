@@ -2,6 +2,8 @@ const themes = [];
 let installedBar = null;
 let stopFlag = () => {};
 let stopTip = () => {};
+let stopSprinkles = () => {};
+let sprinklesFaded = false;
 const scrollMotion = { y: 0, velocity: 0, time: 0, movedAt: -Infinity };
 const SCROLL_EMIT_WINDOW = 400;
 let activeTheme = null;
@@ -28,6 +30,7 @@ function wakeParticles(bar, theme) {
 
 // one particle per interval, launched now from the live scroll position
 function sprinkle(bar, theme, now) {
+    if (sprinklesFaded) return;
     const perSecond = Math.max(1, theme.particleCount) / Math.max(0.1, theme.physics.lifetime[1] * 0.75);
     if (now - lastEmit < 1000 / perSecond) return;
     const [particle] = idleParticles(bar);
@@ -248,7 +251,7 @@ function emitParticle(particle, bar, theme, stagger = null) {
         };
     });
     particle.animate(frames, { duration: lifetime * 1000, delay: stagger ?? Math.random() * 120, easing: 'linear' })
-        .onfinish = () => { if (emitsAlways(theme) || scrolling()) emitParticle(particle, bar, theme); };
+        .onfinish = () => { if (!sprinklesFaded && (emitsAlways(theme) || scrolling())) emitParticle(particle, bar, theme); };
 }
 
 export function createFlagCloth(width, height, { foldStiffness = 0.15, gravity = 500, windStrength = 350, windCalm = 2.5, windBurstLength = 1.4, windReversal = 0.5, flutter = 0.9, flutterWaves = 1.6, flutterSpeed = 2.5, damping = 0.99 } = {}) {
@@ -324,6 +327,48 @@ function expandedTriangle([a, b, c], padding) {
     });
 }
 
+// bar decorations fade after a delay and return while the tip is hovered or focused
+function fadeWithTip(bar, { hide, show }) {
+    const tip = bar.querySelector('.vyasa-scroll-proxy-tip');
+    let timer;
+    const reveal = () => { clearTimeout(timer); show(); };
+    const idle = (delay = 15000) => {
+        clearTimeout(timer);
+        if (!tip?.matches(':hover, :focus')) timer = setTimeout(hide, delay);
+    };
+    const leave = () => idle();
+    tip?.addEventListener('pointerenter', reveal);
+    tip?.addEventListener('pointerleave', leave);
+    tip?.addEventListener('focus', reveal);
+    tip?.addEventListener('blur', leave);
+    const stop = () => {
+        clearTimeout(timer);
+        tip?.removeEventListener('pointerenter', reveal);
+        tip?.removeEventListener('pointerleave', leave);
+        tip?.removeEventListener('focus', reveal);
+        tip?.removeEventListener('blur', leave);
+    };
+    return { idle, stop };
+}
+
+// sprinkles stop emitting while faded; always-on themes restart their fountain on reveal
+function mountSprinkleFade(bar, theme) {
+    const effects = bar.querySelector('.vyasa-scroll-proxy-effects');
+    sprinklesFaded = false;
+    effects.classList.remove('is-faded');
+    const fader = fadeWithTip(bar, {
+        hide: () => { sprinklesFaded = true; effects.classList.add('is-faded'); },
+        show: () => {
+            if (!sprinklesFaded) return;
+            sprinklesFaded = false;
+            effects.classList.remove('is-faded');
+            if (emitsAlways(theme)) wakeParticles(bar, theme);
+        },
+    });
+    fader.idle();
+    return fader.stop;
+}
+
 function mountFlag(bar, theme) {
     const flag = theme.flag;
     const canvas = document.createElement('canvas'), image = new Image();
@@ -343,26 +388,17 @@ function mountFlag(bar, theme) {
     }
     holder.appendChild(canvas);
     bar.appendChild(holder);
-    const tip = bar.querySelector('.vyasa-scroll-proxy-tip');
-    let fadeTimer;
-    const fade = () => {
-        holder.classList.add('is-faded');
-        holder.inert = true;
-        holder.style.pointerEvents = 'none';
-    };
-    const reveal = () => {
-        clearTimeout(fadeTimer);
-        holder.classList.remove('is-faded');
-        holder.inert = false;
-    };
-    const idle = () => {
-        clearTimeout(fadeTimer);
-        if (!tip?.matches(':hover, :focus')) fadeTimer = setTimeout(fade, 15000);
-    };
-    tip?.addEventListener('pointerenter', reveal);
-    tip?.addEventListener('pointerleave', idle);
-    tip?.addEventListener('focus', reveal);
-    tip?.addEventListener('blur', idle);
+    const fader = fadeWithTip(bar, {
+        hide: () => {
+            holder.classList.add('is-faded');
+            holder.inert = true;
+            holder.style.pointerEvents = 'none';
+        },
+        show: () => {
+            holder.classList.remove('is-faded');
+            holder.inert = false;
+        },
+    });
     let outline = [];
     const hover = (event) => {
         if (holder.inert) return;
@@ -428,17 +464,12 @@ function mountFlag(bar, theme) {
         cloth = createFlagCloth(flagHeight * image.naturalWidth / image.naturalHeight, flagHeight, flag.physics);
         for (let step = 0; step < 1200; step++) cloth.step();
         frame = requestAnimationFrame(draw);
-        clearTimeout(fadeTimer);
-        if (!tip?.matches(':hover, :focus')) fadeTimer = setTimeout(fade, 5000);
+        fader.idle(5000);
     };
     image.onerror = () => holder.remove();
     image.src = flag.src;
     return () => {
-        clearTimeout(fadeTimer);
-        tip?.removeEventListener('pointerenter', reveal);
-        tip?.removeEventListener('pointerleave', idle);
-        tip?.removeEventListener('focus', reveal);
-        tip?.removeEventListener('blur', idle);
+        fader.stop();
         document.removeEventListener('pointermove', hover);
         image.onload = image.onerror = null; cancelAnimationFrame(frame); holder.remove();
     };
@@ -453,7 +484,9 @@ function applyTheme(bar, theme) {
     if (!theme) return;
     stopFlag();
     stopTip();
+    stopSprinkles();
     stopTip = mountTip(bar, theme);
+    stopSprinkles = mountSprinkleFade(bar, theme);
     stopFlag = theme.flag?.src ? mountFlag(bar, theme) : () => {};
     bar.dataset.vyasaScrollTheme = theme.id;
     bar.dataset.vyasaScrollEffect = theme.effect || 'none';

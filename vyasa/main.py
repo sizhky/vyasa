@@ -163,6 +163,9 @@ def cli() -> None:
         from .extensions_builtin.tasks.query import query_command
 
         sys.exit(query_command(sys.argv[2:]))
+    if len(sys.argv) > 1 and sys.argv[1] == 'hash-password':
+        from .auth.unlock import hash_password_command
+        sys.exit(hash_password_command(sys.argv[2:]))
     if len(sys.argv) > 1 and sys.argv[1] == 'sections':
         from .sections import sections_command
 

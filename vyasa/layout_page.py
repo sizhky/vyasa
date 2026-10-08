@@ -2,6 +2,7 @@ import time
 import re
 from typing import Any
 from urllib.parse import quote
+from .auth.unlock import is_signed_in
 from fasthtml.common import Link
 
 from fasthtml.common import A, Aside, Button, Div, Footer, Main, NotStr, P, Span, Title
@@ -234,7 +235,7 @@ def render_page_frame(frame: PageFrame, *, htmx, deps: PageFrameDeps):
     def _footer_node(outer_cls, outer_style):
         logout_button = None
         extra_links = _collect_footer_links(auth)
-        if auth:
+        if is_signed_in(auth):
             display_name = auth.get("name") or auth.get("email") or auth.get("username") or "User"
             impersonator = auth.get("impersonator")
             if impersonator:

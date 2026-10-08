@@ -601,24 +601,77 @@ def classify_root(path: Path) -> RootClass:
         repo.close()
 
 
+def _worktree_status(rc: RootClass):
+    """dulwich status of a clone on a branch; None for bare/plain/detached or on error."""
+    if rc.kind != "clone" or rc.current_branch is None:
+        return None
+    from dulwich import porcelain
+
+    try:
+        return porcelain.status(str(rc.path), untracked_files="all")
+    except Exception:
+        return None
+
+
+def _posix(paths) -> set[str]:
+    return {p.decode() if isinstance(p, bytes) else p for p in paths}
+
+
 def uncommitted_paths(rc: RootClass) -> frozenset[str]:
     """Posix-relative paths in a working clone that differ from HEAD
     (staged, unstaged, or untracked). Empty for bare/plain roots and for a
     detached HEAD. Drives the per-file uncommitted indicator in disk mode."""
-    if rc.kind != "clone" or rc.current_branch is None:
+    status = _worktree_status(rc)
+    if status is None:
         return frozenset()
-    from dulwich import porcelain
+    dirty = _posix((*status.unstaged, *status.untracked))
+    for paths in status.staged.values():
+        dirty |= _posix(paths)
+    return frozenset(dirty)
+
+
+def unstaged_paths(rc: RootClass) -> frozenset[str]:
+    """Paths whose working-tree text differs from the index (unstaged or
+    untracked), the set VS Code lists under Changes. Drives document diff mode."""
+    status = _worktree_status(rc)
+    return frozenset(_posix((*status.unstaged, *status.untracked))) if status else frozenset()
+
+
+def owning_clone(file_path) -> "tuple[RootClass, str] | None":
+    """The clone that owns `file_path` and the file's repo-relative path, else None.
+    The owning repo may sit below the content root."""
+    try:
+        from dulwich.errors import NotGitRepository
+        from dulwich.repo import Repo
+
+        path = Path(file_path).resolve()
+        with Repo.discover(str(path.parent)) as repo:
+            work_root = Path(repo.path).resolve()
+        rc = classify_root(work_root)
+        if rc.kind != "clone":
+            return None
+        return rc, path.relative_to(work_root).as_posix()
+    except (ImportError, NotGitRepository, ValueError, OSError):
+        return None
+
+
+def staged_text(rc: RootClass, rel: str) -> str:
+    """`rel` as staged in the clone's index; "" when the index lacks it (untracked).
+    A merge conflict uses this branch's side as the base."""
+    from dulwich.index import ConflictedIndexEntry
+    from dulwich.repo import Repo
 
     try:
-        status = porcelain.status(str(rc.path), untracked_files="all")
-    except Exception:
-        return frozenset()
-    dirty: set[str] = set()
-    for paths in status.staged.values():
-        dirty.update(p.decode() if isinstance(p, bytes) else p for p in paths)
-    for p in (*status.unstaged, *status.untracked):
-        dirty.add(p.decode() if isinstance(p, bytes) else p)
-    return frozenset(dirty)
+        with Repo(str(rc.path)) as repo:
+            entry = repo.open_index()[rel.encode()]
+            if isinstance(entry, ConflictedIndexEntry):
+                entry = entry.this
+            if entry is None:
+                return ""
+            data = repo[entry.sha].as_raw_string()
+    except (KeyError, OSError):
+        return ""
+    return data.decode("utf-8", errors="replace")
 
 
 _GIT_BACKEND_CACHE: dict[tuple[str, str], "GitBackend"] = {}

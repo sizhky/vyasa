@@ -49,6 +49,7 @@ ACTION_ICONS = {
     "file-edit": '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-page-action-icon"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m12 18 5-5 2 2-5 5h-2z"/></svg>',
     "fold": '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-page-action-icon vyasa-fold-all-icon"><path d="M6 7h12"/><path d="M6 12h8"/><path d="M6 17h5"/><path d="m15 10 3 3 3-3"/></svg>',
     "monitor": '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-page-action-icon"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8"/><path d="M12 16v4"/></svg>',
+    "git-compare": '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-page-action-icon"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><path d="M11 18H8a2 2 0 0 1-2-2V9"/></svg>',
     "external-link": '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-page-action-icon"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>',
 }
 
@@ -229,6 +230,23 @@ def present_button(slug: str):
         data_tooltip="Present document",
         aria_label="Present document",
         cls="vyasa-page-action-button vyasa-page-action-tooltip inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm",
+    )
+
+
+def diff_button(slug: str, *, active: bool = False):
+    """Toggle between the reading view and the unstaged-changes view of a document."""
+    label, tooltip = ("Close diff", "Back to the document (D)") if active else ("Diff", "Show unstaged changes (D)")
+    return A(
+        action_icon("git-compare"),
+        label,
+        href=content_url_for_slug(slug, prefix="/posts" if active else "/diff"),
+        hx_boost="false",
+        data_vyasa_diff_document="true",
+        aria_pressed="true" if active else "false",
+        data_tooltip=tooltip,
+        aria_label=tooltip,
+        cls="vyasa-page-action-button vyasa-page-action-tooltip inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm"
+        + (" vyasa-page-action-button-active" if active else ""),
     )
 
 

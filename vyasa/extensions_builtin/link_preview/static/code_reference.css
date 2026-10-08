@@ -192,7 +192,7 @@
 
 .vyasa-markdown-reference .vyasa-code-reference-body { padding: var(--vyasa-space-3); }
 
-.vyasa-markdown-diff { display: grid; gap: var(--vyasa-space-3); }
+.vyasa-markdown-diff { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--vyasa-space-3); }
 
 .vyasa-markdown-diff-omission {
     padding: var(--vyasa-space-2) var(--vyasa-space-3);

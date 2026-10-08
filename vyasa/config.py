@@ -482,6 +482,24 @@ class VyasaConfig:
             "rules": rules,
         }
 
+    def get_role_passwords(self) -> dict:
+        """Role to salted password hash, from the top-level `[role_passwords]` table (see `vyasa.auth.unlock`)."""
+        cfg = self._config.get('role_passwords', {})
+        if not isinstance(cfg, dict):
+            return {}
+        # `full` is the admin role; a shared password must never grant it.
+        return {str(role): str(encoded) for role, encoded in cfg.items()
+                if role and role != "full" and isinstance(encoded, str) and encoded.startswith("scrypt$")}
+
+    def get_marimo_servers(self) -> dict:
+        """Name to `{upstream, token_file}` from `[marimo_servers.<name>]` (see `extensions_builtin/marimo/proxy.py`)."""
+        cfg = self._config.get('marimo_servers', {})
+        if not isinstance(cfg, dict):
+            return {}
+        return {str(name): {"upstream": str(server["upstream"]), "token_file": server.get("token_file")}
+                for name, server in cfg.items()
+                if isinstance(server, dict) and str(server.get("upstream", "")).startswith(("http://", "https://"))}
+
     def get_sidebars_open(self) -> bool:
         """Get whether sidebars should be open by default."""
         value = self.get('sidebars_open', 'VYASA_SIDEBARS_OPEN', False)

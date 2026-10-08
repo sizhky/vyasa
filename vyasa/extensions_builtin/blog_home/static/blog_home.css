@@ -35,3 +35,11 @@
     color: var(--vyasa-text-muted);
     font-size: var(--vyasa-text-base);
 }
+
+/* The feed loads more posts whenever its end scrolls into view, so a footer
+   below it would keep moving away. On the home page only, pin it to the viewport. */
+body:has(#blog-feed) #site-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 30;
+}

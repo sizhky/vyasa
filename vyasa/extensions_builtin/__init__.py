@@ -15,6 +15,7 @@ def load_builtin_extensions():
     from . import default_search
     from . import default_theme
     from . import document_actions
+    from . import document_diff
     from . import document_edit
     from . import filesystem
     from . import filesystem_routes
@@ -25,6 +26,7 @@ def load_builtin_extensions():
     from . import link_preview
     from . import mermaid
     from . import mkdocs
+    from . import marimo
     from . import mdx
     from . import rbac_admin
     from . import scoped_custom_css
@@ -56,6 +58,7 @@ def load_builtin_extensions():
         cytograph.EXTENSION,
         cryptograph.EXTENSION,
         tasks.EXTENSION,
+        marimo.EXTENSION,
         mdx.EXTENSION,
         html_viewer.EXTENSION,
         pdf_viewer.EXTENSION,
@@ -64,6 +67,7 @@ def load_builtin_extensions():
         vega.EXTENSION,
         document_actions.EXTENSION,
         document_edit.EXTENSION,
+        document_diff.EXTENSION,
         table_of_contents.EXTENSION,
         scoped_custom_css.EXTENSION,
         scroll_proxy.EXTENSION,

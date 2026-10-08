@@ -1787,13 +1787,13 @@ function initKeyboardShortcuts() {
         } else {
             documentTopPrefix = false;
         }
-        if (e.key.toLowerCase() === 'p') {
-            const presentLink = mainContent?.querySelector('[data-vyasa-present-document="true"]');
-            if (presentLink) {
-                e.preventDefault();
-                window.location.href = presentLink.href;
-                return;
-            }
+        // P opens Present; D toggles the unstaged-changes diff view.
+        const modeLink = { p: 'present', d: 'diff' }[e.key.toLowerCase()];
+        const modeAnchor = modeLink && mainContent?.querySelector(`[data-vyasa-${modeLink}-document="true"]`);
+        if (modeAnchor) {
+            e.preventDefault();
+            window.location.href = modeAnchor.href;
+            return;
         }
         if ((e.key === 'j' || e.key === 'k') && !mainContent?.classList.contains('vyasa-zen-present')) {
             e.preventDefault();
