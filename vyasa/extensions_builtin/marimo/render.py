@@ -45,6 +45,7 @@ VIEW_HEAD_START = """<script>try { window.localStorage; } catch (error) {
   } });
 }</script>"""
 # Studio's projection variables: marimo cells otherwise use marimo's own fonts and colors.
+# marimo Markdown tables follow the `.uk-table` rules in header.css; `:nth-child(n)` outranks marimo's row stripes.
 # A frame whose document and frame element differ in color-scheme gets an opaque background.
 # daisyUI sets `color-scheme: dark` on :root and Studio's outer document sets none, so both levels use `normal`.
 VIEW_HEAD_END = """<style>
@@ -59,10 +60,16 @@ marimo-cell {
   --marimo-cell-accent: var(--vyasa-primary, LinkText);
 }
 marimo-cell .prose :where(code)::before, marimo-cell .prose :where(code)::after { content: none; }
+marimo-cell .markdown table tbody tr:nth-child(n) { background: transparent; }
+marimo-cell .markdown table tbody tr:nth-child(n):hover { background: var(--vyasa-hover); }
+marimo-cell .markdown table :is(th, td) { padding: var(--vyasa-space-2) var(--vyasa-space-3); border: 0; border-bottom: 1px solid var(--vyasa-border); }
+marimo-cell .markdown table tbody tr:last-child > td { border-bottom: 0; }
+marimo-cell .markdown table thead th { color: var(--vyasa-ink); font-weight: var(--vyasa-weight-medium); }
 html, body, #page-container { background: transparent !important; }
 :root { color-scheme: normal !important; }
 </style>"""
 # Measure `#app-shell`, not the document: the document is as tall as the frame, so it never shrinks.
+# Vyasa reads `html.dark`; marimo reads `body.dark`, because its `:root` light palette overrides `.dark` on `<html>`.
 RUN_SCRIPT = """<style>[data-vyasa-marimo-run] { display: none; }</style><script>(() => {
   const run = new URLSearchParams(location.search).get("run") || "0";
   const section = document.querySelector(`[data-vyasa-marimo-run="${CSS.escape(run)}"]`);
@@ -72,7 +79,8 @@ RUN_SCRIPT = """<style>[data-vyasa-marimo-run] { display: none; }</style><script
   new ResizeObserver(report).observe(shell);
   report();
   window.addEventListener("message", (event) => {
-    if (event.data && event.data.type === "vyasa-theme") document.documentElement.classList.toggle("dark", !!event.data.dark);
+    if (!event.data || event.data.type !== "vyasa-theme") return;
+    for (const node of [document.documentElement, document.body]) node.classList.toggle("dark", !!event.data.dark);
   });
 })();</script>"""
 # Vyasa page side: the message comes from the view inside Studio's outer document, which is the frame's window.
