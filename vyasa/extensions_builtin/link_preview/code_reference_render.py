@@ -10,7 +10,6 @@ from __future__ import annotations
 import html
 import re
 from difflib import SequenceMatcher
-from itertools import zip_longest
 
 from fasthtml.common import to_xml
 
@@ -545,11 +544,17 @@ def _markdown_equal_blocks(
     return output
 
 
-def _markdown_diff_body(resolved: ResolvedCodeReference, current_path: str) -> str:
+def markdown_diff_html(
+    before_source: str, after_source: str, current_path: str, *, focus: str = "all", context: int = 3,
+) -> str:
+    """Render two Markdown texts through Vyasa and mark their differences.
+
+    `focus="changed"` folds unchanged blocks beyond `context` into an omission row.
+    """
     runtime = get_extension_runtime() or refresh_extension_runtime(get_config().get_extensions_config())
     collector = runtime.new_asset_collector() if runtime else None
-    old_blocks = _markdown_blocks(resolved.before_source)
-    new_blocks = _markdown_blocks(resolved.after_source)
+    old_blocks = _markdown_blocks(before_source)
+    new_blocks = _markdown_blocks(after_source)
     opcodes = SequenceMatcher(None, old_blocks, new_blocks, autojunk=False).get_opcodes()
     rendered: list[str] = []
     for opcode_index, (tag, i1, i2, j1, j2) in enumerate(opcodes):
@@ -557,33 +562,34 @@ def _markdown_diff_body(resolved: ResolvedCodeReference, current_path: str) -> s
             blocks = new_blocks[j1:j2]
             rendered.extend(
                 _markdown_equal_blocks(
-                    blocks, opcode_index, len(opcodes), resolved.reference.context,
+                    blocks, opcode_index, len(opcodes), context,
                     current_path, collector,
                 )
-                if resolved.reference.focus == "changed"
+                if focus == "changed"
                 else [_markdown_diff_block(block, "context", current_path, collector) for block in blocks]
             )
             continue
         old, new = old_blocks[i1:i2], new_blocks[j1:j2]
-        for before_block, after_block in zip_longest(old, new, fillvalue=""):
-            if before_block and after_block:
-                table_diff = _markdown_table_diff(
-                    before_block, after_block, current_path, collector,
-                    focus=resolved.reference.focus, context=resolved.reference.context,
-                )
-                if table_diff:
-                    rendered.append(table_diff)
-                    continue
-                marked_before, marked_after = _marked_words(before_block, after_block)
-                rendered.append(
-                    '<div class="vyasa-markdown-diff-pair">'
-                    f'{_markdown_diff_block(marked_before, "deleted", current_path, collector)}'
-                    f'{_markdown_diff_block(marked_after, "added", current_path, collector)}</div>'
-                )
-            elif before_block:
-                rendered.append(_markdown_diff_block(before_block, "deleted", current_path, collector))
-            elif after_block:
-                rendered.append(_markdown_diff_block(after_block, "added", current_path, collector))
+        paired = min(len(old), len(new))
+        for before_block, after_block in zip(old[:paired], new[:paired]):
+            table_diff = _markdown_table_diff(
+                before_block, after_block, current_path, collector,
+                focus=focus, context=context,
+            )
+            if table_diff:
+                rendered.append(table_diff)
+                continue
+            marked_before, marked_after = _marked_words(before_block, after_block)
+            rendered.append(
+                '<div class="vyasa-markdown-diff-pair">'
+                f'{_markdown_diff_block(marked_before, "deleted", current_path, collector)}'
+                f'{_markdown_diff_block(marked_after, "added", current_path, collector)}</div>'
+            )
+        # A run of unpaired blocks is one change, so it gets one labelled section.
+        if old[paired:]:
+            rendered.append(_markdown_diff_block("\n\n".join(old[paired:]), "deleted", current_path, collector))
+        if new[paired:]:
+            rendered.append(_markdown_diff_block("\n\n".join(new[paired:]), "added", current_path, collector))
     assets = "".join(to_xml(node) for node in bundle_asset_nodes_for_collector(collector, runtime=runtime))
     return f'{assets}<div class="vyasa-markdown-diff">{"".join(rendered)}</div>'
 
@@ -592,8 +598,11 @@ def render_markdown_diff_reference(
     resolved: ResolvedCodeReference, relative_path: str, *, current_path: str
 ) -> str:
     """Render two Markdown revisions through Vyasa and mark their differences."""
-    body = _markdown_diff_body(resolved, current_path)
     reference = resolved.reference
+    body = markdown_diff_html(
+        resolved.before_source, resolved.after_source, current_path,
+        focus=reference.focus, context=reference.context,
+    )
     return (
         '<div class="vyasa-code-reference vyasa-markdown-reference" '
         f'data-code-reference-role="{_escape(reference.role)}" '
@@ -658,6 +667,7 @@ def render_code_reference_diagnostic(error: CodeReferenceError) -> str:
 
 __all__ = [
     "CodeReference",
+    "markdown_diff_html",
     "render_markdown_diff_reference",
     "render_code_reference_diagnostic",
     "render_resolved_code_reference",

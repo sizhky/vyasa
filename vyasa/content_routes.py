@@ -145,19 +145,13 @@ def _render_ref_markdown(ref_doc, *, path, htmx, request, slug_to_title, layout,
     return DocumentPage(ref_doc.title, path, content, toc_source=ref_doc.body).render(layout, htmx=htmx, blog_title=get_blog_title(), auth=request.scope.get("auth"))
 
 
-def _uncommitted_banner(root, file_path):
+def _uncommitted_banner(file_path):
     """Show an indicator when a working clone serves an uncommitted file from
     disk (its checked-out branch). Per-file: only flags the page being viewed."""
-    from .content_backend import classify_root, uncommitted_paths
+    from .content_backend import owning_clone, uncommitted_paths
 
-    try:
-        rc = classify_root(root)
-        if rc.kind != "clone":
-            return None
-        rel = Path(file_path).resolve().relative_to(Path(root).resolve()).as_posix()
-    except (ValueError, OSError):
-        return None
-    if rel not in uncommitted_paths(rc):
+    found = owning_clone(file_path)
+    if found is None or found[1] not in uncommitted_paths(found[0]):
         return None
     return Div(
         Span(UkIcon("git-commit", cls="w-4 h-4"), cls="opacity-70"),
@@ -323,7 +317,7 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
         )
     )
     actions = ((error_chip,) if error_chip else ()) + document_actions
-    uncommitted_banner = _uncommitted_banner(root, file_path)
+    uncommitted_banner = _uncommitted_banner(file_path)
     disk_branch = _current_branch_for(root)
     post_content = Div(
         document_header(post_title, read_source, actions=actions, breadcrumbs=breadcrumbs, file_path=file_path, meta_extra=_ref_badge(disk_branch) if disk_branch else None),
