@@ -151,24 +151,52 @@ def fallback_markdown(markdown: str) -> str:
     return RUN_RE.sub(run, BLOCK_RE.sub(block, markdown))
 
 
-def offline_callout(doc_path: Path, spec: dict, reason: str) -> str:
+def endpoints(spec: dict, marimo_servers: dict) -> dict | None:
+    """Where frames load from, where Vyasa checks health, and the start command's address flags.
+
+    `server` names a proxied server from `[marimo_servers]`, so frames use Vyasa's own address.
+    `url` is a direct server that readers' browsers reach themselves.
+
+    >>> endpoints({"view": "v", "url": "http://localhost:2719"}, {})["frames"]
+    'http://localhost:2719/v/'
+    >>> e = endpoints({"view": "v", "server": "s"}, {"s": {"upstream": "http://127.0.0.1:2721", "token_file": "/k"}})
+    >>> e["frames"], e["health"], e["flags"]
+    ('/marimo/s/v/', 'http://127.0.0.1:2721/marimo/s/health', '--host 127.0.0.1 --port 2721 --base-url /marimo/s --token-password-file /k')
+    >>> endpoints({"view": "v", "server": "missing"}, {}) is None
+    True
+    """
+    if spec.get("server"):
+        name = str(spec["server"])
+        server = marimo_servers.get(name)
+        if not server:
+            return None
+        upstream = server["upstream"].rstrip("/")
+        port = upstream.rsplit(":", 1)[-1]
+        token = f" --token-password-file {server['token_file']}" if server.get("token_file") else ""
+        return {"frames": f"/marimo/{name}/{spec['view']}/", "health": f"{upstream}/marimo/{name}/health",
+                "shown": f"server `{name}`", "flags": f"--host 127.0.0.1 --port {port} --base-url /marimo/{name}{token}"}
+    url = str(spec.get("url") or "http://localhost:2718").rstrip("/")
+    return {"frames": f"{url}/{spec['view']}/", "health": f"{url}/health", "shown": url,
+            "flags": f"--port {url.rsplit(':', 1)[-1]}"}
+
+
+def offline_callout(doc_path: Path, spec: dict, reason: str, flags: str) -> str:
     """Error callout with the command that starts the server; the notebook path is absolute so it runs anywhere.
 
-    >>> print(offline_callout(Path("/r/docs/a.md"), {"notebook": "../nb/x.py", "url": "http://localhost:2719"}, "No server answers at http://localhost:2719"))
+    >>> print(offline_callout(Path("/r/docs/a.md"), {"notebook": "../nb/x.py"}, "No server answers at http://localhost:2719", "--port 2719"))
     > [!error] Marimo server is not running
     > No server answers at http://localhost:2719. The page shows its static version, and optional blocks are hidden. Start the server, then reload this page:
     >
     > ```bash
-    > uvx --with marimo-studio==0.2.3 marimo run /r/nb/x.py --sandbox --port 2719
+    > uvx --with marimo-studio==0.2.3 marimo run /r/nb/x.py --sandbox --headless --port 2719
     > ```
     """
     notebook = (doc_path.parent / spec["notebook"]).resolve()
-    port = str(spec.get("url") or "http://localhost:2718").rstrip("/").rsplit(":", 1)[-1]
     return (
         "> [!error] Marimo server is not running\n"
         f"> {reason}. The page shows its static version, and optional blocks are hidden. Start the server, then reload this page:\n"
         ">\n> ```bash\n"
-        f"> uvx --with marimo-studio==0.2.3 marimo run {notebook} --sandbox --port {port}\n"
+        f"> uvx --with marimo-studio==0.2.3 marimo run {notebook} --sandbox --headless {flags}\n"
         "> ```"
     )
 
@@ -199,8 +227,9 @@ def runs_html(markdown: str) -> str:
 
 
 def server_up(url: str, timeout: float = 0.3) -> bool:
+    """`url` is the full health address."""
     try:
-        with urllib.request.urlopen(url.rstrip("/") + "/health", timeout=timeout) as response:
+        with urllib.request.urlopen(url, timeout=timeout) as response:
             return response.status == 200
     except Exception:
         return False
@@ -247,23 +276,27 @@ def render_marimo_document(context):
     metadata, raw = parse_frontmatter(doc_path)
     title, markdown = resolve_markdown_title_text(metadata, raw, doc_path.stem, abbreviations=context.abbreviations)
     target = view_dir(doc_path, spec)
-    url = str(spec.get("url") or "http://localhost:2718").rstrip("/")
+    from .proxy import servers
+    where = endpoints(spec, servers())
     file_path = str(doc_path)
-    if not (target / "view.toml").is_file():
+    flags = where["flags"] if where else ""
+    if not where:
+        reason = f"`.vyasa` has no `[marimo_servers.{spec.get('server')}]` entry"
+    elif not (target / "view.toml").is_file():
         reason = f"Studio view `{spec['view']}` does not exist at `{target}`"
-    elif not server_up(url):
-        reason = f"No server answers at {url}"
+    elif not server_up(where["health"]):
+        reason = f"No server answers for {where['shown']}"
     else:
         shell = DocumentPage(title, context.path, Div(), show_sidebar=False, show_toc=False).render(
             context.layout, htmx=False, blog_title=context.blog_title, auth=context.auth)
         origin = str(context.request.base_url).rstrip("/")
         write_if_changed(target / "index.html", view_html(full_page_html(context.request, shell), runs_html(markdown), origin, doc_path.name))
-        body = from_md(framed_markdown(markdown, f"{url}/{spec['view']}/"), current_path=context.path)
+        body = from_md(framed_markdown(markdown, where["frames"]), current_path=context.path)
         content = Div(context.breadcrumbs, H1(title, cls=f"{PAGE_TITLE_CLS} mb-6"),
                       Div(body, data_vyasa_document_body="true", cls="w-full"), Script(FRAME_HEIGHT_SCRIPT))
         return DocumentPage(title, context.path, content, file_path=file_path, toc_source=markdown).render(
             context.layout, htmx=context.htmx, blog_title=context.blog_title, auth=context.auth)
-    body = from_md(f"{offline_callout(doc_path, spec, reason)}\n\n{fallback_markdown(markdown)}", current_path=context.path)
+    body = from_md(f"{offline_callout(doc_path, spec, reason, flags)}\n\n{fallback_markdown(markdown)}", current_path=context.path)
     content = Div(context.breadcrumbs, H1(title, cls=f"{PAGE_TITLE_CLS} mb-6"), Div(body, data_vyasa_document_body="true"))
     return DocumentPage(title, context.path, content, file_path=file_path, toc_source=fallback_markdown(markdown)).render(
         context.layout, htmx=context.htmx, blog_title=context.blog_title, auth=context.auth)

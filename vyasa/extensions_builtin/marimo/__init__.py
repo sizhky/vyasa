@@ -1,4 +1,5 @@
 from ...extensions import DocumentType, ExtensionMeta, VyasaExtensionBase
+from .proxy import PREFIX, register_marimo_proxy
 from .render import is_marimo_path, render_marimo_document, render_static_marimo_document
 
 
@@ -7,6 +8,7 @@ class MarimoExtension(VyasaExtensionBase):
         app.documents.kind_resolver("marimo", "flask-conical", is_marimo_path)
         app.documents.renderer("marimo", render_marimo_document)
         app.documents.static_renderer("marimo", render_static_marimo_document)
+        app.routes.add(PREFIX, register_marimo_proxy, methods=("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"))
 
 
 EXTENSION = MarimoExtension(
@@ -15,6 +17,7 @@ EXTENSION = MarimoExtension(
         "render",
         ("cap:document_type:marimo",),
         requires=("slot:layout", "cap:markdown_pipeline"),
+        route_prefixes=(PREFIX,),
         scope_disable=True,
     )
 )
