@@ -169,8 +169,8 @@ def test_markdown_code_reference_renders_revision_diff_as_documents(tmp_path, mo
     assert 'data-code-reference-view="markdown-diff"' in result
     assert 'data-markdown-diff-state="deleted"' in result
     assert 'data-markdown-diff-state="added"' in result
-    assert '<del class="vyasa-markdown-diff-word">old</del>' in result
-    assert '<ins class="vyasa-markdown-diff-word">new</ins>' in result
+    assert '<del class="vyasa-markdown-diff-word"><strong>old stage</strong></del>' in result
+    assert '<ins class="vyasa-markdown-diff-word"><strong>new phase</strong></ins>' in result
     assert "<strong>" in result and "<ul" in result
     assert 'class="language-markdown"' not in result
     assert "name: daksh" not in result
@@ -185,24 +185,36 @@ def test_markdown_diff_keeps_fenced_blocks_whole():
     after = "# Doc\n\n```text\none\n\nthree\n```"
 
     old_blocks = code_reference_render._markdown_blocks(before)
-    new_blocks = code_reference_render._markdown_blocks(after)
     assert len(old_blocks) == 2
-    old, new = code_reference_render._marked_words(old_blocks[1], new_blocks[1])
-    assert old == old_blocks[1] and new == new_blocks[1]
+    html = code_reference_render.markdown_diff_html(before, after, "doc")
+    assert "vyasa-markdown-diff-word" not in html
 
 
-def test_markdown_diff_does_not_put_marks_inside_link_syntax():
-    before = "Read [the guide](old-guide)."
-    after = "Read [the guide](new-guide)."
+def test_markdown_diff_marks_one_run_per_contiguous_change():
+    before = "The product is X."
+    after = "The product is X. The target user is the family caregiver, not the patient."
 
-    assert code_reference_render._marked_words(before, after) == (before, after)
+    html = code_reference_render.markdown_diff_html(before, after, "doc")
+    assert html.count('<ins class="vyasa-markdown-diff-word">') == 1
+    assert '<ins class="vyasa-markdown-diff-word">The target user is the family caregiver, not the patient.</ins>' in html
 
 
-def test_markdown_diff_does_not_put_marks_inside_table_syntax():
-    before = "| Stage | Path |\n|---|---|\n| Architecture | old |"
-    after = "| Stage | Path |\n|---|---|\n| Architecture | new |"
+def test_markdown_diff_marks_link_text_without_breaking_link_syntax():
+    html = code_reference_render.markdown_diff_html(
+        "Read [the guide](old-guide) now.", "Read [a manual](new-guide) now.", "doc"
+    )
+    assert '<ins class="vyasa-markdown-diff-word"><a href=' in html
+    assert "a manual</a></ins>" in html
+    assert "](" not in html
 
-    assert code_reference_render._marked_words(before, after) == (before, after)
+
+def test_markdown_diff_pairs_edited_block_past_an_inserted_one():
+    before = "First paragraph stays almost the same here."
+    after = "A brand new opening line.\n\nFirst paragraph stays nearly the same here."
+
+    html = code_reference_render.markdown_diff_html(before, after, "doc")
+    assert '<del class="vyasa-markdown-diff-word">almost</del>' in html
+    assert '<ins class="vyasa-markdown-diff-word">nearly</ins>' in html
 
 
 def test_markdown_diff_renders_one_collapsed_table_with_changed_cells(tmp_path):
@@ -223,9 +235,7 @@ def test_markdown_diff_renders_one_collapsed_table_with_changed_cells(tmp_path):
     assert result.count("<table") == 1
     assert 'class="vyasa-markdown-table-diff"' in result
     assert '<span class="vyasa-markdown-table-state is-changed">Changed</span>' in result
-    assert '<del class="vyasa-markdown-table-cell-old">Old</del>' in result
-    assert '<ins class="vyasa-markdown-table-word">' not in result
-    assert '<ins class="vyasa-markdown-table-cell-new">New</ins>' in result
+    assert '<del class="vyasa-markdown-diff-word">Old</del><br><ins class="vyasa-markdown-diff-word">New</ins>' in result
     assert "Unchanged rows omitted" in result
     assert "Alpha" not in result and "Gamma" not in result
 
@@ -1720,3 +1730,14 @@ def test_link_preview_renders_kg_directory_with_static_renderer(tmp_path, monkey
     assert 'data-relative-path="tasks.kg"' in result
     assert 'data-vyasa-bundle-asset="true"' in result
     assert "tasks.js" in result
+
+
+def test_markdown_table_diff_marks_changed_words_inside_a_cell(tmp_path):
+    before = "| Name | Note |\n|---|---|\n| Beta | runs the **old** nightly job |"
+    after = "| Name | Note |\n|---|---|\n| Beta | runs the **new** nightly job |\n| Gamma | fresh row |"
+    html = code_reference_render.markdown_diff_html(before, after, "table")
+
+    assert '<del class="vyasa-markdown-diff-word"><strong>old</strong></del>' in html
+    assert '<ins class="vyasa-markdown-diff-word"><strong>new</strong></ins>' in html
+    assert "runs the" in html and "VYASATABLE" not in html
+    assert '<ins class="vyasa-markdown-diff-word">fresh row</ins>' in html
