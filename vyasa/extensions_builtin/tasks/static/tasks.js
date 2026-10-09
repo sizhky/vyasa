@@ -56,7 +56,7 @@ import {
     tasksGroupBackground, tasksGroupIdsContainingSelection, tasksHoverFocusEdge, tasksHoverFocusNodeStyle,
     tasksNodeBackground, tasksNodeColorLevels, tasksNodeIsOverlaid, tasksProminentEdgeOpacity,
     tasksActiveNodeFill, tasksGroupFrameStyle, tasksNodeHasInternals, tasksTaskWrapperStyle,
-    tasksReferenceFlowEdge, tasksResolvedThemeColor, tasksUseColorOverlay,
+    tasksReferenceFlowEdges, tasksResolvedThemeColor, tasksUseColorOverlay,
 } from './tasks_paint.js';
 import {
     tasksCanvasBackgroundProps, tasksCanvasStyle, tasksEdgeStrokeStyle, tasksGroupLook, tasksGroupRingTokens,
@@ -2868,6 +2868,11 @@ async function renderTasksGraphs(rootElement = document) {
                     // reaching back into the map from inside it.
                     const pairMateColors = new Map(anchored.edges.map((item) => [item.id, resolveTasksEdgeColor(item, model, model?.edge_color_by, edgeColorPalette)]));
                     const fixedLayout = tasksFixedLayout(mode);
+                    // A layout that pins both ends of an edge itself (a sequence row)
+                    // owns that edge's geometry, so the style cascade stops there.
+                    const fixedEdgePathOf = (edge) => (fixedLayout?.authoredHandles
+                        ? fixedLayout.edgePath
+                        : tasksEdgePathOf(edge, fixedLayout?.ownsEdgePath ? { edge_path: activeProjection?.edge_path } : model, fixedLayout?.edgePath));
                     const styledEdges = anchored.edges.map((edge) => {
                         const edgeColor = resolveTasksEdgeColor(edge, model, model?.edge_color_by, edgeColorPalette);
                         const resolvedLabel = resolveTasksEdgeLabel(edge, model, activeProjection);
@@ -2877,10 +2882,7 @@ async function renderTasksGraphs(rootElement = document) {
                         // A lifeline is a full-height column, so a row that crosses one
                         // must draw over it, not behind it.
                         const rowZ = tasksFixedLayout(mode)?.edgesOverNodes ? TASKS_TASK_Z + 10 : TASKS_EDGE_Z;
-                        // A layout that pins both ends of an edge itself (a sequence row)
-                        // owns that edge's geometry, so the style cascade stops there.
-                        const edgeDefaults = fixedLayout?.ownsEdgePath ? { edge_path: activeProjection?.edge_path } : model;
-                        const edgePath = fixedLayout?.authoredHandles ? fixedLayout.edgePath : tasksEdgePathOf(edge, edgeDefaults, fixedLayout?.edgePath);
+                        const edgePath = fixedEdgePathOf(edge);
                         const stroke = tasksEdgeStrokeStyle(edgePath, edgeColor, tasksIsDashed(edge));
                         return {
                             ...edge,
@@ -2929,7 +2931,14 @@ async function renderTasksGraphs(rootElement = document) {
                     // A fixed layout never moves its nodes, so routed edges are solved
                     // against the node rects once, here.
                     const baseEdges = tasksRouteEdges(nodesWithStyle, styledEdges, fixedLayout?.gutter);
-                    referenceEdgesRef.current = referenceAnchored.edges.map((edge) => tasksReferenceFlowEdge(edge, rf.MarkerType.ArrowClosed, hoverFontSize, layoutConfig.edgeLabelWidth));
+                    referenceEdgesRef.current = tasksReferenceFlowEdges(nodesWithStyle, referenceAnchored.edges, {
+                        markerType: rf.MarkerType.ArrowClosed,
+                        fontSize: hoverFontSize,
+                        labelMaxWidth: layoutConfig.edgeLabelWidth,
+                        model,
+                        edgePathOf: fixedEdgePathOf,
+                        gutter: fixedLayout?.gutter,
+                    });
                     const anchoredNodes = nodesWithStyle.map((node) => ({
                         ...node,
                         data: { ...node.data, handleLayout: tasksMergeHandleLayouts(anchored.nodeHandles[node.id], referenceAnchored.nodeHandles[node.id]) },
@@ -3171,7 +3180,13 @@ async function renderTasksGraphs(rootElement = document) {
                             : undefined,
                     },
                 }));
-                referenceEdgesRef.current = referenceAnchored.edges.map((edge) => tasksReferenceFlowEdge(edge, rf.MarkerType.ArrowClosed, hoverFontSize, layoutConfig.edgeLabelWidth));
+                referenceEdgesRef.current = tasksReferenceFlowEdges(baseNodes, referenceAnchored.edges, {
+                    markerType: rf.MarkerType.ArrowClosed,
+                    fontSize: hoverFontSize,
+                    labelMaxWidth: layoutConfig.edgeLabelWidth,
+                    model,
+                    gutter: tasksFreeRouteGutter(layoutConfig),
+                });
                 graphBaseRef.current = { nodes: anchoredNodes, edges: baseEdges };
                 window.__vyasaTasksDebug.latest = {
                     widgetId,
