@@ -946,39 +946,12 @@ async function renderTasksGraphs(rootElement = document) {
                 return list.filter((slide) => slide && Array.isArray(slide.nodes) && slide.nodes.length);
             }, [baseProjectionState.model]);
             const [slideIndex, setSlideIndex] = React.useState(-1);
+            // Slides always show EG; EG+ adds the direct neighbours. 'off' only while no slide is open.
             const [slideFocusMode, setSlideFocusMode] = React.useState('off'); // 'off' | 'eg' | 'egplus'
             React.useEffect(() => {
                 setSlideIndex((index) => index < 0 ? -1 : (slides.length ? 0 : -1));
                 if (!slides.length) setSlideFocusMode('off');
             }, [activeProjectionId, slides]);
-            React.useEffect(() => {
-                const slide = slideIndex >= 0 ? slides[slideIndex] : null;
-                if (!slide) return;
-                const ids = new Set((slide.nodes || []).map((id) => String(id || '').trim()).filter(Boolean));
-                selectedNodeIdRef.current = null;
-                selectedNodeIdsRef.current = new Set(ids);
-                setSelectedNodeId(null);
-                setSelectedNodeIds(new Set(ids));
-            }, [slideIndex, slides]);
-            React.useEffect(() => {
-                const slide = slideIndex >= 0 ? slides[slideIndex] : null;
-                if (!slide) return;
-                const ids = new Set((slide.nodes || []).map((id) => String(id || '').trim()).filter(Boolean));
-                const timer = window.setTimeout(() => {
-                    const reactFlow = reactFlowApiRef.current;
-                    const matched = tasksMatchedSlideNodes(slides, slideIndex, graphBaseRef.current.nodes);
-                    logTasksDebug('slideFocusFit', {
-                        widgetId,
-                        slideIndex,
-                        graphRevision,
-                        requestedNodeCount: ids.size,
-                        matchedNodeCount: matched.length,
-                        graphReady: Boolean(reactFlow),
-                    });
-                    if (reactFlow && matched.length) reactFlow.fitView({ nodes: matched, duration: 400, padding: 0.3, includeHiddenNodes: true });
-                }, 80);
-                return () => window.clearTimeout(timer);
-            }, [slideIndex, slides, graphRevision]);
             // Sticky EG/EG+ focus: rebuild the current graph whenever the slide or mode changes.
             React.useEffect(() => {
                 if (initialEgoMode) return;
@@ -990,7 +963,7 @@ async function renderTasksGraphs(rootElement = document) {
                 if (!slide || !Array.isArray(slide.nodes) || !slide.nodes.length) return;
                 const timer = window.setTimeout(() => {
                     window.__vyasaTasksActions?.[widgetId]?.openEgo?.(
-                        slideFocusMode === 'egplus', slide.nodes, true, () => setSlideFocusMode('off')
+                        slideFocusMode === 'egplus', slide.nodes, true, () => { setSlideFocusMode('off'); setSlideIndex(-1); }
                     );
                 }, 70);
                 return () => window.clearTimeout(timer);
@@ -2732,7 +2705,10 @@ async function renderTasksGraphs(rootElement = document) {
             }, [layoutRawGraph, layoutModel, jitterConfig, layoutConfig]);
             const rebuildLayout = React.useCallback(async (expandedSet, mode = viewMode) => {
                 const layoutStart = tasksPerfNow();
-                const revisionKey = `${mode}|${String(model?.graph_id || '')}|${Array.from(expandedSet || []).sort().join(',')}`;
+                // A rebuild is a new layout when the mode, the graph, its node set or its
+                // open groups change. Two EG graphs share a graph id but not their nodes.
+                const nodeSetKey = [...(model?.groups || []), ...(model?.tasks || [])].map((node) => String(node.id || '')).sort().join(',');
+                const revisionKey = `${mode}|${String(model?.graph_id || '')}|${nodeSetKey}|${Array.from(expandedSet || []).sort().join(',')}`;
                 const revisionCause = lastLayoutRevisionKeyRef.current === revisionKey ? 'visual' : 'layout';
                 lastLayoutRevisionKeyRef.current = revisionKey;
                 lastGraphRevisionCauseRef.current = revisionCause;
@@ -3345,19 +3321,26 @@ async function renderTasksGraphs(rootElement = document) {
                 prevExpandedCountRef.current = nextCount;
             }, [expanded]);
             React.useEffect(() => {
-                if (lastGraphRevisionCauseRef.current === 'visual') return;
                 const fitAction = pendingFitActionRef.current;
                 if (!fitAction) return;
+                // A layout often commits a second, visual-only revision. That re-run
+                // cancels the wait below, so it must restart it, not drop the owed fit.
+                logTasksDebug('autoFitRequest', { widgetId, fitAction, graphRevision, cause: lastGraphRevisionCauseRef.current, slideIndex });
                 // `mode` says the layout was replaced: a projection swap, a context
                 // swap, or a new group-by. The camera then points at geometry that is
                 // gone, and the graph reads as blank until a reload. The expand
                 // preference governs expanding a node, not replacing the layout.
                 if (!shouldAutoFitTasksOnExpand() && fitAction !== 'shortcut' && fitAction !== 'mode') return;
+                // The one fit after a layout: wait ~25 frames for it to settle, then
+                // fit the open slide's nodes, or the whole graph when no slide is open.
                 let rafId = null;
                 let framesLeft = 25;
                 const step = () => {
                     if (framesLeft <= 0) {
-                        reactFlowApiRef.current?.fitView({ duration: 200, padding: 0.2, includeHiddenNodes: true });
+                        const matched = slideIndex >= 0 ? tasksMatchedSlideNodes(slides, slideIndex, graphBaseRef.current.nodes) : [];
+                        logTasksDebug('autoFit', { widgetId, fitAction, slideIndex, graphRevision, matchedNodeCount: matched.length });
+                        if (matched.length) reactFlowApiRef.current?.fitView({ nodes: matched, duration: 400, padding: 0.3, includeHiddenNodes: true });
+                        else reactFlowApiRef.current?.fitView({ duration: 200, padding: 0.2, includeHiddenNodes: true });
                         pendingFitActionRef.current = null;
                         return;
                     }
@@ -3368,7 +3351,7 @@ async function renderTasksGraphs(rootElement = document) {
                 return () => {
                     if (rafId !== null) window.cancelAnimationFrame(rafId);
                 };
-            }, [graphRevision, expanded]);
+            }, [graphRevision, expanded, slideIndex, slides]);
             React.useEffect(() => {
                 if (!shouldAutoFitTasksOnFilter()) return;
                 const hasFilters = tasksFilterQueryHasRules(effectiveQueryFilters) || tasksFilterQueryHasRules(effectiveSwatchFilters) || effectiveEdgeTypes.length > 0;
@@ -3464,9 +3447,6 @@ async function renderTasksGraphs(rootElement = document) {
             React.useEffect(() => {
                 rebuildLayout(expanded);
             }, [expanded, viewMode, rebuildLayout]);
-            // Fit-on-mode-change is driven from inside ReactFlowProvider via
-            // FitOnNodesReady below — it waits for useNodesInitialized() so the
-            // fit lands after React Flow has finished measuring node rects.
             const nodeTypes = React.useMemo(() => ({ vyasaTask: CustomNode }), [CustomNode]);
             const edgeTypes = React.useMemo(() => ({ vyasaEdge: CustomEdge }), []);
             const FitViewHotkey = () => {
@@ -4404,25 +4384,6 @@ async function renderTasksGraphs(rootElement = document) {
                 }, [reactFlow, graphRevision, egoMode]);
                 return null;
             };
-            const FitOnNodesReady = () => {
-                const reactFlow = rf.useReactFlow();
-                React.useEffect(() => {
-                    if (pendingFitActionRef.current !== 'mode') return;
-                    // Pragmatic: wait long enough for the layout to settle, then fit.
-                    // Same call the F key triggers, just timed past any settle race.
-                    const timeoutId = window.setTimeout(() => {
-                        const matched = tasksMatchedSlideNodes(slides, slideIndex, graphBaseRef.current.nodes);
-                        if (slideIndex >= 0) {
-                            if (matched.length) reactFlow.fitView({ nodes: matched, duration: 400, padding: 0.3, includeHiddenNodes: true });
-                        } else {
-                            reactFlow.fitView({ duration: 200, padding: 0.16, includeHiddenNodes: true });
-                        }
-                        pendingFitActionRef.current = null;
-                    }, 350);
-                    return () => window.clearTimeout(timeoutId);
-                }, [reactFlow, graphRevision, viewMode, slideIndex, slides]);
-                return null;
-            };
             const TasksNodeHighlightBorders = () => {
                 if (!rf.ViewportPortal) return null;
                 const byId = Object.fromEntries(nodes.map((node) => [node.id, node]));
@@ -4757,7 +4718,7 @@ async function renderTasksGraphs(rootElement = document) {
             const SlideLauncher = () => {
                 if (!slides.length || slideIndex >= 0) return null;
                 return window.React.createElement('button', {
-                    type: 'button', onClick: () => setSlideIndex(0),
+                    type: 'button', onClick: () => { setSlideFocusMode('eg'); setSlideIndex(0); },
                     style: { position: 'absolute', left: '12px', top: '12px', zIndex: 36, padding: '7px 13px', borderRadius: '9px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 94%, transparent)', boxShadow: '0 8px 20px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', cursor: 'pointer', fontSize: '12px', fontWeight: 600 },
                 }, '▶ Slides');
             };
@@ -4786,8 +4747,7 @@ async function renderTasksGraphs(rootElement = document) {
                         window.React.createElement('button', { type: 'button', 'aria-label': 'Next slide', onClick: () => go(1), disabled: slideIndex >= slides.length - 1, style: navBtn(slideIndex >= slides.length - 1) }, '›')
                     ),
                     window.React.createElement('div', { style: { display: 'flex', gap: '6px', marginBottom: '10px' } },
-                        window.React.createElement('button', { type: 'button', title: "Focus this slide's nodes in a compact view (toggle)", onClick: () => setSlideFocusMode((m) => m === 'eg' ? 'off' : 'eg'), style: focusBtn(slideFocusMode === 'eg') }, 'EG'),
-                        window.React.createElement('button', { type: 'button', title: "Focus this slide's nodes plus their direct neighbors, dimmed (toggle)", onClick: () => setSlideFocusMode((m) => m === 'egplus' ? 'off' : 'egplus'), style: focusBtn(slideFocusMode === 'egplus') }, 'EG+')
+                        window.React.createElement('button', { type: 'button', title: "Add this slide's direct neighbors (toggle)", onClick: () => setSlideFocusMode((m) => m === 'egplus' ? 'eg' : 'egplus'), style: focusBtn(slideFocusMode === 'egplus') }, 'EG+')
                     ),
                     window.React.createElement('div', { style: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px', marginBottom: '8px' } },
                         window.React.createElement('strong', { style: { fontSize: '16px' } }, slide.title || `Slide ${slideIndex + 1}`),
@@ -5040,8 +5000,7 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement(SlideLauncher),
                     window.React.createElement(FitViewHotkey),
                     window.React.createElement(ActionBridge),
-                    window.React.createElement(RestoreEgoViewport),
-                    window.React.createElement(FitOnNodesReady)
+                    window.React.createElement(RestoreEgoViewport)
                     ),
                     GitReviewBar(),
                     RightRail(),
@@ -5061,8 +5020,7 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement(SlideLauncher),
                         window.React.createElement(FitViewHotkey),
                         window.React.createElement(ActionBridge),
-                        window.React.createElement(RestoreEgoViewport),
-                        window.React.createElement(FitOnNodesReady)
+                        window.React.createElement(RestoreEgoViewport)
                     ),
                     GitReviewBar(),
                     RightRail(),
