@@ -1,6 +1,6 @@
 import { logTasksPerf, traceTasksEdge } from './tasks_diagnostics.js';
 import {
-    TASKS_STYLE_ATTRS, applyTasksFilterAttributePolicy, resolveTasksNodeImage, sizeTaskNode, tasksNodeLook, tasksNodeSubtitle, tasksUngroupModelForGrouping,
+    TASKS_STYLE_ATTRS, applyTasksFilterAttributePolicy, resolveTasksNodeImage, sizeTaskNode, tasksNodeImageHero, tasksNodeLook, tasksNodeSubtitle, tasksUngroupModelForGrouping,
     tasksViewMatchesContext,
 } from './tasks_graph_core.js';
 
@@ -1389,7 +1389,7 @@ export function buildVisibleTasksGraph(model, expanded) {
         ...Array.from(visibleTasks).map((id) => {
             const source = tasksById[id] || {};
             const label = source.label || id;
-            return { ...source, id, label, __kind__: 'task', ...sizeTaskNode(label, 'task', null, { hasImage: Boolean(resolveTasksNodeImage(source, model)), nodeLabels, look: tasksNodeLook(source, model), subtitle: tasksNodeSubtitle(source, model) }) };
+            return { ...source, id, label, __kind__: 'task', ...sizeTaskNode(label, 'task', null, { hasImage: Boolean(resolveTasksNodeImage(source, model)), heroImage: tasksNodeImageHero(source, model), nodeLabels, look: tasksNodeLook(source, model), subtitle: tasksNodeSubtitle(source, model) }) };
         }),
     ];
     const parentOfGroup = Object.fromEntries((model.groups || []).map((g) => [g.id, g.parent_group_id || null]));
@@ -1484,7 +1484,7 @@ export function normalizeTasksGraphNodes(graph, model) {
             // box. Auto-sizing it to a card would throw that away.
             const size = node.__fixed_size__
                 ? { width: node.width, height: node.height }
-                : sizeTaskNode(label, kind, null, { hasImage: Boolean(resolveTasksNodeImage(source, model)), nodeLabels, look: tasksNodeLook(source, model), subtitle: tasksNodeSubtitle(source, model) });
+                : sizeTaskNode(label, kind, null, { hasImage: Boolean(resolveTasksNodeImage(source, model)), heroImage: kind === 'task' && tasksNodeImageHero(source, model), nodeLabels, look: tasksNodeLook(source, model), subtitle: tasksNodeSubtitle(source, model) });
             return { ...source, ...nodeRest, __kind__: kind, label, ...size };
         }),
     };

@@ -6,7 +6,7 @@ from collections import defaultdict
 from itertools import product
 
 from .layout import build_collapsed_graph
-from .layouts import all_layout_keys, apply_layout_aliases, layout_error
+from .layouts import STYLE_KEYS, all_layout_keys, apply_layout_aliases, layout_error
 
 TASKS_PROJECTION_UNSPECIFIED_LABEL = "Unspecified"
 PROJECTION_DISPLAY_KEYS = {
@@ -17,7 +17,7 @@ PROJECTION_DISPLAY_KEYS = {
     "layout_direction", "collision_gap", "edge_label_width",
     "layout", "layout_error",
     # Style defaults for every node and edge in the view; see layouts.STYLE_KEYS.
-    "node_look", "edge_path", "subtitle_from", "edge_corner", "canvas",
+    *STYLE_KEYS, "subtitle_from",
     # Pairing a call with its reply is a view rule, not a layout rule, so it is
     # not in all_layout_keys() and has to be named here.
     "pair_by",

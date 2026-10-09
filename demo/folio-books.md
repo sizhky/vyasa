@@ -4,7 +4,7 @@ title: Folio Books — one KG, six styles
 
 # Folio Books: one KG, six styles
 
-Folio Books is a small online bookshop. Every figure on this page reads the same pack, `folio-books.kg`. Each view picks the style that fits its question. The style keys are `node_look`, `edge_path`, `edge_corner`, and `canvas`. A view sets them as defaults, and any node or edge can override them.
+Folio Books is a small online bookshop. Every figure on this page reads the same pack, `folio-books.kg`. Each view picks the style that fits its question. The style keys are `node_look`, `node_image`, `edge_path`, `edge_corner`, and `canvas`. A view sets them as defaults, and any node or edge can override them.
 
 ## What runs: services
 

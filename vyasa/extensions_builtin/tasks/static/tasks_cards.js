@@ -416,6 +416,7 @@ export function renderTasksCardNodeIcon(React, node, model, options = {}) {
         alt: '',
         loading: 'lazy',
         draggable: false,
+        'data-vyasa-no-image-focus': '',
         className: tasksIsIconifyImage(image) ? 'vyasa-tasks-node-image vyasa-tasks-node-image--icon' : 'vyasa-tasks-node-image',
         style: { ...style, objectFit: 'contain' },
     });

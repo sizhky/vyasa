@@ -1,7 +1,7 @@
 import { renderTasksInlineLinks, renderTasksNodeLinkBadge, tasksIsIconifyImage, tasksNodeLinkKinds } from './tasks_cards.js';
 import { logTasksDebug } from './tasks_diagnostics.js';
 import {
-    normalizeTasksNodeImageUrl, tasksGraphCornerPath, tasksIsDashed, tasksNodeSubtitle, tasksReviewTarget,
+    normalizeTasksNodeImageUrl, tasksGraphCornerPath, TASKS_HERO_IMAGE_SIZE, tasksIsDashed, tasksNodeImageHero, tasksNodeSubtitle, tasksReviewTarget,
 } from './tasks_graph_core.js';
 import { tasksRoleOf } from './tasks_roles.js';
 import { tasksGroupTitleLook, tasksLookBody, tasksStackShadow } from './tasks_theme.js';
@@ -68,6 +68,7 @@ export function createTasksNodeRenderer(getState) {
                             alt: '',
                             loading: 'lazy',
                             draggable: false,
+                            'data-vyasa-no-image-focus': '',
                             className: nodeImageClassName,
                             style: {
                                 width: `${size}px`,
@@ -543,6 +544,8 @@ export function createTasksNodeRenderer(getState) {
                         }
                         // A figure look restyles the body; a card look keeps it as is.
                         const look = tasksLookBody(React, data?.__node_look__, { dashed: tasksIsDashed(data), kind: data?.__look_kind__ }, tasksNodeSubtitle(data, model));
+                        // A hero image stacks above the title and subtitle; sizeTaskNode gave it a row.
+                        const heroImage = !isGroup && Boolean(nodeImage) && tasksNodeImageHero(data, model);
                         return React.createElement('div', {
                             ...reviewAttrs,
                             className: 'vyasa-task-node-body',
@@ -553,7 +556,8 @@ export function createTasksNodeRenderer(getState) {
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                gap: nodeImage ? '10px' : undefined,
+                                flexDirection: heroImage ? 'column' : undefined,
+                                gap: heroImage ? '6px' : (nodeImage ? '10px' : undefined),
                                 fontSize: `${TASKS_NODE_LABEL_FONT_SIZE}px`,
                                 fontWeight: '600',
                                 fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
@@ -572,15 +576,15 @@ export function createTasksNodeRenderer(getState) {
                             noteBadge,
                             linkKinds.length ? renderTasksNodeLinkBadge(React, { right: canExpand ? '32px' : '10px', kinds: linkKinds }) : null,
                             ...renderHandles('target'),
-                            renderNodeImage(isGroup ? 30 : 28),
+                            heroImage ? renderNodeImage(TASKS_HERO_IMAGE_SIZE) : renderNodeImage(isGroup ? 30 : 28),
                             React.createElement('span', {
                                 style: {
                                     boxSizing: 'border-box',
                                     position: 'relative',
                                     zIndex: 1,
-                                    flex: '1 1 auto',
+                                    flex: heroImage ? '0 0 auto' : '1 1 auto',
                                     minWidth: 0,
-                                    width: nodeImage ? 'auto' : '100%',
+                                    width: nodeImage && !heroImage ? 'auto' : '100%',
                                     maxWidth: '100%',
                                     overflow: 'hidden',
                                     display: 'block',

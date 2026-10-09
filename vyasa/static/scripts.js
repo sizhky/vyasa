@@ -1996,7 +1996,7 @@ function initImageFocus() {
 
     document.addEventListener('click', (event) => {
         const image = event.target.closest?.('#main-content img, .vyasa-zen-slide-body img');
-        if (!image) return;
+        if (!image || image.hasAttribute('data-vyasa-no-image-focus')) return;
         event.preventDefault();
         event.stopPropagation();
         const expanded = document.createElement('img');

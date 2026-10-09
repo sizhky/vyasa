@@ -1168,7 +1168,8 @@ body.iframe-fullscreen-open { overflow: hidden; }
 .iframe-fullscreen-frame { width: 100%; height: 100%; border: 1px solid var(--vyasa-border); border-radius: var(--vyasa-radius-md) !important; background: var(--vyasa-surface); }
 
 .vyasa-markdown-image { display: block; width: auto; height: auto; max-width: 60vw; max-height: 40vh; margin-inline: auto; }
-#main-content img, .vyasa-zen-slide-body img { cursor: zoom-in; }
+/* An image an author places in a document opens in focus; a UI image opts out with data-vyasa-no-image-focus. */
+:is(#main-content, .vyasa-zen-slide-body) img:not([data-vyasa-no-image-focus]) { cursor: zoom-in; }
 html:has(.image-focus-dialog[open]), body.image-focus-open { overflow: hidden; }
 .image-focus-dialog { padding: 0; border: 0; max-width: 94vw; max-height: 94vh; background: transparent; overflow: visible; animation: image-focus-fade-in var(--vyasa-duration-base) var(--vyasa-ease); }
 .image-focus-dialog::backdrop { background: rgb(0 0 0 / 0.8); animation: image-focus-backdrop-in var(--vyasa-duration-base) var(--vyasa-ease); }
