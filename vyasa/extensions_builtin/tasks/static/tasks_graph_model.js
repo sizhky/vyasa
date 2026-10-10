@@ -1264,6 +1264,22 @@ export function buildTasksUngroupedState(sourceModel) {
     return { model, graph: buildTasksCollapsedGraph(model) };
 }
 
+/**
+ * The EG seed for a filter match. A matching group would bring all its contents,
+ * so groups are dropped; their matching nodes bring them back as frames. Only a
+ * match of groups alone keeps them.
+ *
+ * >>> tasksEgoFilterSeed(new Set(['g', 'a']), { groups: [{ id: 'g' }] })
+ * Set { 'a' }
+ * >>> tasksEgoFilterSeed(new Set(['g']), { groups: [{ id: 'g' }] })
+ * Set { 'g' }
+ */
+export function tasksEgoFilterSeed(matchedIds, model) {
+    const groupIds = new Set((model?.groups || []).map((group) => String(group.id)));
+    const leaves = new Set(Array.from(matchedIds || []).filter((id) => !groupIds.has(String(id))));
+    return leaves.size ? leaves : new Set(matchedIds || []);
+}
+
 export function buildTasksEgoState(sourceModel, sourceGraph, selectedIds, includeNeighbors = false, colorBy = '') {
     const selected = new Set(Array.from(selectedIds || []).map((id) => String(id || '').trim()).filter(Boolean));
     if (!selected.size) return null;

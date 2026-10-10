@@ -21,7 +21,7 @@ import {
 } from './tasks_graph_core.js';
 import {
     TASKS_DEFAULT_CARD_STATES, TASKS_GANTT_PROJECTION_ID, TASKS_PROJECTION_UNSPECIFIED_CONTENT_OPACITY_DEFAULT, TASKS_PROJECTION_UNSPECIFIED_LABEL,
-    buildTasksCollapsedGraph, buildTasksEgoState, buildTasksProjectionConfigText, clampTasksEdgeOpacity,
+    buildTasksCollapsedGraph, buildTasksEgoState, buildTasksProjectionConfigText, tasksEgoFilterSeed, clampTasksEdgeOpacity,
     clampTasksProjectionDisplayOpacity, collapseOneGroupDepth, collectExpandedGroupsByDepth, collectTasksGroupDescendantIds,
     effectiveExpandedGroups, expandOneGroupDepth, normalizeTasksCardStates, normalizeTasksCheckedNodeIds,
     normalizeTasksFilterQuery, normalizeTasksGraphNodes, normalizeTasksGroupByDisabledKeys, normalizeTasksNodeNotes,
@@ -4299,9 +4299,14 @@ async function renderTasksGraphs(rootElement = document) {
                         },
                         openEgo: (includeNeighbors = false, explicitIds = null, inline = false, onClose = null) => {
                             const previous = egoReturnRef.current;
+                            // With nothing clicked, the selection is the filter match. A clicked
+                            // group brings its contents; a matching group only frames its matches.
+                            const fromFilter = !selectedNodeIdRef.current && !selectedNodeIdsRef.current.size;
                             const egoSelection = Array.isArray(explicitIds) && explicitIds.length
                                 ? new Set(explicitIds.map((id) => String(id || '').trim()).filter(Boolean))
-                                : (previous ? new Set(previous.egoSelection) : currentSelectionIds());
+                                : (previous
+                                    ? new Set(previous.egoSelection)
+                                    : (fromFilter ? tasksEgoFilterSeed(currentSelectionIds(), baseProjectionState.model) : currentSelectionIds()));
                             logTasksDebug('openEgoAction', {
                                 widgetId,
                                 includeNeighbors,
