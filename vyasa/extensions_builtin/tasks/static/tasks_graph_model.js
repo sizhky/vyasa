@@ -1280,14 +1280,16 @@ export function tasksEgoFilterSeed(matchedIds, model) {
     return leaves.size ? leaves : new Set(matchedIds || []);
 }
 
-export function buildTasksEgoState(sourceModel, sourceGraph, selectedIds, includeNeighbors = false, colorBy = '') {
+// `referenceEdges` are the 'is referred by' edges the caller shows; EG+ takes
+// neighbours over them only when they are on.
+export function buildTasksEgoState(sourceModel, sourceGraph, selectedIds, includeNeighbors = false, colorBy = '', referenceEdges = []) {
     const selected = new Set(Array.from(selectedIds || []).map((id) => String(id || '').trim()).filter(Boolean));
     if (!selected.size) return null;
     const groupsById = Object.fromEntries((sourceModel.groups || []).map((group) => [group.id, group]));
     const tasksById = Object.fromEntries((sourceModel.tasks || []).map((task) => [task.id, task]));
     const visible = new Set(selected);
     if (includeNeighbors) {
-        const neighborEdges = [...(sourceModel.dependency_edges || []), ...tasksReferenceEdges(sourceModel)];
+        const neighborEdges = [...(sourceModel.dependency_edges || []), ...referenceEdges];
         for (const edge of neighborEdges) {
             if (selected.has(edge.source)) visible.add(edge.target);
             if (selected.has(edge.target)) visible.add(edge.source);

@@ -4318,7 +4318,8 @@ async function renderTasksGraphs(rootElement = document) {
                                 baseRawGraph,
                                 egoSelection,
                                 includeNeighbors,
-                                activeColorBy
+                                activeColorBy,
+                                referenceEdgesVisible ? tasksReferenceEdges(baseProjectionState.model, sourceModel?.dependency_edges) : []
                             );
                             if (!nextEgoState) return;
                             if (!previous) {
