@@ -160,7 +160,8 @@
 }
 button[data-vyasa-tasks-action="toggleEdges"][data-vyasa-edges-off="true"],
 button[data-vyasa-tasks-action="toggleHoverCards"][data-vyasa-hover-cards-off="true"],
-button[data-vyasa-tasks-action="toggleCardScroll"][data-vyasa-card-scroll-on="true"] {
+button[data-vyasa-tasks-action="toggleCardScroll"][data-vyasa-card-scroll-on="true"],
+button[data-vyasa-tasks-action="toggleReferenceEdges"][data-vyasa-reference-edges-on="true"] {
     color: #fecaca !important;
     border-color: #ef4444 !important;
     background: #dc2626 !important;

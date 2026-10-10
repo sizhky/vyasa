@@ -216,6 +216,7 @@ const isTasksHopCode = (code) => TASKS_HOP_GROW_CODES.has(code) || TASKS_HOP_SHR
 const TASKS_ZOOM_MOMENTUM_RATE = 0.0007;
 
 const TASKS_EDGE_LABELS_VISIBLE_KEY = 'vyasa:tasks:edge-labels-visible';
+const TASKS_REFERENCE_EDGES_VISIBLE_KEY = 'vyasa:tasks:reference-edges-visible';
 
 const TASKS_GROUP_HOVER_CARDS_KEY = 'vyasa:tasks:group-hover-cards';
 const TASKS_HOVER_CARD_SCROLL_KEY = 'vyasa:tasks:hover-card-scroll';
@@ -448,6 +449,10 @@ function syncTasksEdgeToggleButtons(widgetId, edgesVisible) {
 
 function syncTasksHoverCardToggleButtons(widgetId, hoverCardsEnabled) {
     syncTasksToggleButtons(widgetId, 'toggleHoverCards', !hoverCardsEnabled, 'data-vyasa-hover-cards-off', 'Toggle hover cards', 'Hover cards are hidden (H)');
+}
+
+function syncTasksReferenceEdgeToggleButtons(widgetId, visible) {
+    syncTasksToggleButtons(widgetId, 'toggleReferenceEdges', visible, 'data-vyasa-reference-edges-on', "Show 'is referred by' edges", "'is referred by' edges are shown");
 }
 
 function syncTasksCardScrollToggleButtons(widgetId, enabled) {
@@ -1078,6 +1083,16 @@ async function renderTasksGraphs(rootElement = document) {
                     return next;
                 });
             }, []);
+            // 'is referred by' edges come from [[node]] links in node text. They are
+            // off unless the Refs button turned them on, which every graph then follows.
+            const [referenceEdgesVisible, setReferenceEdgesVisible] = React.useState(() => readTasksStoredFlag(TASKS_REFERENCE_EDGES_VISIBLE_KEY) === true);
+            const setReferenceEdgesVisibleGlobal = React.useCallback((update) => {
+                setReferenceEdgesVisible((current) => {
+                    const next = Boolean(typeof update === 'function' ? update(current) : update);
+                    writeTasksGlobalToggle(TASKS_REFERENCE_EDGES_VISIBLE_KEY, next);
+                    return next;
+                });
+            }, []);
             const setHoverCardModeGlobal = React.useCallback((update) => {
                 setHoverCardMode((current) => {
                     const next = clampTasksHoverCardMode(typeof update === 'function' ? update(current) : update);
@@ -1111,6 +1126,9 @@ async function renderTasksGraphs(rootElement = document) {
             React.useEffect(() => {
                 syncTasksCardScrollToggleButtons(widgetId, hoverCardScrollMode);
             }, [widgetId, hoverCardScrollMode]);
+            React.useEffect(() => {
+                syncTasksReferenceEdgeToggleButtons(widgetId, referenceEdgesVisible);
+            }, [widgetId, referenceEdgesVisible]);
             const defaultEdgeOpacity = React.useMemo(
                 () => tasksDefaultEdgeOpacity((sourceModel?.dependency_edges || []).length),
                 [sourceModel]
@@ -1147,8 +1165,8 @@ async function renderTasksGraphs(rootElement = document) {
             visibleEdgesRef.current = edges;
             const edgeNodeLabels = React.useMemo(() => tasksModelNodeLabels(model), [model]);
             const referenceEdgeRecords = React.useMemo(
-                () => tasksReferenceEdges(model, sourceModel?.dependency_edges),
-                [model, sourceModel]
+                () => (referenceEdgesVisible ? tasksReferenceEdges(model, sourceModel?.dependency_edges) : []),
+                [model, sourceModel, referenceEdgesVisible]
             );
             const layoutModel = React.useMemo(() => ({
                 ...model,
@@ -4358,6 +4376,7 @@ async function renderTasksGraphs(rootElement = document) {
                             current === 'off' ? clampTasksHoverCardMode(lastHoverCardPlacementRef.current) : 'off'
                         )),
                         toggleEdges: () => setEdgesVisibleGlobal((current) => !current),
+                        toggleReferenceEdges: () => setReferenceEdgesVisibleGlobal((current) => !current),
                         toggleCardScroll: () => setHoverCardScrollModeGlobal((current) => !current),
                         toggleHelp: () => setHelpOpen((current) => !current),
                     };
