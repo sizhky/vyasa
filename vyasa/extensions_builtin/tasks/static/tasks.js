@@ -67,7 +67,7 @@ import { tasksHighlightGraph } from './tasks_highlight.js';
 import { tasksRoleOf } from './tasks_roles.js';
 import { createTasksInternals } from './tasks_internals.js';
 import {
-    TASKS_EDGES_VISIBLE_KEY, TASKS_HOVER_CARD_MODES, TASKS_HOVER_CARD_MODE_KEY, buildTasksNodeNotesBackup,
+    TASKS_EDGES_VISIBLE_KEY, TASKS_FULLSCREEN_KEY, TASKS_HOVER_CARD_MODES, TASKS_HOVER_CARD_MODE_KEY, buildTasksNodeNotesBackup,
     checkedNodeIdsFromStates, clearTasksGlobalToggle, downloadTasksNodeNotes, readTasksCheckedNodeIds,
     readTasksEdgesVisible, readTasksGlobalToggle, readTasksHoverCardMode, readTasksPrefs,
     readTasksStoredFlag, tasksNodeCardWidthKey, uploadTasksNodeNotes, writeTasksCheckedNodeIds,
@@ -547,9 +547,25 @@ function syncTasksFullscreenButton(wrapper) {
     });
 }
 
+// A .kg page's own graph; a standalone graph inside an internals panel is not one.
+function isTasksPageGraph(wrapper) {
+    return String(wrapper?.dataset?.tasksStandalone || '').toLowerCase() === 'true'
+        && !wrapper.closest('.vyasa-kg-internals-body');
+}
+
+// Slides and EG maximize through setTasksMaximized directly, so only user toggles land here.
 const { setTasksMaximized } = createTasksFullscreenController({
     syncTasksFullscreenButton,
+    onUserToggle: (wrapper, on) => {
+        if (isTasksPageGraph(wrapper)) writeTasksGlobalToggle(TASKS_FULLSCREEN_KEY, on);
+    },
 });
+
+function restoreTasksPageFullscreen(wrapper) {
+    if (wrapper.__tasksFullscreenRestored || !isTasksPageGraph(wrapper)) return;
+    wrapper.__tasksFullscreenRestored = true;
+    if (readTasksStoredFlag(TASKS_FULLSCREEN_KEY)) setTasksMaximized(wrapper, true);
+}
 
 function applyTasksStandaloneHeight(wrapper) {
     if (String(wrapper?.dataset?.tasksStandalone || '').toLowerCase() !== 'true') return;
@@ -599,6 +615,8 @@ async function renderTasksGraphs(rootElement = document) {
             needsRetry = true;
             continue;
         }
+        // After the visibility gate: a maximized wrapper is position: fixed, so its offsetParent is null.
+        restoreTasksPageFullscreen(wrapper);
         const initialSourceModel = JSON.parse(wrapper.dataset.tasksPayload || '{"groups":[],"tasks":[],"group_tree":{},"task_children":{},"dependency_edges":[]}');
         const initialSourceGraph = normalizeTasksGraphNodes(JSON.parse(wrapper.dataset.tasksGraph || '{"nodes":[],"edges":[]}'), initialSourceModel);
         const widgetId = wrapper.id;

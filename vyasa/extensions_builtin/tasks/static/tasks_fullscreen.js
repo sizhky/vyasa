@@ -1,4 +1,4 @@
-export function createTasksFullscreenController({ syncTasksFullscreenButton }) {
+export function createTasksFullscreenController({ syncTasksFullscreenButton, onUserToggle = () => {} }) {
     function setTasksMaximized(wrapper, on, options = {}) {
         if (!wrapper) return;
         const isOn = wrapper.getAttribute('data-tasks-maximized') === 'true';
@@ -17,6 +17,7 @@ export function createTasksFullscreenController({ syncTasksFullscreenButton }) {
                     return;
                 }
                 setTasksMaximized(wrapper, false);
+                onUserToggle(wrapper, false);
             };
             wrapper.__tasksMaximizeEsc = escHandler;
             document.addEventListener('keydown', escHandler, true);
@@ -40,7 +41,9 @@ export function createTasksFullscreenController({ syncTasksFullscreenButton }) {
     function openTasksFullscreen(id) {
         const wrapper = document.getElementById(id);
         if (!wrapper) return;
-        setTasksMaximized(wrapper, wrapper.getAttribute('data-tasks-maximized') !== 'true');
+        const on = wrapper.getAttribute('data-tasks-maximized') !== 'true';
+        setTasksMaximized(wrapper, on);
+        onUserToggle(wrapper, on);
     }
 
     window.openTasksFullscreen = openTasksFullscreen;
