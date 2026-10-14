@@ -1030,7 +1030,15 @@ document.addEventListener('toggle', (event) => {
 
 let standaloneMetaKey = false;
 
+// Deepest hovered plain details toggles with its nested details; else a hovered summary clicks.
 function toggleHoveredDetails() {
+    const plain = [...document.querySelectorAll('#main-content details:not(.vyasa-heading-fold):hover')].pop();
+    if (plain) {
+        const shouldOpen = !plain.open;
+        plain.open = shouldOpen;
+        plain.querySelectorAll('details').forEach((nested) => { nested.open = shouldOpen; });
+        return true;
+    }
     const summary = [...document.querySelectorAll('details > summary:hover')].pop();
     if (!summary) return false;
     summary.click();
@@ -1039,7 +1047,7 @@ function toggleHoveredDetails() {
 
 window.addEventListener('keydown', (event) => {
     if (event.key === 'Meta') {
-        standaloneMetaKey = !event.defaultPrevented && !event.repeat
+        standaloneMetaKey = !event.repeat
             && !shortcutsSuspended() && !isEditableShortcutEvent(event)
             && !event.shiftKey && !event.altKey && !event.ctrlKey
             && !document.querySelector('a[data-vyasa-link-preview="true"]:hover');
@@ -1170,24 +1178,6 @@ document.addEventListener('click', (event) => {
         details.open = !details.open;
         syncHeadingActionStates(document);
     }
-});
-
-let hoveredPlainDetails = null;
-let metaChorded = false;
-document.addEventListener('mouseover', (event) => {
-    hoveredPlainDetails = event.target.closest?.('#main-content details:not(.vyasa-heading-fold)') || null;
-});
-document.addEventListener('keydown', (event) => {
-    if (event.key !== 'Meta') metaChorded = true;
-});
-document.addEventListener('keyup', (event) => {
-    if (event.key !== 'Meta') return;
-    const chorded = metaChorded;
-    metaChorded = false;
-    if (chorded || !hoveredPlainDetails?.isConnected) return;
-    const shouldOpen = !hoveredPlainDetails.open;
-    hoveredPlainDetails.open = shouldOpen;
-    hoveredPlainDetails.querySelectorAll('details').forEach((nested) => { nested.open = shouldOpen; });
 });
 
 function syncHeadingActionStates(root = document) {
