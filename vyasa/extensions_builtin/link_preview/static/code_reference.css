@@ -111,7 +111,7 @@
 .vyasa-code-reference-omission button {
     padding: 2px var(--vyasa-space-2);
     border: 1px solid var(--vyasa-border);
-    border-radius: var(--vyasa-radius-md);
+    border-radius: var(--vyasa-control-radius);
     background: var(--vyasa-surface);
     color: var(--vyasa-text);
     font-size: 0.78em;

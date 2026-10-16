@@ -20,7 +20,7 @@
 .vyasa-comments { margin-top: var(--vyasa-space-7); padding-top: var(--vyasa-space-5); border-top: 1px solid var(--vyasa-border); }
 .vyasa-comments[hidden] { display: none; }
 .vyasa-comments-header { display: flex; align-items: center; justify-content: space-between; gap: var(--vyasa-space-4); }
-.vyasa-annotations-export { display: inline-flex; align-items: center; justify-content: center; padding: var(--vyasa-space-2); border-radius: var(--vyasa-radius-md); color: inherit; transition: background-color var(--vyasa-duration-fast) var(--vyasa-ease); }
+.vyasa-annotations-export { display: inline-flex; align-items: center; justify-content: center; padding: var(--vyasa-space-2); border-radius: var(--vyasa-control-radius); color: inherit; transition: background-color var(--vyasa-duration-fast) var(--vyasa-ease); }
 .vyasa-annotations-export[hidden] { display: none; }
 .vyasa-annotations-export:hover { background: var(--vyasa-hover); }
 .vyasa-comments-list { display: grid; gap: var(--vyasa-space-4); margin: var(--vyasa-space-4) 0 0; padding: 0; list-style: none; }

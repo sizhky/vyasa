@@ -75,7 +75,7 @@ details[data-mkdocs-section] > summary {
     display: inline-block;
     padding: var(--vyasa-space-2) var(--vyasa-space-4);
     border: 2px solid var(--vyasa-primary);
-    border-radius: var(--vyasa-button-radius, var(--vyasa-radius-md));
+    border-radius: var(--vyasa-control-radius, var(--vyasa-radius-md));
     color: var(--vyasa-primary) !important;
     font-weight: var(--vyasa-weight-semibold);
     text-decoration: none !important;

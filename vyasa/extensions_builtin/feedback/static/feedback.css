@@ -48,7 +48,7 @@
 .vyasa-feedback-pill button { flex: 0 0 auto; border: 0; color: inherit; background: transparent; cursor: pointer; }
 .vyasa-feedback-input { width: 100%; min-height: 6rem; resize: vertical; padding: var(--vyasa-space-3); border: 1px solid var(--vyasa-border-strong); border-radius: var(--vyasa-radius-md); color: var(--vyasa-text); background: var(--vyasa-bg); font: inherit; }
 .vyasa-feedback-actions { display: grid; gap: var(--vyasa-space-2); }
-.vyasa-feedback-action { padding: var(--vyasa-space-2) var(--vyasa-space-3); border: 0; border-radius: var(--vyasa-radius-md); color: var(--vyasa-accent-contrast); background: var(--vyasa-accent-9); font-size: var(--vyasa-text-sm); font-weight: var(--vyasa-weight-medium); cursor: pointer; transition: background-color var(--vyasa-duration-fast) var(--vyasa-ease); }
+.vyasa-feedback-action { padding: var(--vyasa-space-2) var(--vyasa-space-3); border: 0; border-radius: var(--vyasa-control-radius); color: var(--vyasa-accent-contrast); background: var(--vyasa-accent-9); font-size: var(--vyasa-text-sm); font-weight: var(--vyasa-weight-medium); cursor: pointer; transition: background-color var(--vyasa-duration-fast) var(--vyasa-ease); }
 .vyasa-feedback-action:hover:not(:disabled) { background: var(--vyasa-accent-10); }
 .vyasa-feedback-action.secondary { color: var(--vyasa-accent-11); background: var(--vyasa-accent-3); }
 .vyasa-feedback-action.secondary:hover:not(:disabled) { background: var(--vyasa-accent-4); }

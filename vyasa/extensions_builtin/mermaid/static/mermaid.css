@@ -22,7 +22,7 @@
 }
 
 .mermaid-fullscreen-title { color: var(--vyasa-text); }
-.mermaid-fullscreen-close { color: var(--vyasa-text-muted); border-radius: var(--vyasa-radius-md); transition: background var(--vyasa-duration-fast) var(--vyasa-ease), color var(--vyasa-duration-fast) var(--vyasa-ease); }
+.mermaid-fullscreen-close { color: var(--vyasa-text-muted); border-radius: var(--vyasa-control-radius); transition: background var(--vyasa-duration-fast) var(--vyasa-ease), color var(--vyasa-duration-fast) var(--vyasa-ease); }
 .mermaid-fullscreen-close:hover {
     color: var(--vyasa-text);
     background: var(--vyasa-hover);

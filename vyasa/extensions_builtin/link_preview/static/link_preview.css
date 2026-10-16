@@ -196,7 +196,7 @@
     max-width: 18rem;
     overflow: hidden;
     border: 1px solid var(--vyasa-link-preview-border);
-    border-radius: var(--vyasa-radius-md);
+    border-radius: var(--vyasa-control-radius);
     padding: var(--vyasa-space-1) var(--vyasa-space-2);
     background: var(--vyasa-link-preview-surface);
     color: var(--vyasa-text-muted);

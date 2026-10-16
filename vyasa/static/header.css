@@ -159,7 +159,9 @@ code, pre { font-family: var(--vyasa-font-mono); }
     --vyasa-selection-bg: var(--vyasa-accent-4);
     --vyasa-focus-ring: var(--vyasa-primary);
 
-    --vyasa-radius-md: var(--vyasa-button-radius);
+    /* Controls keep the theme button radius; containers cap it, so a pill theme keeps rectangle menus. */
+    --vyasa-control-radius: var(--vyasa-button-radius);
+    --vyasa-radius-md: min(var(--vyasa-button-radius), 1rem);
     --vyasa-rect-radius: var(--vyasa-radius-md);
 
     /* shadcn shadow scale: xs controls, sm cards, md menus/popovers, lg dialogs. */
@@ -656,7 +658,7 @@ html[data-vyasa-hide-toc-sidebar] #toc-sidebar {
     height: 2.25rem;
     padding: 0 var(--vyasa-space-2);
     border: 0;
-    border-radius: var(--vyasa-radius-md);
+    border-radius: var(--vyasa-control-radius);
     background: transparent;
     font: var(--vyasa-weight-medium) var(--vyasa-text-sm)/1 var(--vyasa-font-ui);
     cursor: pointer;
@@ -783,7 +785,7 @@ html[data-vyasa-hide-toc-sidebar] #toc-sidebar {
     height: 2.25rem;
     padding: 0 var(--vyasa-space-3);
     border: 1px solid var(--vyasa-border);
-    border-radius: var(--vyasa-radius-md);
+    border-radius: var(--vyasa-control-radius);
     background: transparent;
     color: var(--vyasa-ink) !important;
     font: var(--vyasa-weight-regular) var(--vyasa-text-base)/1 var(--vyasa-font-ui);
@@ -828,7 +830,7 @@ html[data-vyasa-hide-toc-sidebar] #toc-sidebar {
     color: var(--vyasa-emphasis-control-text) !important;
     background: var(--vyasa-emphasis-control-bg) !important;
     border: 1px solid var(--vyasa-emphasis-control-border) !important;
-    border-radius: var(--vyasa-radius-md) !important;
+    border-radius: var(--vyasa-control-radius) !important;
     box-shadow: none;
     transition: color var(--vyasa-duration-fast) var(--vyasa-ease), background-color var(--vyasa-duration-fast) var(--vyasa-ease), border-color var(--vyasa-duration-fast) var(--vyasa-ease);
 }
@@ -982,7 +984,7 @@ html[data-theme-mode="system"] #theme-mode-toggle [data-theme-mode-icon="system"
 .vyasa-sidebar-section-toggle {
     color: var(--vyasa-text-muted) !important;
     font: var(--vyasa-weight-medium) var(--vyasa-text-xs)/var(--vyasa-leading-tight) var(--vyasa-font-ui);
-    border-radius: var(--vyasa-radius-md);
+    border-radius: var(--vyasa-control-radius);
     transition: background-color var(--vyasa-duration-fast) var(--vyasa-ease), color var(--vyasa-duration-fast) var(--vyasa-ease);
 }
 .vyasa-sidebar-section-toggle:hover { background: var(--vyasa-hover); color: var(--vyasa-ink) !important; }
@@ -1405,7 +1407,7 @@ details[open] > .vyasa-callout-summary .vyasa-callout-chevron { transform: rotat
     height: 2.25rem;
     padding: 0 var(--vyasa-space-4);
     border: 1px solid transparent;
-    border-radius: var(--vyasa-radius-md) !important;
+    border-radius: var(--vyasa-control-radius) !important;
     background: var(--vyasa-accent-9);
     color: var(--vyasa-accent-contrast) !important;
     font: var(--vyasa-weight-medium) var(--vyasa-text-base)/1 var(--vyasa-font-ui);
@@ -1653,7 +1655,7 @@ a.vyasa-code-link code { color: inherit; }
     width: 1.75rem;
     height: 1.75rem;
     padding: 0;
-    border-radius: var(--vyasa-radius-md) !important;
+    border-radius: var(--vyasa-control-radius) !important;
     background: transparent !important;
     box-shadow: none !important;
     color: var(--vyasa-text-muted) !important;
@@ -1849,7 +1851,7 @@ a.vyasa-code-link code { color: inherit; }
     min-height: 1.25rem;
     padding: 2px var(--vyasa-space-2);
     border: 1px solid var(--vyasa-border);
-    border-radius: var(--vyasa-radius-md);
+    border-radius: var(--vyasa-control-radius);
     background: var(--vyasa-tree-chip-bg);
     color: var(--vyasa-text-muted);
     font: var(--vyasa-weight-medium) var(--vyasa-text-xs)/1 var(--vyasa-font-ui);
