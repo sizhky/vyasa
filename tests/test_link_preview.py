@@ -1741,3 +1741,43 @@ def test_markdown_table_diff_marks_changed_words_inside_a_cell(tmp_path):
     assert '<ins class="vyasa-markdown-diff-word"><strong>new</strong></ins>' in html
     assert "runs the" in html and "VYASATABLE" not in html
     assert '<ins class="vyasa-markdown-diff-word">fresh row</ins>' in html
+
+
+def test_plain_file_preview_clips_at_line_limit(tmp_path, monkeypatch):
+    source = tmp_path / "big.json"
+    source.write_text("".join(f'"{n}",\n' for n in range(5000)), encoding="utf-8")
+    monkeypatch.setattr(routes, "_resolve_preview_file", lambda _slug: source)
+    monkeypatch.setattr(routes, "content_slug_for_path", lambda _path, strip_suffix=True: "big.json")
+
+    result = routes.render_link_preview_html(href="big.json")
+
+    assert result is not None
+    assert '&quot;1999&quot;' in result and '&quot;2000&quot;' not in result
+    assert "Showing the first 2,000 lines" in result
+    assert 'href="/posts/big.json"' in result
+
+
+def test_plain_file_preview_cuts_a_long_line(tmp_path, monkeypatch):
+    source = tmp_path / "min.json"
+    source.write_text("[" + "1," * 300_000 + "1]", encoding="utf-8")
+    monkeypatch.setattr(routes, "_resolve_preview_file", lambda _slug: source)
+    monkeypatch.setattr(routes, "content_slug_for_path", lambda _path, strip_suffix=True: "min.json")
+
+    result = routes.render_link_preview_html(href="min.json")
+
+    assert result is not None
+    assert len(result) < 4 * routes.RENDERED_LINE_CHARS_LIMIT
+    assert "…</code>" in result
+    assert "Showing the first 1 lines, up to 2,000 characters each." in result
+
+
+def test_small_plain_file_preview_has_no_clip_notice(tmp_path, monkeypatch):
+    source = tmp_path / "small.json"
+    source.write_text('{"a": 1}\n', encoding="utf-8")
+    monkeypatch.setattr(routes, "_resolve_preview_file", lambda _slug: source)
+    monkeypatch.setattr(routes, "content_slug_for_path", lambda _path, strip_suffix=True: "small.json")
+
+    result = routes.render_link_preview_html(href="small.json")
+
+    assert result is not None
+    assert "vyasa-link-preview-clip-notice" not in result

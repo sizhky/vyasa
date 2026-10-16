@@ -50,7 +50,11 @@ ROLE_VALUES = frozenset({"implementation", "test", "context", "contract"})
 SOURCE_BYTES_LIMIT = 2 * 1024 * 1024
 # The source view renders one continuous range, so the reader can scroll the
 # real file. The limit only guards a runaway page; it clips and warns.
-RENDERED_LINES_LIMIT = 4000
+RENDERED_LINES_LIMIT = 2000
+# A plain file preview reads at most this much, so a giant one-line JSON stays cheap.
+RENDERED_BYTES_LIMIT = 200 * 1024
+# One long line is costly to highlight and lay out, so a plain file preview cuts it.
+RENDERED_LINE_CHARS_LIMIT = 2000
 FOCUS_RANGES_LIMIT = 50
 CONTEXT_LINES_LIMIT = 20
 ATTRIBUTE_PAYLOAD_LIMIT = 4 * 1024
