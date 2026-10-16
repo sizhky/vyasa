@@ -30,6 +30,8 @@ let pointerFrame = null;
 let previewPage = `${window.location.pathname}${window.location.search}`;
 const previewViews = new Set();
 const externalPreviewOrigins = new WeakMap();
+// A covered or inside link shows no pointer while this is false.
+const LINK_PREVIEW_DIMPLE = false;
 let dimpleFilterSequence = 0;
 let dimpleMapUrl = '';
 
@@ -347,6 +349,13 @@ function createPreviewView({ point, link, onClose }) {
         card.style.filter = `url(#${dimpleEffect.id})`;
         drawDimpleCanvas(dimpleCanvas, popupRect, shownDimple.dimple, shownDimple.inside, Math.max(0, strength));
     };
+    const hidePointer = () => {
+        pointer.hidden = true;
+        shownDimple = null;
+        depth = { value: 0, velocity: 0, settled: true };
+        depthTarget = 0;
+        drawDimple(null);
+    };
     const updatePointer = () => {
         const origin = externalPreviewOrigins.get(activeLink);
         const source = origin?.frame || activeLink;
@@ -355,11 +364,7 @@ function createPreviewView({ point, link, onClose }) {
             width: origin.width, height: origin.height } : bounds;
         if (!source.isConnected || (origin && (origin.width <= 0 || origin.height <= 0
             || origin.x + origin.width < 0 || origin.y + origin.height < 0 || origin.x > bounds.width || origin.y > bounds.height))) {
-            pointer.hidden = true;
-            shownDimple = null;
-            depth = { value: 0, velocity: 0, settled: true };
-            depthTarget = 0;
-            drawDimple(null);
+            hidePointer();
             return;
         }
         const popupRect = popover.getBoundingClientRect();
@@ -372,8 +377,12 @@ function createPreviewView({ point, link, onClose }) {
         const geometry = linkPreviewPointerGeometry(sourceRect, popupRect, 28, 2, {
             preferDimple: sourceCovered && sourceParent !== popover,
         });
-        pointer.hidden = false;
         const dimple = geometry.kind === 'dimple' || geometry.kind === 'dimple-inside';
+        if (dimple && !LINK_PREVIEW_DIMPLE) {
+            hidePointer();
+            return;
+        }
+        pointer.hidden = false;
         if (dimple) shownDimple = { dimple: geometry.dimple, inside: geometry.kind === 'dimple-inside' };
         pushDepth(dimple ? 1 : 0, popupRect);
         popover.classList.toggle('has-origin-dimple', dimple);
