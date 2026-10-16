@@ -2136,6 +2136,7 @@ const GOOGLE_FONT_QUERIES = {
     'Noto Serif': 'family=Noto+Serif:wght@400;500;600;700',
     'Nunito Sans': 'family=Nunito+Sans:wght@400;500;600;700;800',
     Onest: 'family=Onest:wght@400;500;600;700;800',
+    Outfit: 'family=Outfit:wght@400;500;600;700',
     'Plus Jakarta Sans': 'family=Plus+Jakarta+Sans:wght@400;500;600;700;800',
     'PT Serif': 'family=PT+Serif:wght@400;700',
     'Public Sans': 'family=Public+Sans:wght@400;500;600;700;800',
