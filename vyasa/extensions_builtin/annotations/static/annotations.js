@@ -1,4 +1,5 @@
 import { documentAbsolutePath, quoteMarkdownCopyValue } from '/static/page_shell.js';
+import { HIGHLIGHT_COLORS, createHighlightStore, overlapping } from '/static/extensions/annotations/highlights.js';
 
 function initAnnotations(root = document) {
     const main = root.getElementById?.('main-content') || document.getElementById('main-content');
@@ -24,6 +25,7 @@ function initAnnotations(root = document) {
     lifecycle.signal.addEventListener('abort', () => {
         commentPopups.forEach((state) => { clearTimeout(state.hideTimer); clearTimeout(state.glowTimer); });
         clearActiveGlows();
+        HIGHLIGHT_COLORS.forEach((color) => window.CSS?.highlights?.delete(`vyasa-user-highlight-${color}`));
     }, { once: true });
     try {
         const stored = JSON.parse(localStorage.getItem(popupStateKey) || '[]');
@@ -691,6 +693,19 @@ function initAnnotations(root = document) {
         addSourceAnchor(item, note, number);
         return true;
     };
+    let storage = null;
+    try { storage = window.localStorage; } catch (_) {}
+    const highlights = createHighlightStore(path, storage);
+    // CSS Custom Highlight API paints ranges without wrapping text, so comment anchors and offsets stay intact.
+    const paintHighlights = () => {
+        if (!window.CSS?.highlights || typeof Highlight !== 'function') return;
+        const items = highlights.list();
+        HIGHLIGHT_COLORS.forEach((color) => {
+            const ranges = items.filter((item) => item.color === color).map((item) => anchorToRange(item.anchor) || findQuoteRange(item.quote)).filter(Boolean);
+            CSS.highlights.set(`vyasa-user-highlight-${color}`, new Highlight(...ranges));
+        });
+    };
+    paintHighlights();
     fetch(`/api/annotations/${path}`).then((r) => r.ok ? r.json() : []).then((items) => {
         if (!Array.isArray(items)) return;
         annotationRoots = buildAnnotationTree(items);
@@ -702,6 +717,7 @@ function initAnnotations(root = document) {
             if (item && anchor && note) showCommentPopup(anchor, note, item);
             else forgetPopupState(entry.id);
         });
+        paintHighlights();
     }).catch(() => {});
     const clearUi = () => {
         document.getElementById('vyasa-selection-actions')?.remove();
@@ -719,7 +735,7 @@ function initAnnotations(root = document) {
         actions.id = 'vyasa-selection-actions';
         actions.className = 'fixed z-[1400] flex gap-1.5';
         actions.style.top = `${Math.max(12, pending.rect.top - 6)}px`;
-        actions.style.left = `${Math.min(window.innerWidth - 94, pending.rect.right + 10)}px`;
+        actions.style.left = `${Math.min(window.innerWidth - 262, pending.rect.right + 10)}px`;
         const bubbleClass = 'flex h-9 w-9 items-center justify-center rounded-full border border-vyasa-border bg-vyasa-surface text-vyasa-text shadow-lg backdrop-blur';
         const makeBubble = (id, label, icon) => {
             const button = document.createElement('button');
@@ -740,6 +756,27 @@ function initAnnotations(root = document) {
             'vyasa-selection-copy', 'Copy selection. Hold Shift for a quote with the file path',
             '<svg viewBox="0 0 24 24" aria-hidden="true" class="h-4 w-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
         );
+        const stored = highlights.list();
+        const covered = overlapping(stored, pending.anchor, pending.quote);
+        const coveredColors = new Set(stored.filter((item) => covered.includes(item.id)).map((item) => item.color));
+        // Selecting a highlight presses its colour: pressed removes it, another colour recolours it.
+        HIGHLIGHT_COLORS.forEach((color) => {
+            const pressed = coveredColors.size === 1 && coveredColors.has(color);
+            const label = pressed ? `Remove ${color} highlight` : covered.length ? `Change highlight to ${color}` : `Highlight in ${color}`;
+            const button = makeBubble(`vyasa-selection-highlight-${color}`, label, `<span class="vyasa-highlight-swatch" data-highlight-color="${color}" aria-hidden="true"></span>`);
+            button.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+            button.addEventListener('click', () => {
+                if (!pending) return;
+                const saved = pressed ? highlights.remove(covered)
+                    : covered.length ? highlights.recolor(covered, color)
+                    : highlights.add({ quote: pending.quote, anchor: pending.anchor, color });
+                if (!saved) return window.__vyasaToast?.('Highlight not saved: browser storage unavailable', 'error');
+                paintHighlights();
+                window.getSelection()?.removeAllRanges();
+                pending = null;
+                clearUi();
+            });
+        });
         // Shift turns the plain copy into a quote that carries where it came from.
         copyButton.addEventListener('click', (event) => {
             const quoted = pending?.quote;
