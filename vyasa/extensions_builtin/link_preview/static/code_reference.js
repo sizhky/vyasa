@@ -5,6 +5,8 @@
 // blocks, and widen the view to the whole file on request. It must not repeat
 // git lookup, symbol selection, or range calculation.
 
+import { markLinkPreviewTarget } from './link_preview_target.js';
+
 const BOUND = 'codeReferenceBound';
 
 function copyText(text) {
@@ -214,6 +216,7 @@ export function scrollToFirstCodeReferenceFocus(root) {
     const ranges = focus.length ? focus : parseBlockRanges(reference.dataset.codeReferenceBlocks);
     if (!ranges.length) return true;
     if (!centreLine(reference, ranges[0].start, false)) return true;
-    lineElement(reference, ranges[0].start)?.classList.add('vyasa-link-preview-target-line');
+    const target = lineElement(reference, ranges[0].start);
+    if (target) markLinkPreviewTarget(target);
     return true;
 }

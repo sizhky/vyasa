@@ -176,7 +176,7 @@ code, pre { font-family: var(--vyasa-font-mono); }
     --vyasa-code-bg: var(--vyasa-gray-2);
     --vyasa-code-fg: var(--vyasa-ink);
     --vyasa-code-border: var(--vyasa-border);
-    --vyasa-code-highlight-bg: var(--vyasa-accent-3);
+    --vyasa-code-highlight-bg: color-mix(in srgb, var(--vyasa-primary) 18%, var(--vyasa-code-bg));
     --vyasa-code-highlight-accent: var(--vyasa-primary);
     --vyasa-inline-code-bg: var(--vyasa-gray-3);
     --vyasa-inline-code-fg: var(--vyasa-code-fg);
@@ -206,7 +206,7 @@ code, pre { font-family: var(--vyasa-font-mono); }
     --vyasa-code-bg: var(--vyasa-dark-code-bg, var(--vyasa-gray-2)) !important;
     --vyasa-code-fg: var(--vyasa-dark-code-fg, var(--vyasa-ink)) !important;
     --vyasa-code-border: var(--vyasa-dark-code-border, var(--vyasa-border)) !important;
-    --vyasa-code-highlight-bg: var(--vyasa-dark-code-highlight-bg, var(--vyasa-accent-3)) !important;
+    --vyasa-code-highlight-bg: var(--vyasa-dark-code-highlight-bg, color-mix(in srgb, var(--vyasa-primary) 24%, var(--vyasa-code-bg))) !important;
     --vyasa-inline-code-bg: var(--vyasa-dark-inline-code-bg, var(--vyasa-gray-3)) !important;
     --vyasa-inline-code-fg: var(--vyasa-dark-inline-code-fg, var(--vyasa-code-fg)) !important;
     --vyasa-inline-code-border: var(--vyasa-dark-inline-code-border, var(--vyasa-gray-5)) !important;
@@ -1286,7 +1286,7 @@ details[open] > .vyasa-callout-summary .vyasa-callout-chevron { transform: rotat
 .vyasa-code-line { display: block; width: calc(100% + 2rem); box-sizing: border-box; white-space: pre; margin: 0 -1rem; padding: 0 1rem; }
 .code-block pre.vyasa-code-wrap .vyasa-code-line { white-space: pre-wrap; overflow-wrap: anywhere; }
 .code-block .vyasa-code-line-highlight {
-    background: color-mix(in srgb, var(--vyasa-code-highlight-bg) 82%, transparent);
+    background: var(--vyasa-code-highlight-bg);
     box-shadow: inset 3px 0 0 var(--vyasa-code-highlight-accent);
 }
 .code-block .vyasa-code-line-highlight-start {

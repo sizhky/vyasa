@@ -14,7 +14,7 @@ import {
     rememberLinkPreviewPosition,
     rememberLinkPreviewWidth,
 } from './link_preview_geometry.js';
-import { linkPreviewCodeLineHref, linkPreviewHashMatch, linkPreviewLineMatch, linkPreviewLineNumber, linkPreviewSymbolMatch } from './link_preview_target.js';
+import { linkPreviewCodeLineHref, linkPreviewHashMatch, linkPreviewLineMatch, linkPreviewLineNumber, linkPreviewSymbolMatch, markLinkPreviewTarget } from './link_preview_target.js';
 import { installCodeReferences, scrollToFirstCodeReferenceFocus } from './code_reference.js';
 import { jumpToTextFragment } from '/static/page_shell.js';
 import { installPanelDrag, installPanelResize, viewportPanelBox } from '/static/floating_panel.js';
@@ -612,7 +612,7 @@ function scrollLinkPreviewToTarget(content, href) {
     const matchedId = linkPreviewHashMatch(href, elementsWithIds.map((element) => element.id));
     if (matchedId) {
         const target = elementsWithIds.find((element) => element.id === matchedId);
-        target.classList.add('vyasa-link-preview-target-line');
+        markLinkPreviewTarget(target);
         target.scrollIntoView({ block: 'center' });
         return;
     }
@@ -620,7 +620,7 @@ function scrollLinkPreviewToTarget(content, href) {
         || linkPreviewLineNumber(href);
     const renderedLine = sourceLine && body.querySelector(`[data-source-line="${sourceLine}"]`);
     if (renderedLine) {
-        renderedLine.classList.add('vyasa-link-preview-target-line');
+        markLinkPreviewTarget(renderedLine);
         renderedLine.scrollIntoView({ block: 'center' });
         return;
     }
@@ -638,7 +638,7 @@ function scrollLinkPreviewToTarget(content, href) {
         return;
     }
     if (codeLines.length) {
-        codeLines[match.chunkIndex].classList.add('vyasa-link-preview-target-line');
+        markLinkPreviewTarget(codeLines[match.chunkIndex]);
         codeLines[match.chunkIndex].scrollIntoView({ block: 'center' });
         return;
     }

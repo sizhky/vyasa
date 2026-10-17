@@ -461,6 +461,14 @@ def test_link_preview_shadow_is_on_unclipped_outer_popup():
     assert ".vyasa-link-preview-target-line" in css
 
 
+def test_code_highlight_contrasts_with_the_code_background():
+    css = Path("vyasa/static/header.css").read_text()
+    assert "--vyasa-code-highlight-bg: color-mix(in srgb, var(--vyasa-primary) 18%, var(--vyasa-code-bg));" in css
+    assert "color-mix(in srgb, var(--vyasa-primary) 24%, var(--vyasa-code-bg))" in css
+    rule = css.split(".code-block .vyasa-code-line-highlight {", 1)[1].split("}", 1)[0]
+    assert "background: var(--vyasa-code-highlight-bg);" in rule
+
+
 def test_link_preview_keeps_wide_tables_scrollable_inside_the_popup():
     css = Path("vyasa/extensions_builtin/link_preview/static/link_preview.css").read_text()
     source = Path("vyasa/extensions_builtin/link_preview/static/link_preview.js").read_text()
