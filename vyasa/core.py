@@ -1425,6 +1425,9 @@ def _posts_tree_fingerprint():
         return 0
 
 
+_POST_TREE_BUILD_LOCK = threading.RLock()
+
+
 @lru_cache(maxsize=8)
 def _cached_build_post_tree(fingerprint, roles_key, show_hidden, current_path):
     roles = list(roles_key) if roles_key else []
@@ -1509,9 +1512,10 @@ def get_posts(roles=None, current_path=""):
     fingerprint = _posts_tree_fingerprint()
     roles_key = tuple(roles or [])
     show_hidden = get_config().get_show_hidden()
-    return _cached_build_post_tree(
-        fingerprint, roles_key, show_hidden, current_path or ""
-    )
+    with _POST_TREE_BUILD_LOCK:
+        return _cached_build_post_tree(
+            fingerprint, roles_key, show_hidden, current_path or ""
+        )
 
 
 def _default_not_found(htmx=None, auth=None):

@@ -388,16 +388,42 @@ def document_kind_for_suffix(suffix: str) -> str | None:
             return item["kind"]
     return None
 
-def document_kind_for_path(path: Path) -> str | None:
+def _resolve_document_kind(path, resolvers) -> str | None:
     try:
-        from .extensions import get_extension_runtime
-        runtime = get_extension_runtime()
-        for resolver in runtime.document_kind_resolvers if runtime else ():
+        for resolver in resolvers:
             if kind := resolver(path):
                 return kind
     except Exception:
         pass
     return document_kind_for_suffix(path.suffix)
+
+
+@lru_cache(maxsize=32768)
+def _cached_document_kind(path_key: str, mtime_ns: int, size: int, resolvers: tuple) -> str | None:
+    return _resolve_document_kind(Path(path_key), resolvers)
+
+
+def document_kind_for_path(path: Path) -> str | None:
+    """Kind from extension resolvers, else from the suffix; disk files are cached by mtime and size.
+
+    >>> document_kind_for_path(Path("missing.pdf"))
+    'pdf'
+    """
+    try:
+        from .extensions import get_extension_runtime
+        runtime = get_extension_runtime()
+        resolvers = tuple(runtime.document_kind_resolvers) if runtime else ()
+    except Exception:
+        resolvers = ()
+    if not resolvers:
+        return document_kind_for_suffix(path.suffix)
+    if not isinstance(path, Path):
+        return _resolve_document_kind(path, resolvers)
+    try:
+        stat = path.stat()
+    except OSError:
+        return _resolve_document_kind(path, resolvers)
+    return _cached_document_kind(str(path), stat.st_mtime_ns, stat.st_size, resolvers)
 
 def document_icon_for_path(path: Path) -> str:
     kind = document_kind_for_path(path)
@@ -414,11 +440,10 @@ def document_icon_for_path(path: Path) -> str:
     return "file-text"
 
 def document_title_for_path(path: Path, abbreviations=None) -> str:
-    kind = document_kind_for_path(path)
     if path.suffix.lower() == ".md":
         return get_post_title(path, abbreviations=abbreviations)
     title = slug_to_title(path.stem, abbreviations=abbreviations)
-    return f"{title} (PDF)" if kind == "pdf" else title
+    return f"{title} (PDF)" if document_kind_for_path(path) == "pdf" else title
 
 def is_document_path(path: Path, allowed_suffixes: tuple[str, ...] | None = None) -> bool:
     suffixes = allowed_suffixes or enabled_document_suffixes()
