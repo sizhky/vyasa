@@ -242,8 +242,8 @@ function createPreviewView({ point, link, onClose }) {
         '<button type="button" class="vyasa-link-preview-close" aria-label="Close preview">×</button>',
         '</span>',
         '</div>',
-        '<div class="vyasa-link-preview-tabs" role="tablist" aria-label="Code URLs" hidden></div>',
-        '<div class="vyasa-link-preview-sections" hidden><div role="tablist" aria-label="Sections in this file"></div><span class="vyasa-link-preview-sections-keys" aria-hidden="true">↑↓</span></div>',
+        '<div class="vyasa-link-preview-tabs" hidden><span class="vyasa-link-preview-strip-keys" aria-hidden="true">←→</span><div role="tablist" aria-label="Code URLs"></div></div>',
+        '<div class="vyasa-link-preview-sections" hidden><span class="vyasa-link-preview-strip-keys" aria-hidden="true">↑↓</span><div role="tablist" aria-label="Sections in this file"></div></div>',
         '<div data-vyasa-link-preview-content class="vyasa-link-preview-content vyasa-link-preview-loading">Loading preview...</div>',
         '</div>',
     ].join('');
@@ -260,6 +260,7 @@ function createPreviewView({ point, link, onClose }) {
     popover.append(dimpleCanvas);
     const bar = popover.querySelector('.vyasa-link-preview-bar');
     const tabs = popover.querySelector('.vyasa-link-preview-tabs');
+    const tabList = tabs.querySelector('[role="tablist"]');
     const sections = popover.querySelector('.vyasa-link-preview-sections');
     const sectionList = sections.querySelector('[role="tablist"]');
     let tabSignature = '';
@@ -450,7 +451,7 @@ function createPreviewView({ point, link, onClose }) {
             selectTab = onSelect;
             const nextSignature = items.map((item) => `${item.link.getAttribute('href') || ''}\n${item.kind || 'code'}\n${item.sections.length}`).join('\n');
             if (nextSignature !== tabSignature) {
-                tabs.replaceChildren();
+                tabList.replaceChildren();
                 items.forEach((item, index) => {
                     const button = document.createElement('button');
                     const href = item.link.getAttribute('href') || '';
@@ -471,15 +472,15 @@ function createPreviewView({ point, link, onClose }) {
                         if (!delta) return;
                         const target = (index + delta + items.length) % items.length;
                         selectTab(target);
-                        tabs.children[target]?.focus();
+                        tabList.children[target]?.focus();
                         event.preventDefault();
                         event.stopPropagation();
                     });
-                    tabs.appendChild(button);
+                    tabList.appendChild(button);
                 });
                 tabSignature = nextSignature;
             }
-            Array.from(tabs.children).forEach((button, index) => {
+            Array.from(tabList.children).forEach((button, index) => {
                 button.setAttribute('aria-selected', String(index === activeTab));
                 button.tabIndex = index === activeTab ? 0 : -1;
             });
