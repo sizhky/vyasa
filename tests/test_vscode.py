@@ -89,6 +89,9 @@ def test_vscode_symbol_uri_contains_resolved_file(tmp_path):
         ("127.0.0.1", "::1", True),
         ("docs.example.com", "127.0.0.1", False),
         ("localhost", "10.0.0.8", False),
+        ("penguin-docs.localhost", "127.0.0.1", True),
+        ("localhost.example.com", "127.0.0.1", False),
+        ("penguin-docs.localhost", "10.0.0.8", False),
     ],
 )
 def test_vscode_opening_is_local_only(hostname, client_host, expected):
