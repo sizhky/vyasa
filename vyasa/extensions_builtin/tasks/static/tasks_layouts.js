@@ -1,9 +1,8 @@
 import { logTasksDebug, logTasksDebugVerbose, rectSummary } from './tasks_diagnostics.js';
 import {
     layoutDisconnectedTaskNodes, packTaskChildRects, resolveTasksNodeImage, sizeTaskNode,
-    TASKS_PORT_STUB, tasksExpandedRootRect, tasksGroupTitleSize, tasksParsePort, tasksNodeLook, tasksNodeSubtitle,
+    TASKS_PORT_STUB, tasksExpandedRootRect, tasksGroupTitleSize, tasksParsePort, tasksNodeImageHero, tasksNodeLook, tasksNodeSubtitle,
 } from './tasks_graph_core.js';
-import { tasksLookSize } from './tasks_theme.js';
 import {
     TASKS_LAYOUT_ERROR_MODE, appendProjectedEdge, buildGanttTasksGraph, buildLayoutErrorGraph,
     buildTasksGroupedState, buildTasksUngroupedState, buildVisibleTasksGraph, reduceTransitiveEdges,
@@ -41,7 +40,7 @@ const taskSize = (task, width, view, layoutDefault, kind = 'task') => {
     const look = tasksNodeLook(task, view, layoutDefault);
     const label = String(task.label || task.id);
     const subtitle = tasksNodeSubtitle(task, view);
-    return tasksLookSize(look, label, subtitle, width) || sizeTaskNode(label, kind, width, { look, subtitle });
+    return sizeTaskNode(label, kind, width, { look, subtitle, heroImage: tasksNodeImageHero(task, view) });
 };
 const taskHeight = (...args) => taskSize(...args).height;
 
@@ -1516,7 +1515,7 @@ async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig
         ...(model.task_children?.[groupId] || []).map((id) => {
             const source = tasksById[id] || {};
             const label = source.label || id;
-            return { id, __kind__: 'task', label, ...sizeTaskNode(label, 'task', null, { hasImage: Boolean(resolveTasksNodeImage(source, model)), nodeLabels, look: tasksNodeLook(source, model), subtitle: tasksNodeSubtitle(source, model) }) };
+            return { id, __kind__: 'task', label, ...sizeTaskNode(label, 'task', null, { hasImage: Boolean(resolveTasksNodeImage(source, model)), heroImage: tasksNodeImageHero(source, model), nodeLabels, look: tasksNodeLook(source, model), subtitle: tasksNodeSubtitle(source, model) }) };
         }),
         ...(model.group_tree?.[groupId] || []).map((id) => {
             const source = groupsById[id] || {};

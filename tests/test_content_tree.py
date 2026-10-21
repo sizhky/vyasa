@@ -294,3 +294,41 @@ def test_content_tree_hides_pdf_and_tree_when_extensions_disabled(tmp_path):
         assert tree.resolve_document("scope") is None
     finally:
         set_extension_runtime(previous)
+
+
+def test_sidebar_active_path_keeps_sibling_folders_lazy(tmp_path):
+    (tmp_path / "app" / "docs").mkdir(parents=True)
+    (tmp_path / "app" / "docs" / "report.md").write_text("# Report\n", encoding="utf-8")
+    (tmp_path / "app" / "runs" / "r1").mkdir(parents=True)
+    (tmp_path / "app" / "runs" / "r1" / "deep.md").write_text("# Deep\n", encoding="utf-8")
+    (tmp_path / ".vyasa").write_text("", encoding="utf-8")
+    reload_config(tmp_path / ".vyasa")
+    core._nav_entries_cache.clear()
+
+    try:
+        html = to_xml(core.build_post_tree(tmp_path, max_depth=1, active_parts=("app", "docs")))
+    finally:
+        reload_config()
+
+    assert "/posts/app/docs/report" in html
+    assert "/posts/app/runs/r1/deep" not in html
+    assert "/_sidebar/posts/branch?path=app%2Fruns" in html
+
+
+def test_sidebar_markdown_row_runs_mdx_check_once(monkeypatch, tmp_path):
+    (tmp_path / "page.md").write_text("# Page\n", encoding="utf-8")
+    (tmp_path / "titled.md").write_text("---\ntitle: Titled\n---\n# Body\n", encoding="utf-8")
+    (tmp_path / ".vyasa").write_text("", encoding="utf-8")
+    reload_config(tmp_path / ".vyasa")
+    core._nav_entries_cache.clear()
+    runtime = get_extension_runtime()
+    calls = []
+    monkeypatch.setattr(runtime, "document_kind_resolvers", [lambda path: calls.append(path.name)])
+
+    try:
+        html = to_xml(core.build_post_tree(tmp_path))
+    finally:
+        reload_config()
+
+    assert "Titled" in html
+    assert sorted(calls) == ["page.md", "titled.md"]

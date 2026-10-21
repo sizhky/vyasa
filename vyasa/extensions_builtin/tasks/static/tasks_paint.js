@@ -1,5 +1,5 @@
 import { logTasksDebug, logTasksDebugVerbose } from './tasks_diagnostics.js';
-import { tasksIsDashed } from './tasks_graph_core.js';
+import { tasksEdgeCornerOf, tasksEdgePathOf, tasksIsDashed, tasksRouteEdges } from './tasks_graph_core.js';
 import { tasksRoleOf } from './tasks_roles.js';
 import { tasksCheckedShadow, tasksEdgeBaseWidth, tasksGroupLook, tasksGroupRingTokens, tasksLitStyle, tasksLookLitFill, tasksNodeLookStyle, tasksStackShadow } from './tasks_theme.js';
 import {
@@ -1212,12 +1212,12 @@ export function tasksHoverFocusEdge(edge, hoveredNodeId, outward = edge.source =
     };
 }
 
-export function tasksReferenceFlowEdge(edge, markerType, fontSize = '12px', labelMaxWidth = 240) {
+export function tasksReferenceFlowEdge(edge, markerType, fontSize = '12px', labelMaxWidth = 240, edgePath = 'ribbon', edgeCorner = 'sharp') {
     const color = 'var(--vyasa-primary)';
     return {
         ...edge,
         type: 'vyasaEdge',
-        data: { ...(edge.data || {}), __reference__: true, edgeColor: color, highlightMode: 'selected', strokeMode: 'selected' },
+        data: { ...(edge.data || {}), __reference__: true, edgeColor: color, highlightMode: 'selected', strokeMode: 'selected', __edge_path__: edgePath, __edge_corner__: edgeCorner },
         markerEnd: { type: markerType, width: 8, height: 8, color },
         zIndex: TASKS_EDGE_FOCUS_Z,
         labelZIndex: TASKS_EDGE_LABEL_FOCUS_Z,
@@ -1228,6 +1228,16 @@ export function tasksReferenceFlowEdge(edge, markerType, fontSize = '12px', labe
         labelBgStyle: { fill: TASKS_EDGE_LABEL_BG, fillOpacity: 0.86 },
         style: { stroke: color, strokeWidth: 2.5, strokeLinecap: 'round', opacity: 1 },
     };
+}
+
+// A reference edge takes the view's edge path and is routed like an authored
+// edge, so it follows the same layout. `edgePathOf` is the caller's cascade.
+export function tasksReferenceFlowEdges(nodes, edges, { markerType, fontSize, labelMaxWidth, model, edgePathOf = (edge) => tasksEdgePathOf(edge, model), gutter, presetRoutes = null }) {
+    const flowEdges = (edges || []).map((edge) => {
+        const edgePath = edgePathOf(edge);
+        return tasksReferenceFlowEdge(edge, markerType, fontSize, labelMaxWidth, edgePath, tasksEdgeCornerOf(edge, model, edgePath));
+    });
+    return tasksRouteEdges(nodes, flowEdges, gutter, presetRoutes);
 }
 
 export function tasksEdgeRecordId(edge) {

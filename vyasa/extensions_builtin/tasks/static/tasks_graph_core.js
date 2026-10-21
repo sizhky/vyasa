@@ -83,8 +83,8 @@ export function sizeTaskNode(label, kind = 'task', widthOverride = null, options
     const width = Math.max(32, Number(widthOverride || spec.width));
     // A look other than card sizes a task with the metrics it is drawn with.
     const looked = kind === 'task' ? tasksLookSize(options?.look, label, options?.subtitle, width) : null;
-    if (looked) return looked;
-    const imageSpec = options?.hasImage ? (TASK_NODE_IMAGE_SPECS[kind] || TASK_NODE_IMAGE_SPECS.task) : null;
+    if (looked) return withHeroImage(looked, options?.heroImage);
+    const imageSpec = options?.hasImage && !options?.heroImage ? (TASK_NODE_IMAGE_SPECS[kind] || TASK_NODE_IMAGE_SPECS.task) : null;
     const imageReserve = imageSpec ? imageSpec.size + imageSpec.gap : 0;
     const maxTextWidth = Math.max(32, width - spec.padX - spec.reserveX - imageReserve - 8);
     const widthBias = options?.hasImage ? 1.18 : 1.12;
@@ -93,11 +93,16 @@ export function sizeTaskNode(label, kind = 'task', widthOverride = null, options
         .reduce((count, part) => count + Math.max(1, Math.ceil((measureTextWidth(part) * widthBias) / maxTextWidth)), 0);
     const textHeight = Math.max(24, lines * 21);
     const contentHeight = Math.max(textHeight, imageSpec?.size || 0);
-    return {
+    return withHeroImage({
         width,
         height: Math.max(spec.minHeight, Math.ceil(contentHeight + spec.padY + 8)),
-    };
+    }, options?.heroImage);
 }
+
+// A hero image adds its own row above whatever the look sized for the text.
+const withHeroImage = (size, heroImage) => (heroImage
+    ? { ...size, height: size.height + TASKS_HERO_IMAGE_SIZE + TASKS_HERO_IMAGE_GAP }
+    : size);
 
 // The height of an open group's title: a card group's title bar, or a figure
 // group's label. Layout and the title node both size it here.
@@ -804,8 +809,9 @@ function edgeAnchorSides(sourceRect, targetRect, sourceNode = null, targetNode =
 // Attrs that set how an item is drawn or which role a node plays, never what
 // it says. Detail cards and filters skip them; layouts.py PRESENTATION_ATTRS
 // is the same set.
-export const TASKS_STYLE_ATTRS = new Set(['node_look', 'edge_path', 'edge_corner', 'canvas', 'subtitle_from', 'dashed', 'source_port', 'target_port', 'node_role', 'internals']);
+export const TASKS_STYLE_ATTRS = new Set(['node_look', 'node_image', 'edge_path', 'edge_corner', 'canvas', 'subtitle_from', 'dashed', 'source_port', 'target_port', 'node_role', 'internals']);
 export const TASKS_EDGE_CORNERS = ['sharp', 'round'];
+export const TASKS_NODE_IMAGES = ['inline', 'hero'];
 
 const tasksCascade = (allowed, ...values) => values
     .map((value) => String(value ?? '').trim().toLowerCase())
@@ -822,6 +828,28 @@ const tasksCascade = (allowed, ...values) => values
 export function tasksNodeLook(node, model, layoutDefault = 'card') {
     return tasksCascade(TASKS_NODE_LOOKS, node?.node_look, model?.node_look, layoutDefault) || 'card';
 }
+
+/**
+ * A hero image sits across the top of a node, above its title and subtitle;
+ * an inline image sits beside the title. A node with no image has no hero.
+ *
+ * >>> tasksNodeImageHero({ node_image: 'hero', image: './a.png' }, {})
+ * true
+ * >>> tasksNodeImageHero({ image: './a.png' }, { node_image: 'hero' })
+ * true
+ * >>> tasksNodeImageHero({ node_image: 'inline', image: './a.png' }, { node_image: 'hero' })
+ * false
+ * >>> tasksNodeImageHero({}, { node_image: 'hero' })
+ * false
+ */
+export function tasksNodeImageHero(node, model) {
+    return tasksCascade(TASKS_NODE_IMAGES, node?.node_image, model?.node_image) === 'hero'
+        && Boolean(resolveTasksNodeImage(node, model));
+}
+
+// A hero image is a fixed square, twice the label font, so it reads as a glyph.
+export const TASKS_HERO_IMAGE_SIZE = 32;
+const TASKS_HERO_IMAGE_GAP = 6;
 
 /**
  * >>> tasksEdgeCornerOf({}, { edge_corner: 'round' })

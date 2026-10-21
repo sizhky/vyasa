@@ -51,6 +51,8 @@ STYLE_KEYS: dict[str, tuple[str, ...]] = {
     "edge_path": ("ribbon", "line", "orthogonal", "octilinear", "arc"),
     "edge_corner": ("sharp", "round"),
     "canvas": ("plain", "blueprint"),
+    # Where a node's image sits: beside the title, or across the top above it.
+    "node_image": ("inline", "hero"),
 }
 
 # Values of the `node_role` attr: what a node is, apart from how it is drawn.

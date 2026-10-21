@@ -30,6 +30,7 @@ from .code_reference import (
     symbol_range,
     parse_line_range,
 )
+from .rendered_word_diff import mark_changed_words
 
 def _escape(value) -> str:
     return html.escape(str(value or ""), quote=True)
@@ -314,16 +315,9 @@ def _diagnostic_card(code: str, message: str) -> str:
 
 
 _MARKDOWN_FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})")
-_MARKDOWN_WORD_RE = re.compile(r"\s+|\w+|[^\w\s]+", re.UNICODE)
-_MARKDOWN_INLINE_UNSAFE_RE = re.compile(r"`|!?\[[^\]]*\]\([^)]*\)|<[^>]+>")
-_MARKDOWN_TABLE_RE = re.compile(r"(?m)^\s*\|.*\|\s*$")
-_TABLE_MARKERS = {
-    "old_open": "VYASATABLEOLDOPEN",
-    "old_close": "VYASATABLEOLDCLOSE",
-    "new_open": "VYASATABLENEWOPEN",
-    "new_close": "VYASATABLENEWCLOSE",
-    "break": "VYASATABLEBREAK",
-}
+# Markers survive table rendering as plain words, so each changed cell's
+# rendered old and new HTML can be found and word-diffed after rendering.
+_TABLE_CELL_RE = re.compile(r"VYASATABLEOLD\s*(.*?)\s*VYASATABLENEW\s*(.*?)\s*VYASATABLEEND", re.S)
 
 
 def _markdown_blocks(source: str) -> list[str]:
@@ -348,42 +342,13 @@ def _markdown_blocks(source: str) -> list[str]:
     return blocks
 
 
-def _marked_words(before: str, after: str) -> tuple[str, str]:
-    """Mark changed words without wrapping Markdown punctuation."""
-    if (
-        _MARKDOWN_FENCE_RE.match(before)
-        or _MARKDOWN_FENCE_RE.match(after)
-        or _MARKDOWN_INLINE_UNSAFE_RE.search(before)
-        or _MARKDOWN_INLINE_UNSAFE_RE.search(after)
-        or _MARKDOWN_TABLE_RE.search(before)
-        or _MARKDOWN_TABLE_RE.search(after)
-    ):
-        return before, after
-    sides = [_MARKDOWN_WORD_RE.findall(value) for value in (before, after)]
-    words = [[token for token in side if not token.isspace()] for side in sides]
-    changed = [set(), set()]
-    for tag, i1, i2, j1, j2 in SequenceMatcher(None, words[0], words[1], autojunk=False).get_opcodes():
-        if tag == "equal":
-            continue
-        changed[0].update(range(i1, i2))
-        changed[1].update(range(j1, j2))
-
-    def mark(tokens: list[str], indexes: set[int], tag: str) -> str:
-        word_index = 0
-        output: list[str] = []
-        for token in tokens:
-            is_word = not token.isspace()
-            should_mark = is_word and word_index in indexes and any(char.isalnum() for char in token)
-            output.append(f'<{tag} class="vyasa-markdown-diff-word">{token}</{tag}>' if should_mark else token)
-            word_index += int(is_word)
-        return "".join(output)
-
-    return mark(sides[0], changed[0], "del"), mark(sides[1], changed[1], "ins")
-
-
 def _markdown_diff_block(markdown: str, state: str, current_path: str, collector) -> str:
-    label = {"added": "Added", "deleted": "Removed", "context": "Unchanged"}[state]
     rendered = _render_markdown_fragment(markdown, current_path=current_path, asset_collector=collector)
+    return _markdown_diff_section(rendered, state)
+
+
+def _markdown_diff_section(rendered: str, state: str) -> str:
+    label = {"added": "Added", "deleted": "Removed", "context": "Unchanged"}[state]
     label_html = (
         f'<span class="vyasa-markdown-diff-label">{label}</span>'
         if state != "context"
@@ -439,22 +404,15 @@ def _table_pairs(
     return pairs
 
 
-def _table_mark(value: str, state: str) -> str:
-    if not value:
-        return ""
-    prefix = _TABLE_MARKERS[f"{state}_open"]
-    suffix = _TABLE_MARKERS[f"{state}_close"]
-    return f"{prefix}{value}{suffix}"
-
-
 def _table_diff_cell(old: str, new: str) -> str:
     if old == new:
         return new
-    if not old:
-        return _table_mark(new, "new")
-    if not new:
-        return _table_mark(old, "old")
-    return f'{_table_mark(old, "old")}{_TABLE_MARKERS["break"]}{_table_mark(new, "new")}'
+    return f"VYASATABLEOLD {old} VYASATABLENEW {new} VYASATABLEEND"
+
+
+def _table_marked_cell(match: re.Match) -> str:
+    old, new = mark_changed_words(match.group(1), match.group(2))
+    return "<br>".join(side for side in (old, new) if side)
 
 
 def _markdown_table_diff(
@@ -513,11 +471,7 @@ def _markdown_table_diff(
         marker = f"VYASATABLESTATE{state.upper()}"
         label = "Unchanged" if state == "context" else state.title()
         rendered = rendered.replace(marker, f'<span class="vyasa-markdown-table-state is-{state}">{label}</span>')
-    rendered = rendered.replace(_TABLE_MARKERS["old_open"], '<del class="vyasa-markdown-table-cell-old">')
-    rendered = rendered.replace(_TABLE_MARKERS["old_close"], "</del>")
-    rendered = rendered.replace(_TABLE_MARKERS["new_open"], '<ins class="vyasa-markdown-table-cell-new">')
-    rendered = rendered.replace(_TABLE_MARKERS["new_close"], "</ins>")
-    rendered = rendered.replace(_TABLE_MARKERS["break"], "<br>")
+    rendered = _TABLE_CELL_RE.sub(_table_marked_cell, rendered)
     return f'<div class="vyasa-markdown-table-diff">{rendered}</div>'
 
 
@@ -542,6 +496,46 @@ def _markdown_equal_blocks(
             output.append('<div class="vyasa-markdown-diff-omission">Unchanged content omitted</div>')
             omitted = True
     return output
+
+
+_PAIR_SIMILARITY = 0.4
+
+
+def _paired_blocks(old: list[str], new: list[str]) -> list[tuple[int, int]]:
+    """In-order pairs of edited blocks, matched by word similarity.
+
+    A block below `_PAIR_SIMILARITY` to every candidate is an insertion or a
+    deletion, so a new paragraph beside an edited one does not shift the pairs.
+
+    >>> _paired_blocks(["one two three"], ["brand new", "one two four"])
+    [(0, 1)]
+    """
+    pairs: list[tuple[int, int]] = []
+    floor = 0
+    for old_index, block in enumerate(old):
+        scores = [
+            (SequenceMatcher(None, block.split(), candidate.split(), autojunk=False).ratio(), new_index)
+            for new_index, candidate in enumerate(new[floor:], start=floor)
+        ]
+        score, new_index = max(scores, default=(0.0, -1), key=lambda item: (item[0], -item[1]))
+        if score >= _PAIR_SIMILARITY:
+            pairs.append((old_index, new_index))
+            floor = new_index + 1
+    return pairs
+
+
+def _markdown_pair_diff(before: str, after: str, current_path: str, collector, *, focus: str, context: int) -> str:
+    table_diff = _markdown_table_diff(before, after, current_path, collector, focus=focus, context=context)
+    if table_diff:
+        return table_diff
+    old_html, new_html = mark_changed_words(
+        _render_markdown_fragment(before, current_path=current_path, asset_collector=collector),
+        _render_markdown_fragment(after, current_path=current_path, asset_collector=collector),
+    )
+    return (
+        '<div class="vyasa-markdown-diff-pair">'
+        f'{_markdown_diff_section(old_html, "deleted")}{_markdown_diff_section(new_html, "added")}</div>'
+    )
 
 
 def markdown_diff_html(
@@ -570,26 +564,18 @@ def markdown_diff_html(
             )
             continue
         old, new = old_blocks[i1:i2], new_blocks[j1:j2]
-        paired = min(len(old), len(new))
-        for before_block, after_block in zip(old[:paired], new[:paired]):
-            table_diff = _markdown_table_diff(
-                before_block, after_block, current_path, collector,
-                focus=focus, context=context,
-            )
-            if table_diff:
-                rendered.append(table_diff)
-                continue
-            marked_before, marked_after = _marked_words(before_block, after_block)
-            rendered.append(
-                '<div class="vyasa-markdown-diff-pair">'
-                f'{_markdown_diff_block(marked_before, "deleted", current_path, collector)}'
-                f'{_markdown_diff_block(marked_after, "added", current_path, collector)}</div>'
-            )
-        # A run of unpaired blocks is one change, so it gets one labelled section.
-        if old[paired:]:
-            rendered.append(_markdown_diff_block("\n\n".join(old[paired:]), "deleted", current_path, collector))
-        if new[paired:]:
-            rendered.append(_markdown_diff_block("\n\n".join(new[paired:]), "added", current_path, collector))
+        old_at = new_at = 0
+        for old_index, new_index in [*_paired_blocks(old, new), (len(old), len(new))]:
+            # A run of unpaired blocks is one change, so it gets one labelled section.
+            if old[old_at:old_index]:
+                rendered.append(_markdown_diff_block("\n\n".join(old[old_at:old_index]), "deleted", current_path, collector))
+            if new[new_at:new_index]:
+                rendered.append(_markdown_diff_block("\n\n".join(new[new_at:new_index]), "added", current_path, collector))
+            if old_index < len(old):
+                rendered.append(_markdown_pair_diff(
+                    old[old_index], new[new_index], current_path, collector, focus=focus, context=context,
+                ))
+            old_at, new_at = old_index + 1, new_index + 1
     assets = "".join(to_xml(node) for node in bundle_asset_nodes_for_collector(collector, runtime=runtime))
     return f'{assets}<div class="vyasa-markdown-diff">{"".join(rendered)}</div>'
 

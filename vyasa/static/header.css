@@ -159,7 +159,9 @@ code, pre { font-family: var(--vyasa-font-mono); }
     --vyasa-selection-bg: var(--vyasa-accent-4);
     --vyasa-focus-ring: var(--vyasa-primary);
 
-    --vyasa-radius-md: var(--vyasa-button-radius);
+    /* Controls keep the theme button radius; containers cap it, so a pill theme keeps rectangle menus. */
+    --vyasa-control-radius: var(--vyasa-button-radius);
+    --vyasa-radius-md: min(var(--vyasa-button-radius), 1rem);
     --vyasa-rect-radius: var(--vyasa-radius-md);
 
     /* shadcn shadow scale: xs controls, sm cards, md menus/popovers, lg dialogs. */
@@ -174,7 +176,7 @@ code, pre { font-family: var(--vyasa-font-mono); }
     --vyasa-code-bg: var(--vyasa-gray-2);
     --vyasa-code-fg: var(--vyasa-ink);
     --vyasa-code-border: var(--vyasa-border);
-    --vyasa-code-highlight-bg: var(--vyasa-accent-3);
+    --vyasa-code-highlight-bg: color-mix(in srgb, var(--vyasa-primary) 18%, var(--vyasa-code-bg));
     --vyasa-code-highlight-accent: var(--vyasa-primary);
     --vyasa-inline-code-bg: var(--vyasa-gray-3);
     --vyasa-inline-code-fg: var(--vyasa-code-fg);
@@ -204,7 +206,7 @@ code, pre { font-family: var(--vyasa-font-mono); }
     --vyasa-code-bg: var(--vyasa-dark-code-bg, var(--vyasa-gray-2)) !important;
     --vyasa-code-fg: var(--vyasa-dark-code-fg, var(--vyasa-ink)) !important;
     --vyasa-code-border: var(--vyasa-dark-code-border, var(--vyasa-border)) !important;
-    --vyasa-code-highlight-bg: var(--vyasa-dark-code-highlight-bg, var(--vyasa-accent-3)) !important;
+    --vyasa-code-highlight-bg: var(--vyasa-dark-code-highlight-bg, color-mix(in srgb, var(--vyasa-primary) 24%, var(--vyasa-code-bg))) !important;
     --vyasa-inline-code-bg: var(--vyasa-dark-inline-code-bg, var(--vyasa-gray-3)) !important;
     --vyasa-inline-code-fg: var(--vyasa-dark-inline-code-fg, var(--vyasa-code-fg)) !important;
     --vyasa-inline-code-border: var(--vyasa-dark-inline-code-border, var(--vyasa-gray-5)) !important;
@@ -656,7 +658,7 @@ html[data-vyasa-hide-toc-sidebar] #toc-sidebar {
     height: 2.25rem;
     padding: 0 var(--vyasa-space-2);
     border: 0;
-    border-radius: var(--vyasa-radius-md);
+    border-radius: var(--vyasa-control-radius);
     background: transparent;
     font: var(--vyasa-weight-medium) var(--vyasa-text-sm)/1 var(--vyasa-font-ui);
     cursor: pointer;
@@ -783,7 +785,7 @@ html[data-vyasa-hide-toc-sidebar] #toc-sidebar {
     height: 2.25rem;
     padding: 0 var(--vyasa-space-3);
     border: 1px solid var(--vyasa-border);
-    border-radius: var(--vyasa-radius-md);
+    border-radius: var(--vyasa-control-radius);
     background: transparent;
     color: var(--vyasa-ink) !important;
     font: var(--vyasa-weight-regular) var(--vyasa-text-base)/1 var(--vyasa-font-ui);
@@ -828,7 +830,7 @@ html[data-vyasa-hide-toc-sidebar] #toc-sidebar {
     color: var(--vyasa-emphasis-control-text) !important;
     background: var(--vyasa-emphasis-control-bg) !important;
     border: 1px solid var(--vyasa-emphasis-control-border) !important;
-    border-radius: var(--vyasa-radius-md) !important;
+    border-radius: var(--vyasa-control-radius) !important;
     box-shadow: none;
     transition: color var(--vyasa-duration-fast) var(--vyasa-ease), background-color var(--vyasa-duration-fast) var(--vyasa-ease), border-color var(--vyasa-duration-fast) var(--vyasa-ease);
 }
@@ -982,7 +984,7 @@ html[data-theme-mode="system"] #theme-mode-toggle [data-theme-mode-icon="system"
 .vyasa-sidebar-section-toggle {
     color: var(--vyasa-text-muted) !important;
     font: var(--vyasa-weight-medium) var(--vyasa-text-xs)/var(--vyasa-leading-tight) var(--vyasa-font-ui);
-    border-radius: var(--vyasa-radius-md);
+    border-radius: var(--vyasa-control-radius);
     transition: background-color var(--vyasa-duration-fast) var(--vyasa-ease), color var(--vyasa-duration-fast) var(--vyasa-ease);
 }
 .vyasa-sidebar-section-toggle:hover { background: var(--vyasa-hover); color: var(--vyasa-ink) !important; }
@@ -1168,7 +1170,8 @@ body.iframe-fullscreen-open { overflow: hidden; }
 .iframe-fullscreen-frame { width: 100%; height: 100%; border: 1px solid var(--vyasa-border); border-radius: var(--vyasa-radius-md) !important; background: var(--vyasa-surface); }
 
 .vyasa-markdown-image { display: block; width: auto; height: auto; max-width: 60vw; max-height: 40vh; margin-inline: auto; }
-#main-content img, .vyasa-zen-slide-body img { cursor: zoom-in; }
+/* An image an author places in a document opens in focus; a UI image opts out with data-vyasa-no-image-focus. */
+:is(#main-content, .vyasa-zen-slide-body) img:not([data-vyasa-no-image-focus]) { cursor: zoom-in; }
 html:has(.image-focus-dialog[open]), body.image-focus-open { overflow: hidden; }
 .image-focus-dialog { padding: 0; border: 0; max-width: 94vw; max-height: 94vh; background: transparent; overflow: visible; animation: image-focus-fade-in var(--vyasa-duration-base) var(--vyasa-ease); }
 .image-focus-dialog::backdrop { background: rgb(0 0 0 / 0.8); animation: image-focus-backdrop-in var(--vyasa-duration-base) var(--vyasa-ease); }
@@ -1283,7 +1286,7 @@ details[open] > .vyasa-callout-summary .vyasa-callout-chevron { transform: rotat
 .vyasa-code-line { display: block; width: calc(100% + 2rem); box-sizing: border-box; white-space: pre; margin: 0 -1rem; padding: 0 1rem; }
 .code-block pre.vyasa-code-wrap .vyasa-code-line { white-space: pre-wrap; overflow-wrap: anywhere; }
 .code-block .vyasa-code-line-highlight {
-    background: color-mix(in srgb, var(--vyasa-code-highlight-bg) 82%, transparent);
+    background: var(--vyasa-code-highlight-bg);
     box-shadow: inset 3px 0 0 var(--vyasa-code-highlight-accent);
 }
 .code-block .vyasa-code-line-highlight-start {
@@ -1404,7 +1407,7 @@ details[open] > .vyasa-callout-summary .vyasa-callout-chevron { transform: rotat
     height: 2.25rem;
     padding: 0 var(--vyasa-space-4);
     border: 1px solid transparent;
-    border-radius: var(--vyasa-radius-md) !important;
+    border-radius: var(--vyasa-control-radius) !important;
     background: var(--vyasa-accent-9);
     color: var(--vyasa-accent-contrast) !important;
     font: var(--vyasa-weight-medium) var(--vyasa-text-base)/1 var(--vyasa-font-ui);
@@ -1652,7 +1655,7 @@ a.vyasa-code-link code { color: inherit; }
     width: 1.75rem;
     height: 1.75rem;
     padding: 0;
-    border-radius: var(--vyasa-radius-md) !important;
+    border-radius: var(--vyasa-control-radius) !important;
     background: transparent !important;
     box-shadow: none !important;
     color: var(--vyasa-text-muted) !important;
@@ -1848,7 +1851,7 @@ a.vyasa-code-link code { color: inherit; }
     min-height: 1.25rem;
     padding: 2px var(--vyasa-space-2);
     border: 1px solid var(--vyasa-border);
-    border-radius: var(--vyasa-radius-md);
+    border-radius: var(--vyasa-control-radius);
     background: var(--vyasa-tree-chip-bg);
     color: var(--vyasa-text-muted);
     font: var(--vyasa-weight-medium) var(--vyasa-text-xs)/1 var(--vyasa-font-ui);

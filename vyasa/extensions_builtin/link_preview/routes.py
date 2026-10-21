@@ -21,7 +21,13 @@ from ...assets import bundle_asset_html
 from ...extensions import bind_asset_collector, get_extension_runtime
 from ...code_source import split_origin_slug
 from ..markdown.renderer import from_md, infer_code_language, render_code_shell
-from .code_reference import CodeReferenceError, resolve_code_reference
+from .code_reference import (
+    RENDERED_BYTES_LIMIT,
+    RENDERED_LINE_CHARS_LIMIT,
+    RENDERED_LINES_LIMIT,
+    CodeReferenceError,
+    resolve_code_reference,
+)
 from .code_reference_markdown import parse_code_reference_json
 from .code_reference_render import (
     render_code_reference_diagnostic,
@@ -172,6 +178,35 @@ def _source_label_attrs(relative_path: str) -> str:
     )
 
 
+def _read_preview_head(file_path: Path) -> tuple[str, bool]:
+    """The first RENDERED_LINES_LIMIT lines within RENDERED_BYTES_LIMIT, each cut at
+    RENDERED_LINE_CHARS_LIMIT characters, and whether anything was left out.
+
+    >>> import tempfile; f = Path(tempfile.mkstemp()[1]); _ = f.write_text("a\\nb\\n")
+    >>> _read_preview_head(f)
+    ('a\\nb\\n', False)
+    """
+    with file_path.open("rb") as handle:
+        raw = handle.read(RENDERED_BYTES_LIMIT + 1)
+    lines = raw[:RENDERED_BYTES_LIMIT].decode("utf-8", errors="replace").splitlines(keepends=True)
+    clipped = len(raw) > RENDERED_BYTES_LIMIT or len(lines) > RENDERED_LINES_LIMIT
+    shown = []
+    for line in lines[:RENDERED_LINES_LIMIT]:
+        text = line.rstrip("\r\n")
+        if len(text) > RENDERED_LINE_CHARS_LIMIT:
+            line = text[:RENDERED_LINE_CHARS_LIMIT] + "…" + line[len(text):]
+            clipped = True
+        shown.append(line)
+    return "".join(shown), clipped
+
+
+def _clip_notice(relative_path: str, shown: str) -> str:
+    return (
+        f'<div class="vyasa-link-preview-clip-notice">Showing the first {len(shown.splitlines()):,} lines, '
+        f'up to {RENDERED_LINE_CHARS_LIMIT:,} characters each. <a href="/posts/{html.escape(relative_path, quote=True)}">Open full file</a></div>'
+    )
+
+
 def _preview_shell(file_path: Path, preview_html: str, target_line: int | None = None) -> str:
     relative_path = content_slug_for_path(file_path, strip_suffix=False) or file_path.name
     return (
@@ -217,40 +252,44 @@ def render_link_preview_html(
         if preview_html is None:
             return None
         return _preview_shell(file_path, preview_html)
-    source = file_path.read_text(encoding="utf-8", errors="replace")
-    target_line = _markdown_target_line(source, href) if file_path.suffix.lower() == ".md" else None
-    if file_path.suffix.lower() == ".md":
-        page_slug = content_slug_for_path(file_path) or slug
-        if target_line:
-            section = None
-        elif _is_text_fragment(fragment):
-            section = _strip_leading_frontmatter_block(source).strip()
-        else:
-            section = (
-                _extract_markdown_section_text(source, fragment)
-                if fragment
-                else _strip_leading_frontmatter_block(source).strip()
-                if symbol
-                else _default_section_markdown(source)
-            )
-        if not section and fragment:
-            section = _default_section_markdown(source)
-        if target_line:
-            preview_html = from_md(
-                _strip_leading_frontmatter_block(source).strip(),
-                current_path=page_slug,
-            )
-        elif not section:
-            return None
-        else:
-            preview_html = from_md(section, current_path=page_slug)
-    else:
+    if file_path.suffix.lower() != ".md":
+        source, clipped = _read_preview_head(file_path)
         language = infer_code_language(file_path.name)
         preview_html = (
             render_code_shell(source, language, line_numbers=True)
             if language
             else f'<pre class="vyasa-link-preview-plain-text">{html.escape(source)}</pre>'
         )
+        if clipped:
+            relative_path = content_slug_for_path(file_path, strip_suffix=False) or file_path.name
+            preview_html += _clip_notice(relative_path, source)
+        return _preview_shell(file_path, preview_html)
+    source = file_path.read_text(encoding="utf-8", errors="replace")
+    target_line = _markdown_target_line(source, href)
+    page_slug = content_slug_for_path(file_path) or slug
+    if target_line:
+        section = None
+    elif _is_text_fragment(fragment):
+        section = _strip_leading_frontmatter_block(source).strip()
+    else:
+        section = (
+            _extract_markdown_section_text(source, fragment)
+            if fragment
+            else _strip_leading_frontmatter_block(source).strip()
+            if symbol
+            else _default_section_markdown(source)
+        )
+    if not section and fragment:
+        section = _default_section_markdown(source)
+    if target_line:
+        preview_html = from_md(
+            _strip_leading_frontmatter_block(source).strip(),
+            current_path=page_slug,
+        )
+    elif not section:
+        return None
+    else:
+        preview_html = from_md(section, current_path=page_slug)
     return _preview_shell(file_path, preview_html, target_line)
 
 

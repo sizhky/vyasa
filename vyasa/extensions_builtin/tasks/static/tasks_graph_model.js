@@ -1,6 +1,6 @@
 import { logTasksPerf, traceTasksEdge } from './tasks_diagnostics.js';
 import {
-    TASKS_STYLE_ATTRS, applyTasksFilterAttributePolicy, resolveTasksNodeImage, sizeTaskNode, tasksNodeLook, tasksNodeSubtitle, tasksUngroupModelForGrouping,
+    TASKS_STYLE_ATTRS, applyTasksFilterAttributePolicy, resolveTasksNodeImage, sizeTaskNode, tasksNodeImageHero, tasksNodeLook, tasksNodeSubtitle, tasksUngroupModelForGrouping,
     tasksViewMatchesContext,
 } from './tasks_graph_core.js';
 
@@ -1264,14 +1264,32 @@ export function buildTasksUngroupedState(sourceModel) {
     return { model, graph: buildTasksCollapsedGraph(model) };
 }
 
-export function buildTasksEgoState(sourceModel, sourceGraph, selectedIds, includeNeighbors = false, colorBy = '') {
+/**
+ * The EG seed for a filter match. A matching group would bring all its contents,
+ * so groups are dropped; their matching nodes bring them back as frames. Only a
+ * match of groups alone keeps them.
+ *
+ * >>> tasksEgoFilterSeed(new Set(['g', 'a']), { groups: [{ id: 'g' }] })
+ * Set { 'a' }
+ * >>> tasksEgoFilterSeed(new Set(['g']), { groups: [{ id: 'g' }] })
+ * Set { 'g' }
+ */
+export function tasksEgoFilterSeed(matchedIds, model) {
+    const groupIds = new Set((model?.groups || []).map((group) => String(group.id)));
+    const leaves = new Set(Array.from(matchedIds || []).filter((id) => !groupIds.has(String(id))));
+    return leaves.size ? leaves : new Set(matchedIds || []);
+}
+
+// `referenceEdges` are the 'is referred by' edges the caller shows; EG+ takes
+// neighbours over them only when they are on.
+export function buildTasksEgoState(sourceModel, sourceGraph, selectedIds, includeNeighbors = false, colorBy = '', referenceEdges = []) {
     const selected = new Set(Array.from(selectedIds || []).map((id) => String(id || '').trim()).filter(Boolean));
     if (!selected.size) return null;
     const groupsById = Object.fromEntries((sourceModel.groups || []).map((group) => [group.id, group]));
     const tasksById = Object.fromEntries((sourceModel.tasks || []).map((task) => [task.id, task]));
     const visible = new Set(selected);
     if (includeNeighbors) {
-        const neighborEdges = [...(sourceModel.dependency_edges || []), ...tasksReferenceEdges(sourceModel)];
+        const neighborEdges = [...(sourceModel.dependency_edges || []), ...referenceEdges];
         for (const edge of neighborEdges) {
             if (selected.has(edge.source)) visible.add(edge.target);
             if (selected.has(edge.target)) visible.add(edge.source);
@@ -1389,7 +1407,7 @@ export function buildVisibleTasksGraph(model, expanded) {
         ...Array.from(visibleTasks).map((id) => {
             const source = tasksById[id] || {};
             const label = source.label || id;
-            return { ...source, id, label, __kind__: 'task', ...sizeTaskNode(label, 'task', null, { hasImage: Boolean(resolveTasksNodeImage(source, model)), nodeLabels, look: tasksNodeLook(source, model), subtitle: tasksNodeSubtitle(source, model) }) };
+            return { ...source, id, label, __kind__: 'task', ...sizeTaskNode(label, 'task', null, { hasImage: Boolean(resolveTasksNodeImage(source, model)), heroImage: tasksNodeImageHero(source, model), nodeLabels, look: tasksNodeLook(source, model), subtitle: tasksNodeSubtitle(source, model) }) };
         }),
     ];
     const parentOfGroup = Object.fromEntries((model.groups || []).map((g) => [g.id, g.parent_group_id || null]));
@@ -1484,7 +1502,7 @@ export function normalizeTasksGraphNodes(graph, model) {
             // box. Auto-sizing it to a card would throw that away.
             const size = node.__fixed_size__
                 ? { width: node.width, height: node.height }
-                : sizeTaskNode(label, kind, null, { hasImage: Boolean(resolveTasksNodeImage(source, model)), nodeLabels, look: tasksNodeLook(source, model), subtitle: tasksNodeSubtitle(source, model) });
+                : sizeTaskNode(label, kind, null, { hasImage: Boolean(resolveTasksNodeImage(source, model)), heroImage: kind === 'task' && tasksNodeImageHero(source, model), nodeLabels, look: tasksNodeLook(source, model), subtitle: tasksNodeSubtitle(source, model) });
             return { ...source, ...nodeRest, __kind__: kind, label, ...size };
         }),
     };

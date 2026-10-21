@@ -647,6 +647,16 @@ def _changes_add_watchable_dir(changes):
     return False
 
 
+def _changes_touch_content(changes):
+    """True if a change lies outside excluded dirs, so the sidebar tree may differ.
+
+    >>> _changes_touch_content({(2, "/r/node_modules/a.js")}) or _changes_touch_content({(2, "/r/docs/a.md")})
+    True
+    """
+    excludes = set(get_config().get_reload_excludes())
+    return any(not excludes.intersection(Path(path).parts) for _, path in changes)
+
+
 class _ReloadHub:
     """One shared file watcher fanning changes out to every SSE subscriber.
 
@@ -660,30 +670,34 @@ class _ReloadHub:
     per path on macOS) that froze the event loop for tens of seconds on large content
     trees, starving every other request until it finished. Keeping it off the loop and
     marshalling change batches back with `call_soon_threadsafe` fixes that.
+
+    The watcher also owns `revision`, the sidebar tree cache key (see
+    `_posts_tree_fingerprint`), so it runs from startup for the process lifetime,
+    not only while a tab is subscribed. `ready` is False until the watch set is
+    registered and while it is rebuilt; a change in that gap is not seen.
     """
 
     def __init__(self):
         self._subscribers = set()
         self._thread = None
-        self._stop = None
         self._loop = None
+        self.revision = 0
+        self.ready = False
+
+    def start(self):
+        if self._thread is None or not self._thread.is_alive():
+            self._thread = threading.Thread(target=self._run, args=(threading.Event(),), daemon=True)
+            self._thread.start()
 
     def subscribe(self):
         queue = asyncio.Queue()
+        self._loop = asyncio.get_running_loop()
         self._subscribers.add(queue)
-        if self._thread is None or not self._thread.is_alive():
-            self._loop = asyncio.get_running_loop()
-            self._stop = threading.Event()
-            self._thread = threading.Thread(target=self._run, args=(self._stop,), daemon=True)
-            self._thread.start()
+        self.start()
         return queue
 
     def unsubscribe(self, queue):
         self._subscribers.discard(queue)
-        if not self._subscribers and self._stop is not None:
-            self._stop.set()  # watch() exits within its poll interval; thread then ends
-            self._thread = None
-            self._stop = None
 
     def _broadcast(self, message):
         for queue in self._subscribers:
@@ -693,9 +707,14 @@ class _ReloadHub:
         from watchfiles import watch
 
         while not stop.is_set():
+            self.ready = False
             try:
                 paths, recursive = _watch_targets()
-                for changes in watch(*paths, debounce=400, recursive=recursive, stop_event=stop):
+                # yield_on_timeout: the first (empty) batch marks the watch set registered.
+                for changes in watch(*paths, debounce=400, recursive=recursive, stop_event=stop, rust_timeout=1000, yield_on_timeout=True):
+                    if not self.ready or _changes_touch_content(changes):
+                        self.revision += 1
+                        self.ready = True
                     message = _reload_event_str(changes)
                     if message is not None and self._loop is not None:
                         self._loop.call_soon_threadsafe(self._broadcast, message)
@@ -854,10 +873,7 @@ def navbar(
 
 
 def _posts_sidebar_fingerprint():
-    try:
-        return ContentTree.from_runtime().fingerprint()
-    except Exception:
-        return 0
+    return _posts_tree_fingerprint()
 
 
 def _find_search_matches(query, limit=40, *, current_path="", ref_state=""):
@@ -1075,7 +1091,16 @@ def _log_startup_content_stats():
     )
 
 
+def _start_content_watcher():
+    try:
+        import watchfiles  # noqa: F401
+    except ImportError:
+        return
+    _get_reload_hub().start()
+
+
 def _preload_posts_cache():
+    _start_content_watcher()
     try:
         show_hidden = get_config().get_show_hidden()
         import time
@@ -1390,10 +1415,17 @@ def build_post_tree(folder, roles=None, max_depth=None, active_parts=()):
 
 
 def _posts_tree_fingerprint():
+    """The watcher revision while the shared watcher is registered, else a full-tree walk."""
+    hub = _get_reload_hub()
+    if hub.ready:
+        return ("watch", hub.revision)
     try:
-        return ContentTree.from_runtime().fingerprint()
+        return ("walk", ContentTree.from_runtime().fingerprint())
     except Exception:
         return 0
+
+
+_POST_TREE_BUILD_LOCK = threading.RLock()
 
 
 @lru_cache(maxsize=8)
@@ -1480,9 +1512,10 @@ def get_posts(roles=None, current_path=""):
     fingerprint = _posts_tree_fingerprint()
     roles_key = tuple(roles or [])
     show_hidden = get_config().get_show_hidden()
-    return _cached_build_post_tree(
-        fingerprint, roles_key, show_hidden, current_path or ""
-    )
+    with _POST_TREE_BUILD_LOCK:
+        return _cached_build_post_tree(
+            fingerprint, roles_key, show_hidden, current_path or ""
+        )
 
 
 def _default_not_found(htmx=None, auth=None):

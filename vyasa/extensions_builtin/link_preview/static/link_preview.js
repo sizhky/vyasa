@@ -14,7 +14,7 @@ import {
     rememberLinkPreviewPosition,
     rememberLinkPreviewWidth,
 } from './link_preview_geometry.js';
-import { linkPreviewCodeLineHref, linkPreviewHashMatch, linkPreviewLineMatch, linkPreviewLineNumber, linkPreviewSymbolMatch } from './link_preview_target.js';
+import { linkPreviewCodeLineHref, linkPreviewHashMatch, linkPreviewLineMatch, linkPreviewLineNumber, linkPreviewSymbolMatch, markLinkPreviewTarget } from './link_preview_target.js';
 import { installCodeReferences, scrollToFirstCodeReferenceFocus } from './code_reference.js';
 import { jumpToTextFragment } from '/static/page_shell.js';
 import { installPanelDrag, installPanelResize, viewportPanelBox } from '/static/floating_panel.js';
@@ -30,6 +30,8 @@ let pointerFrame = null;
 let previewPage = `${window.location.pathname}${window.location.search}`;
 const previewViews = new Set();
 const externalPreviewOrigins = new WeakMap();
+// A covered or inside link shows no pointer while this is false.
+const LINK_PREVIEW_DIMPLE = false;
 let dimpleFilterSequence = 0;
 let dimpleMapUrl = '';
 
@@ -240,8 +242,8 @@ function createPreviewView({ point, link, onClose }) {
         '<button type="button" class="vyasa-link-preview-close" aria-label="Close preview">×</button>',
         '</span>',
         '</div>',
-        '<div class="vyasa-link-preview-tabs" role="tablist" aria-label="Code URLs" hidden></div>',
-        '<div class="vyasa-link-preview-sections" hidden><div role="tablist" aria-label="Sections in this file"></div><span class="vyasa-link-preview-sections-keys" aria-hidden="true">↑↓</span></div>',
+        '<div class="vyasa-link-preview-tabs" hidden><span class="vyasa-link-preview-strip-keys" aria-hidden="true">←→</span><div role="tablist" aria-label="Code URLs"></div></div>',
+        '<div class="vyasa-link-preview-sections" hidden><span class="vyasa-link-preview-strip-keys" aria-hidden="true">↑↓</span><div role="tablist" aria-label="Sections in this file"></div></div>',
         '<div data-vyasa-link-preview-content class="vyasa-link-preview-content vyasa-link-preview-loading">Loading preview...</div>',
         '</div>',
     ].join('');
@@ -258,6 +260,7 @@ function createPreviewView({ point, link, onClose }) {
     popover.append(dimpleCanvas);
     const bar = popover.querySelector('.vyasa-link-preview-bar');
     const tabs = popover.querySelector('.vyasa-link-preview-tabs');
+    const tabList = tabs.querySelector('[role="tablist"]');
     const sections = popover.querySelector('.vyasa-link-preview-sections');
     const sectionList = sections.querySelector('[role="tablist"]');
     let tabSignature = '';
@@ -347,6 +350,13 @@ function createPreviewView({ point, link, onClose }) {
         card.style.filter = `url(#${dimpleEffect.id})`;
         drawDimpleCanvas(dimpleCanvas, popupRect, shownDimple.dimple, shownDimple.inside, Math.max(0, strength));
     };
+    const hidePointer = () => {
+        pointer.hidden = true;
+        shownDimple = null;
+        depth = { value: 0, velocity: 0, settled: true };
+        depthTarget = 0;
+        drawDimple(null);
+    };
     const updatePointer = () => {
         const origin = externalPreviewOrigins.get(activeLink);
         const source = origin?.frame || activeLink;
@@ -355,11 +365,7 @@ function createPreviewView({ point, link, onClose }) {
             width: origin.width, height: origin.height } : bounds;
         if (!source.isConnected || (origin && (origin.width <= 0 || origin.height <= 0
             || origin.x + origin.width < 0 || origin.y + origin.height < 0 || origin.x > bounds.width || origin.y > bounds.height))) {
-            pointer.hidden = true;
-            shownDimple = null;
-            depth = { value: 0, velocity: 0, settled: true };
-            depthTarget = 0;
-            drawDimple(null);
+            hidePointer();
             return;
         }
         const popupRect = popover.getBoundingClientRect();
@@ -372,8 +378,12 @@ function createPreviewView({ point, link, onClose }) {
         const geometry = linkPreviewPointerGeometry(sourceRect, popupRect, 28, 2, {
             preferDimple: sourceCovered && sourceParent !== popover,
         });
-        pointer.hidden = false;
         const dimple = geometry.kind === 'dimple' || geometry.kind === 'dimple-inside';
+        if (dimple && !LINK_PREVIEW_DIMPLE) {
+            hidePointer();
+            return;
+        }
+        pointer.hidden = false;
         if (dimple) shownDimple = { dimple: geometry.dimple, inside: geometry.kind === 'dimple-inside' };
         pushDepth(dimple ? 1 : 0, popupRect);
         popover.classList.toggle('has-origin-dimple', dimple);
@@ -441,7 +451,7 @@ function createPreviewView({ point, link, onClose }) {
             selectTab = onSelect;
             const nextSignature = items.map((item) => `${item.link.getAttribute('href') || ''}\n${item.kind || 'code'}\n${item.sections.length}`).join('\n');
             if (nextSignature !== tabSignature) {
-                tabs.replaceChildren();
+                tabList.replaceChildren();
                 items.forEach((item, index) => {
                     const button = document.createElement('button');
                     const href = item.link.getAttribute('href') || '';
@@ -462,15 +472,15 @@ function createPreviewView({ point, link, onClose }) {
                         if (!delta) return;
                         const target = (index + delta + items.length) % items.length;
                         selectTab(target);
-                        tabs.children[target]?.focus();
+                        tabList.children[target]?.focus();
                         event.preventDefault();
                         event.stopPropagation();
                     });
-                    tabs.appendChild(button);
+                    tabList.appendChild(button);
                 });
                 tabSignature = nextSignature;
             }
-            Array.from(tabs.children).forEach((button, index) => {
+            Array.from(tabList.children).forEach((button, index) => {
                 button.setAttribute('aria-selected', String(index === activeTab));
                 button.tabIndex = index === activeTab ? 0 : -1;
             });
@@ -603,7 +613,7 @@ function scrollLinkPreviewToTarget(content, href) {
     const matchedId = linkPreviewHashMatch(href, elementsWithIds.map((element) => element.id));
     if (matchedId) {
         const target = elementsWithIds.find((element) => element.id === matchedId);
-        target.classList.add('vyasa-link-preview-target-line');
+        markLinkPreviewTarget(target);
         target.scrollIntoView({ block: 'center' });
         return;
     }
@@ -611,7 +621,7 @@ function scrollLinkPreviewToTarget(content, href) {
         || linkPreviewLineNumber(href);
     const renderedLine = sourceLine && body.querySelector(`[data-source-line="${sourceLine}"]`);
     if (renderedLine) {
-        renderedLine.classList.add('vyasa-link-preview-target-line');
+        markLinkPreviewTarget(renderedLine);
         renderedLine.scrollIntoView({ block: 'center' });
         return;
     }
@@ -629,7 +639,7 @@ function scrollLinkPreviewToTarget(content, href) {
         return;
     }
     if (codeLines.length) {
-        codeLines[match.chunkIndex].classList.add('vyasa-link-preview-target-line');
+        markLinkPreviewTarget(codeLines[match.chunkIndex]);
         codeLines[match.chunkIndex].scrollIntoView({ block: 'center' });
         return;
     }

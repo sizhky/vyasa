@@ -19,6 +19,9 @@ export const TASKS_EDGES_VISIBLE_KEY = 'vyasa:tasks:edges-visible';
 
 export const TASKS_HOVER_CARD_MODE_KEY = 'vyasa:tasks:hover-card-mode';
 
+// Read only by a .kg page's own graph; embedded and panel graphs ignore it.
+export const TASKS_FULLSCREEN_KEY = 'vyasa:tasks:fullscreen';
+
 const TASKS_PREFS_INDEX_KEY = 'vyasa:tasks:prefs:__index__';
 
 const TASKS_PREFS_MAX_ENTRIES = 200;

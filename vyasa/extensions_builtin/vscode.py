@@ -71,7 +71,7 @@ def is_local_request(request: Any) -> bool:
     client_host = str(getattr(getattr(request, "client", None), "host", "") or "")
 
     def is_loopback(value: str) -> bool:
-        if value == "localhost":
+        if value == "localhost" or value.endswith(".localhost"):
             return True
         try:
             return ip_address(value).is_loopback

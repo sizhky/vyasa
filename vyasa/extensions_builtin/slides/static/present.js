@@ -19,7 +19,7 @@ if (!window.__vyasaZenBound) {
     title: 'Slide shortcuts',
     groups: [
       ['Exit', [['Shift+Esc', 'Document']]],
-      ['Slides', [['M / Esc', 'Overview'], ['?', 'Shortcuts'], ['J / K / Arrows', 'Scroll / Reveal / Rewind'], ['H / L', 'Skip to previous / next slide']]],
+      ['Slides', [['M / Esc', 'Overview'], ['?', 'Shortcuts'], ['J / K / Arrows', 'Scroll / Reveal / Rewind'], ['Space / Shift+Space', 'Same as J / K'], ['Click margin', 'Right as J / Left as K'], ['H / L', 'Skip to previous / next slide']]],
       ['Overview', [['J / K', 'Move Selection'], ['H / L', 'Collapse / Expand'], ['Enter', 'Open Slide'], ['Esc', 'Close']]],
     ],
   });
@@ -1061,6 +1061,37 @@ if (!window.__vyasaZenBound) {
     }
     return true;
   };
+  // J/K order: finish scrolling a tall unit, then reveal or rewind units, then change slide.
+  const stepForward = () => scrollLastVisibleUnit('down') || revealNextUnit() || follow('right');
+  const stepBack = () => scrollLastVisibleUnit('up') || hidePreviousUnit() || follow('left');
+
+  // Click zones: the empty margins beside the text column step, the right like J and the left like K.
+  // The column itself stays free for text selection.
+  const CLICK_ZONE_EXEMPT = 'a, button, input, textarea, select, summary, label, video, audio, iframe, '
+    + '[contenteditable], [role="button"], [role="dialog"], dialog, #site-navbar, .vyasa-zen-nav-group, '
+    + '#slide-overview, .vyasa-floating-bubble';
+  const clickZoneSide = (event) => {
+    if (!document.querySelector('#main-content.vyasa-zen-present')) return null;
+    if (event.button > 0 || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return null;
+    if (event.target.closest?.(CLICK_ZONE_EXEMPT)) return null;
+    const column = document.querySelector('#main-content :is(.vyasa-zen-slide-body, .vyasa-zen-cover)')?.getBoundingClientRect();
+    if (!column) return null;
+    if (event.clientX < column.left) return 'left';
+    if (event.clientX > column.right) return 'right';
+    return null;
+  };
+  // A pan or text drag ends in a click; only a still press counts as a step.
+  let pressX = 0;
+  let pressY = 0;
+  document.addEventListener('pointerdown', (event) => { pressX = event.clientX; pressY = event.clientY; }, true);
+  const clickWasDrag = (event) => Math.hypot(event.clientX - pressX, event.clientY - pressY) > 6;
+  document.addEventListener('pointermove', (event) => {
+    const side = event.pointerType === 'mouse' && !overviewIsOpen() ? clickZoneSide(event) : null;
+    if ((document.documentElement.dataset.zenClickSide || null) === side) return;
+    if (side) document.documentElement.dataset.zenClickSide = side;
+    else delete document.documentElement.dataset.zenClickSide;
+  }, { passive: true });
+
   document.addEventListener('click', (event) => {
     const toggle = event.target.closest('[data-zen-overview-toggle="true"]');
     if (toggle) {
@@ -1098,6 +1129,13 @@ if (!window.__vyasaZenBound) {
         return;
       }
     }
+    const zoneSide = clickZoneSide(event);
+    if (zoneSide && !overviewIsOpen() && !clickWasDrag(event) && !String(window.getSelection?.() || '')
+      && (zoneSide === 'right' ? stepForward() : stepBack())) {
+      revealLog('click zone handled', { side: zoneSide });
+      event.preventDefault();
+      return;
+    }
     if (!event.target.closest('#slide-overview')) {
       document.getElementById('slide-overview')?.classList.add('hidden');
     }
@@ -1119,7 +1157,9 @@ if (!window.__vyasaZenBound) {
     }
     if (event.metaKey || event.ctrlKey || event.altKey
       || event.target?.matches?.('input, textarea, select') || event.target?.isContentEditable) return;
-    const key = ARROW_AS_VIM[event.key] || event.key.toLowerCase();
+    // Space on a focused control keeps its native click; elsewhere it steps like J, Shift+Space like K.
+    if (event.key === ' ' && event.target?.closest?.('a, button, summary')) return;
+    const key = event.key === ' ' ? (event.shiftKey ? 'k' : 'j') : ARROW_AS_VIM[event.key] || event.key.toLowerCase();
     if (overviewIsOpen() && (key === 'h' || key === 'l')) {
       if (moveOverviewBranch(key)) event.preventDefault();
       return;
@@ -1133,8 +1173,8 @@ if (!window.__vyasaZenBound) {
       event.preventDefault();
     }
     if (key === 'h' && follow('left', true)) event.preventDefault();
-    if (key === 'j' && (scrollLastVisibleUnit('down') || revealNextUnit() || follow('right'))) event.preventDefault();
-    if (key === 'k' && (scrollLastVisibleUnit('up') || hidePreviousUnit() || follow('left'))) event.preventDefault();
+    if (key === 'j' && stepForward()) event.preventDefault();
+    if (key === 'k' && stepBack()) event.preventDefault();
     if (key === 'l' && follow('right', true)) event.preventDefault();
   });
 

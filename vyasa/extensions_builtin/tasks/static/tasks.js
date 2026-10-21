@@ -21,7 +21,7 @@ import {
 } from './tasks_graph_core.js';
 import {
     TASKS_DEFAULT_CARD_STATES, TASKS_GANTT_PROJECTION_ID, TASKS_PROJECTION_UNSPECIFIED_CONTENT_OPACITY_DEFAULT, TASKS_PROJECTION_UNSPECIFIED_LABEL,
-    buildTasksCollapsedGraph, buildTasksEgoState, buildTasksProjectionConfigText, clampTasksEdgeOpacity,
+    buildTasksCollapsedGraph, buildTasksEgoState, buildTasksProjectionConfigText, tasksEgoFilterSeed, clampTasksEdgeOpacity,
     clampTasksProjectionDisplayOpacity, collapseOneGroupDepth, collectExpandedGroupsByDepth, collectTasksGroupDescendantIds,
     effectiveExpandedGroups, expandOneGroupDepth, normalizeTasksCardStates, normalizeTasksCheckedNodeIds,
     normalizeTasksFilterQuery, normalizeTasksGraphNodes, normalizeTasksGroupByDisabledKeys, normalizeTasksNodeNotes,
@@ -56,7 +56,7 @@ import {
     tasksGroupBackground, tasksGroupIdsContainingSelection, tasksHoverFocusEdge, tasksHoverFocusNodeStyle,
     tasksNodeBackground, tasksNodeColorLevels, tasksNodeIsOverlaid, tasksProminentEdgeOpacity,
     tasksActiveNodeFill, tasksGroupFrameStyle, tasksNodeHasInternals, tasksTaskWrapperStyle,
-    tasksReferenceFlowEdge, tasksResolvedThemeColor, tasksUseColorOverlay,
+    tasksReferenceFlowEdges, tasksResolvedThemeColor, tasksUseColorOverlay,
 } from './tasks_paint.js';
 import {
     tasksCanvasBackgroundProps, tasksCanvasStyle, tasksEdgeStrokeStyle, tasksGroupLook, tasksGroupRingTokens,
@@ -67,7 +67,7 @@ import { tasksHighlightGraph } from './tasks_highlight.js';
 import { tasksRoleOf } from './tasks_roles.js';
 import { createTasksInternals } from './tasks_internals.js';
 import {
-    TASKS_EDGES_VISIBLE_KEY, TASKS_HOVER_CARD_MODES, TASKS_HOVER_CARD_MODE_KEY, buildTasksNodeNotesBackup,
+    TASKS_EDGES_VISIBLE_KEY, TASKS_FULLSCREEN_KEY, TASKS_HOVER_CARD_MODES, TASKS_HOVER_CARD_MODE_KEY, buildTasksNodeNotesBackup,
     checkedNodeIdsFromStates, clearTasksGlobalToggle, downloadTasksNodeNotes, readTasksCheckedNodeIds,
     readTasksEdgesVisible, readTasksGlobalToggle, readTasksHoverCardMode, readTasksPrefs,
     readTasksStoredFlag, tasksNodeCardWidthKey, uploadTasksNodeNotes, writeTasksCheckedNodeIds,
@@ -216,6 +216,7 @@ const isTasksHopCode = (code) => TASKS_HOP_GROW_CODES.has(code) || TASKS_HOP_SHR
 const TASKS_ZOOM_MOMENTUM_RATE = 0.0007;
 
 const TASKS_EDGE_LABELS_VISIBLE_KEY = 'vyasa:tasks:edge-labels-visible';
+const TASKS_REFERENCE_EDGES_VISIBLE_KEY = 'vyasa:tasks:reference-edges-visible';
 
 const TASKS_GROUP_HOVER_CARDS_KEY = 'vyasa:tasks:group-hover-cards';
 const TASKS_HOVER_CARD_SCROLL_KEY = 'vyasa:tasks:hover-card-scroll';
@@ -450,6 +451,10 @@ function syncTasksHoverCardToggleButtons(widgetId, hoverCardsEnabled) {
     syncTasksToggleButtons(widgetId, 'toggleHoverCards', !hoverCardsEnabled, 'data-vyasa-hover-cards-off', 'Toggle hover cards', 'Hover cards are hidden (H)');
 }
 
+function syncTasksReferenceEdgeToggleButtons(widgetId, visible) {
+    syncTasksToggleButtons(widgetId, 'toggleReferenceEdges', visible, 'data-vyasa-reference-edges-on', "Show 'is referred by' edges", "'is referred by' edges are shown");
+}
+
 function syncTasksCardScrollToggleButtons(widgetId, enabled) {
     syncTasksToggleButtons(widgetId, 'toggleCardScroll', enabled, 'data-vyasa-card-scroll-on', 'Toggle card scroll mode (V)', 'Card scroll mode is on (V)');
 }
@@ -542,9 +547,25 @@ function syncTasksFullscreenButton(wrapper) {
     });
 }
 
+// A .kg page's own graph; a standalone graph inside an internals panel is not one.
+function isTasksPageGraph(wrapper) {
+    return String(wrapper?.dataset?.tasksStandalone || '').toLowerCase() === 'true'
+        && !wrapper.closest('.vyasa-kg-internals-body');
+}
+
+// Slides and EG maximize through setTasksMaximized directly, so only user toggles land here.
 const { setTasksMaximized } = createTasksFullscreenController({
     syncTasksFullscreenButton,
+    onUserToggle: (wrapper, on) => {
+        if (isTasksPageGraph(wrapper)) writeTasksGlobalToggle(TASKS_FULLSCREEN_KEY, on);
+    },
 });
+
+function restoreTasksPageFullscreen(wrapper) {
+    if (wrapper.__tasksFullscreenRestored || !isTasksPageGraph(wrapper)) return;
+    wrapper.__tasksFullscreenRestored = true;
+    if (readTasksStoredFlag(TASKS_FULLSCREEN_KEY)) setTasksMaximized(wrapper, true);
+}
 
 function applyTasksStandaloneHeight(wrapper) {
     if (String(wrapper?.dataset?.tasksStandalone || '').toLowerCase() !== 'true') return;
@@ -594,6 +615,8 @@ async function renderTasksGraphs(rootElement = document) {
             needsRetry = true;
             continue;
         }
+        // After the visibility gate: a maximized wrapper is position: fixed, so its offsetParent is null.
+        restoreTasksPageFullscreen(wrapper);
         const initialSourceModel = JSON.parse(wrapper.dataset.tasksPayload || '{"groups":[],"tasks":[],"group_tree":{},"task_children":{},"dependency_edges":[]}');
         const initialSourceGraph = normalizeTasksGraphNodes(JSON.parse(wrapper.dataset.tasksGraph || '{"nodes":[],"edges":[]}'), initialSourceModel);
         const widgetId = wrapper.id;
@@ -946,39 +969,12 @@ async function renderTasksGraphs(rootElement = document) {
                 return list.filter((slide) => slide && Array.isArray(slide.nodes) && slide.nodes.length);
             }, [baseProjectionState.model]);
             const [slideIndex, setSlideIndex] = React.useState(-1);
+            // Slides always show EG; EG+ adds the direct neighbours. 'off' only while no slide is open.
             const [slideFocusMode, setSlideFocusMode] = React.useState('off'); // 'off' | 'eg' | 'egplus'
             React.useEffect(() => {
                 setSlideIndex((index) => index < 0 ? -1 : (slides.length ? 0 : -1));
                 if (!slides.length) setSlideFocusMode('off');
             }, [activeProjectionId, slides]);
-            React.useEffect(() => {
-                const slide = slideIndex >= 0 ? slides[slideIndex] : null;
-                if (!slide) return;
-                const ids = new Set((slide.nodes || []).map((id) => String(id || '').trim()).filter(Boolean));
-                selectedNodeIdRef.current = null;
-                selectedNodeIdsRef.current = new Set(ids);
-                setSelectedNodeId(null);
-                setSelectedNodeIds(new Set(ids));
-            }, [slideIndex, slides]);
-            React.useEffect(() => {
-                const slide = slideIndex >= 0 ? slides[slideIndex] : null;
-                if (!slide) return;
-                const ids = new Set((slide.nodes || []).map((id) => String(id || '').trim()).filter(Boolean));
-                const timer = window.setTimeout(() => {
-                    const reactFlow = reactFlowApiRef.current;
-                    const matched = tasksMatchedSlideNodes(slides, slideIndex, graphBaseRef.current.nodes);
-                    logTasksDebug('slideFocusFit', {
-                        widgetId,
-                        slideIndex,
-                        graphRevision,
-                        requestedNodeCount: ids.size,
-                        matchedNodeCount: matched.length,
-                        graphReady: Boolean(reactFlow),
-                    });
-                    if (reactFlow && matched.length) reactFlow.fitView({ nodes: matched, duration: 400, padding: 0.3, includeHiddenNodes: true });
-                }, 80);
-                return () => window.clearTimeout(timer);
-            }, [slideIndex, slides, graphRevision]);
             // Sticky EG/EG+ focus: rebuild the current graph whenever the slide or mode changes.
             React.useEffect(() => {
                 if (initialEgoMode) return;
@@ -990,7 +986,7 @@ async function renderTasksGraphs(rootElement = document) {
                 if (!slide || !Array.isArray(slide.nodes) || !slide.nodes.length) return;
                 const timer = window.setTimeout(() => {
                     window.__vyasaTasksActions?.[widgetId]?.openEgo?.(
-                        slideFocusMode === 'egplus', slide.nodes, true, () => setSlideFocusMode('off')
+                        slideFocusMode === 'egplus', slide.nodes, true, () => { setSlideFocusMode('off'); setSlideIndex(-1); }
                     );
                 }, 70);
                 return () => window.clearTimeout(timer);
@@ -1105,6 +1101,16 @@ async function renderTasksGraphs(rootElement = document) {
                     return next;
                 });
             }, []);
+            // 'is referred by' edges come from [[node]] links in node text. They are
+            // off unless the Refs button turned them on, which every graph then follows.
+            const [referenceEdgesVisible, setReferenceEdgesVisible] = React.useState(() => readTasksStoredFlag(TASKS_REFERENCE_EDGES_VISIBLE_KEY) === true);
+            const setReferenceEdgesVisibleGlobal = React.useCallback((update) => {
+                setReferenceEdgesVisible((current) => {
+                    const next = Boolean(typeof update === 'function' ? update(current) : update);
+                    writeTasksGlobalToggle(TASKS_REFERENCE_EDGES_VISIBLE_KEY, next);
+                    return next;
+                });
+            }, []);
             const setHoverCardModeGlobal = React.useCallback((update) => {
                 setHoverCardMode((current) => {
                     const next = clampTasksHoverCardMode(typeof update === 'function' ? update(current) : update);
@@ -1138,6 +1144,9 @@ async function renderTasksGraphs(rootElement = document) {
             React.useEffect(() => {
                 syncTasksCardScrollToggleButtons(widgetId, hoverCardScrollMode);
             }, [widgetId, hoverCardScrollMode]);
+            React.useEffect(() => {
+                syncTasksReferenceEdgeToggleButtons(widgetId, referenceEdgesVisible);
+            }, [widgetId, referenceEdgesVisible]);
             const defaultEdgeOpacity = React.useMemo(
                 () => tasksDefaultEdgeOpacity((sourceModel?.dependency_edges || []).length),
                 [sourceModel]
@@ -1174,8 +1183,8 @@ async function renderTasksGraphs(rootElement = document) {
             visibleEdgesRef.current = edges;
             const edgeNodeLabels = React.useMemo(() => tasksModelNodeLabels(model), [model]);
             const referenceEdgeRecords = React.useMemo(
-                () => tasksReferenceEdges(model, sourceModel?.dependency_edges),
-                [model, sourceModel]
+                () => (referenceEdgesVisible ? tasksReferenceEdges(model, sourceModel?.dependency_edges) : []),
+                [model, sourceModel, referenceEdgesVisible]
             );
             const layoutModel = React.useMemo(() => ({
                 ...model,
@@ -2732,7 +2741,10 @@ async function renderTasksGraphs(rootElement = document) {
             }, [layoutRawGraph, layoutModel, jitterConfig, layoutConfig]);
             const rebuildLayout = React.useCallback(async (expandedSet, mode = viewMode) => {
                 const layoutStart = tasksPerfNow();
-                const revisionKey = `${mode}|${String(model?.graph_id || '')}|${Array.from(expandedSet || []).sort().join(',')}`;
+                // A rebuild is a new layout when the mode, the graph, its node set or its
+                // open groups change. Two EG graphs share a graph id but not their nodes.
+                const nodeSetKey = [...(model?.groups || []), ...(model?.tasks || [])].map((node) => String(node.id || '')).sort().join(',');
+                const revisionKey = `${mode}|${String(model?.graph_id || '')}|${nodeSetKey}|${Array.from(expandedSet || []).sort().join(',')}`;
                 const revisionCause = lastLayoutRevisionKeyRef.current === revisionKey ? 'visual' : 'layout';
                 lastLayoutRevisionKeyRef.current = revisionKey;
                 lastGraphRevisionCauseRef.current = revisionCause;
@@ -2868,6 +2880,11 @@ async function renderTasksGraphs(rootElement = document) {
                     // reaching back into the map from inside it.
                     const pairMateColors = new Map(anchored.edges.map((item) => [item.id, resolveTasksEdgeColor(item, model, model?.edge_color_by, edgeColorPalette)]));
                     const fixedLayout = tasksFixedLayout(mode);
+                    // A layout that pins both ends of an edge itself (a sequence row)
+                    // owns that edge's geometry, so the style cascade stops there.
+                    const fixedEdgePathOf = (edge) => (fixedLayout?.authoredHandles
+                        ? fixedLayout.edgePath
+                        : tasksEdgePathOf(edge, fixedLayout?.ownsEdgePath ? { edge_path: activeProjection?.edge_path } : model, fixedLayout?.edgePath));
                     const styledEdges = anchored.edges.map((edge) => {
                         const edgeColor = resolveTasksEdgeColor(edge, model, model?.edge_color_by, edgeColorPalette);
                         const resolvedLabel = resolveTasksEdgeLabel(edge, model, activeProjection);
@@ -2877,10 +2894,7 @@ async function renderTasksGraphs(rootElement = document) {
                         // A lifeline is a full-height column, so a row that crosses one
                         // must draw over it, not behind it.
                         const rowZ = tasksFixedLayout(mode)?.edgesOverNodes ? TASKS_TASK_Z + 10 : TASKS_EDGE_Z;
-                        // A layout that pins both ends of an edge itself (a sequence row)
-                        // owns that edge's geometry, so the style cascade stops there.
-                        const edgeDefaults = fixedLayout?.ownsEdgePath ? { edge_path: activeProjection?.edge_path } : model;
-                        const edgePath = fixedLayout?.authoredHandles ? fixedLayout.edgePath : tasksEdgePathOf(edge, edgeDefaults, fixedLayout?.edgePath);
+                        const edgePath = fixedEdgePathOf(edge);
                         const stroke = tasksEdgeStrokeStyle(edgePath, edgeColor, tasksIsDashed(edge));
                         return {
                             ...edge,
@@ -2929,7 +2943,14 @@ async function renderTasksGraphs(rootElement = document) {
                     // A fixed layout never moves its nodes, so routed edges are solved
                     // against the node rects once, here.
                     const baseEdges = tasksRouteEdges(nodesWithStyle, styledEdges, fixedLayout?.gutter);
-                    referenceEdgesRef.current = referenceAnchored.edges.map((edge) => tasksReferenceFlowEdge(edge, rf.MarkerType.ArrowClosed, hoverFontSize, layoutConfig.edgeLabelWidth));
+                    referenceEdgesRef.current = tasksReferenceFlowEdges(nodesWithStyle, referenceAnchored.edges, {
+                        markerType: rf.MarkerType.ArrowClosed,
+                        fontSize: hoverFontSize,
+                        labelMaxWidth: layoutConfig.edgeLabelWidth,
+                        model,
+                        edgePathOf: fixedEdgePathOf,
+                        gutter: fixedLayout?.gutter,
+                    });
                     const anchoredNodes = nodesWithStyle.map((node) => ({
                         ...node,
                         data: { ...node.data, handleLayout: tasksMergeHandleLayouts(anchored.nodeHandles[node.id], referenceAnchored.nodeHandles[node.id]) },
@@ -3171,7 +3192,13 @@ async function renderTasksGraphs(rootElement = document) {
                             : undefined,
                     },
                 }));
-                referenceEdgesRef.current = referenceAnchored.edges.map((edge) => tasksReferenceFlowEdge(edge, rf.MarkerType.ArrowClosed, hoverFontSize, layoutConfig.edgeLabelWidth));
+                referenceEdgesRef.current = tasksReferenceFlowEdges(baseNodes, referenceAnchored.edges, {
+                    markerType: rf.MarkerType.ArrowClosed,
+                    fontSize: hoverFontSize,
+                    labelMaxWidth: layoutConfig.edgeLabelWidth,
+                    model,
+                    gutter: tasksFreeRouteGutter(layoutConfig),
+                });
                 graphBaseRef.current = { nodes: anchoredNodes, edges: baseEdges };
                 window.__vyasaTasksDebug.latest = {
                     widgetId,
@@ -3330,19 +3357,26 @@ async function renderTasksGraphs(rootElement = document) {
                 prevExpandedCountRef.current = nextCount;
             }, [expanded]);
             React.useEffect(() => {
-                if (lastGraphRevisionCauseRef.current === 'visual') return;
                 const fitAction = pendingFitActionRef.current;
                 if (!fitAction) return;
+                // A layout often commits a second, visual-only revision. That re-run
+                // cancels the wait below, so it must restart it, not drop the owed fit.
+                logTasksDebug('autoFitRequest', { widgetId, fitAction, graphRevision, cause: lastGraphRevisionCauseRef.current, slideIndex });
                 // `mode` says the layout was replaced: a projection swap, a context
                 // swap, or a new group-by. The camera then points at geometry that is
                 // gone, and the graph reads as blank until a reload. The expand
                 // preference governs expanding a node, not replacing the layout.
                 if (!shouldAutoFitTasksOnExpand() && fitAction !== 'shortcut' && fitAction !== 'mode') return;
+                // The one fit after a layout: wait ~25 frames for it to settle, then
+                // fit the open slide's nodes, or the whole graph when no slide is open.
                 let rafId = null;
                 let framesLeft = 25;
                 const step = () => {
                     if (framesLeft <= 0) {
-                        reactFlowApiRef.current?.fitView({ duration: 200, padding: 0.2, includeHiddenNodes: true });
+                        const matched = slideIndex >= 0 ? tasksMatchedSlideNodes(slides, slideIndex, graphBaseRef.current.nodes) : [];
+                        logTasksDebug('autoFit', { widgetId, fitAction, slideIndex, graphRevision, matchedNodeCount: matched.length });
+                        if (matched.length) reactFlowApiRef.current?.fitView({ nodes: matched, duration: 400, padding: 0.3, includeHiddenNodes: true });
+                        else reactFlowApiRef.current?.fitView({ duration: 200, padding: 0.2, includeHiddenNodes: true });
                         pendingFitActionRef.current = null;
                         return;
                     }
@@ -3353,7 +3387,7 @@ async function renderTasksGraphs(rootElement = document) {
                 return () => {
                     if (rafId !== null) window.cancelAnimationFrame(rafId);
                 };
-            }, [graphRevision, expanded]);
+            }, [graphRevision, expanded, slideIndex, slides]);
             React.useEffect(() => {
                 if (!shouldAutoFitTasksOnFilter()) return;
                 const hasFilters = tasksFilterQueryHasRules(effectiveQueryFilters) || tasksFilterQueryHasRules(effectiveSwatchFilters) || effectiveEdgeTypes.length > 0;
@@ -3449,9 +3483,6 @@ async function renderTasksGraphs(rootElement = document) {
             React.useEffect(() => {
                 rebuildLayout(expanded);
             }, [expanded, viewMode, rebuildLayout]);
-            // Fit-on-mode-change is driven from inside ReactFlowProvider via
-            // FitOnNodesReady below — it waits for useNodesInitialized() so the
-            // fit lands after React Flow has finished measuring node rects.
             const nodeTypes = React.useMemo(() => ({ vyasaTask: CustomNode }), [CustomNode]);
             const edgeTypes = React.useMemo(() => ({ vyasaEdge: CustomEdge }), []);
             const FitViewHotkey = () => {
@@ -4286,9 +4317,14 @@ async function renderTasksGraphs(rootElement = document) {
                         },
                         openEgo: (includeNeighbors = false, explicitIds = null, inline = false, onClose = null) => {
                             const previous = egoReturnRef.current;
+                            // With nothing clicked, the selection is the filter match. A clicked
+                            // group brings its contents; a matching group only frames its matches.
+                            const fromFilter = !selectedNodeIdRef.current && !selectedNodeIdsRef.current.size;
                             const egoSelection = Array.isArray(explicitIds) && explicitIds.length
                                 ? new Set(explicitIds.map((id) => String(id || '').trim()).filter(Boolean))
-                                : (previous ? new Set(previous.egoSelection) : currentSelectionIds());
+                                : (previous
+                                    ? new Set(previous.egoSelection)
+                                    : (fromFilter ? tasksEgoFilterSeed(currentSelectionIds(), baseProjectionState.model) : currentSelectionIds()));
                             logTasksDebug('openEgoAction', {
                                 widgetId,
                                 includeNeighbors,
@@ -4300,7 +4336,8 @@ async function renderTasksGraphs(rootElement = document) {
                                 baseRawGraph,
                                 egoSelection,
                                 includeNeighbors,
-                                activeColorBy
+                                activeColorBy,
+                                referenceEdgesVisible ? tasksReferenceEdges(baseProjectionState.model, sourceModel?.dependency_edges) : []
                             );
                             if (!nextEgoState) return;
                             if (!previous) {
@@ -4363,6 +4400,7 @@ async function renderTasksGraphs(rootElement = document) {
                             current === 'off' ? clampTasksHoverCardMode(lastHoverCardPlacementRef.current) : 'off'
                         )),
                         toggleEdges: () => setEdgesVisibleGlobal((current) => !current),
+                        toggleReferenceEdges: () => setReferenceEdgesVisibleGlobal((current) => !current),
                         toggleCardScroll: () => setHoverCardScrollModeGlobal((current) => !current),
                         toggleHelp: () => setHelpOpen((current) => !current),
                     };
@@ -4387,25 +4425,6 @@ async function renderTasksGraphs(rootElement = document) {
                     });
                     return () => window.cancelAnimationFrame(frame);
                 }, [reactFlow, graphRevision, egoMode]);
-                return null;
-            };
-            const FitOnNodesReady = () => {
-                const reactFlow = rf.useReactFlow();
-                React.useEffect(() => {
-                    if (pendingFitActionRef.current !== 'mode') return;
-                    // Pragmatic: wait long enough for the layout to settle, then fit.
-                    // Same call the F key triggers, just timed past any settle race.
-                    const timeoutId = window.setTimeout(() => {
-                        const matched = tasksMatchedSlideNodes(slides, slideIndex, graphBaseRef.current.nodes);
-                        if (slideIndex >= 0) {
-                            if (matched.length) reactFlow.fitView({ nodes: matched, duration: 400, padding: 0.3, includeHiddenNodes: true });
-                        } else {
-                            reactFlow.fitView({ duration: 200, padding: 0.16, includeHiddenNodes: true });
-                        }
-                        pendingFitActionRef.current = null;
-                    }, 350);
-                    return () => window.clearTimeout(timeoutId);
-                }, [reactFlow, graphRevision, viewMode, slideIndex, slides]);
                 return null;
             };
             const TasksNodeHighlightBorders = () => {
@@ -4742,7 +4761,7 @@ async function renderTasksGraphs(rootElement = document) {
             const SlideLauncher = () => {
                 if (!slides.length || slideIndex >= 0) return null;
                 return window.React.createElement('button', {
-                    type: 'button', onClick: () => setSlideIndex(0),
+                    type: 'button', onClick: () => { setSlideFocusMode('eg'); setSlideIndex(0); },
                     style: { position: 'absolute', left: '12px', top: '12px', zIndex: 36, padding: '7px 13px', borderRadius: '9px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 94%, transparent)', boxShadow: '0 8px 20px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', cursor: 'pointer', fontSize: '12px', fontWeight: 600 },
                 }, '▶ Slides');
             };
@@ -4771,8 +4790,7 @@ async function renderTasksGraphs(rootElement = document) {
                         window.React.createElement('button', { type: 'button', 'aria-label': 'Next slide', onClick: () => go(1), disabled: slideIndex >= slides.length - 1, style: navBtn(slideIndex >= slides.length - 1) }, '›')
                     ),
                     window.React.createElement('div', { style: { display: 'flex', gap: '6px', marginBottom: '10px' } },
-                        window.React.createElement('button', { type: 'button', title: "Focus this slide's nodes in a compact view (toggle)", onClick: () => setSlideFocusMode((m) => m === 'eg' ? 'off' : 'eg'), style: focusBtn(slideFocusMode === 'eg') }, 'EG'),
-                        window.React.createElement('button', { type: 'button', title: "Focus this slide's nodes plus their direct neighbors, dimmed (toggle)", onClick: () => setSlideFocusMode((m) => m === 'egplus' ? 'off' : 'egplus'), style: focusBtn(slideFocusMode === 'egplus') }, 'EG+')
+                        window.React.createElement('button', { type: 'button', title: "Add this slide's direct neighbors (toggle)", onClick: () => setSlideFocusMode((m) => m === 'egplus' ? 'eg' : 'egplus'), style: focusBtn(slideFocusMode === 'egplus') }, 'EG+')
                     ),
                     window.React.createElement('div', { style: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px', marginBottom: '8px' } },
                         window.React.createElement('strong', { style: { fontSize: '16px' } }, slide.title || `Slide ${slideIndex + 1}`),
@@ -5025,8 +5043,7 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement(SlideLauncher),
                     window.React.createElement(FitViewHotkey),
                     window.React.createElement(ActionBridge),
-                    window.React.createElement(RestoreEgoViewport),
-                    window.React.createElement(FitOnNodesReady)
+                    window.React.createElement(RestoreEgoViewport)
                     ),
                     GitReviewBar(),
                     RightRail(),
@@ -5046,8 +5063,7 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement(SlideLauncher),
                         window.React.createElement(FitViewHotkey),
                         window.React.createElement(ActionBridge),
-                        window.React.createElement(RestoreEgoViewport),
-                        window.React.createElement(FitOnNodesReady)
+                        window.React.createElement(RestoreEgoViewport)
                     ),
                     GitReviewBar(),
                     RightRail(),

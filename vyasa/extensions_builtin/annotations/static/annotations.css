@@ -20,7 +20,7 @@
 .vyasa-comments { margin-top: var(--vyasa-space-7); padding-top: var(--vyasa-space-5); border-top: 1px solid var(--vyasa-border); }
 .vyasa-comments[hidden] { display: none; }
 .vyasa-comments-header { display: flex; align-items: center; justify-content: space-between; gap: var(--vyasa-space-4); }
-.vyasa-annotations-export { display: inline-flex; align-items: center; justify-content: center; padding: var(--vyasa-space-2); border-radius: var(--vyasa-radius-md); color: inherit; transition: background-color var(--vyasa-duration-fast) var(--vyasa-ease); }
+.vyasa-annotations-export { display: inline-flex; align-items: center; justify-content: center; padding: var(--vyasa-space-2); border-radius: var(--vyasa-control-radius); color: inherit; transition: background-color var(--vyasa-duration-fast) var(--vyasa-ease); }
 .vyasa-annotations-export[hidden] { display: none; }
 .vyasa-annotations-export:hover { background: var(--vyasa-hover); }
 .vyasa-comments-list { display: grid; gap: var(--vyasa-space-4); margin: var(--vyasa-space-4) 0 0; padding: 0; list-style: none; }
@@ -51,3 +51,22 @@
 .vyasa-comment-popup-bar uk-icon { display: inline-flex; width: var(--vyasa-icon-size); height: var(--vyasa-icon-size); }
 .vyasa-comment-popup-bar uk-icon svg { color: inherit !important; stroke: currentColor !important; fill: none !important; }
 .vyasa-comment-popup .vyasa-comment { list-style: none; }
+/* Reader highlight colours; names match HIGHLIGHT_COLORS in highlights.js. Themes may override these tokens. */
+:root {
+    --vyasa-highlight-yellow: var(--vyasa-highlight);
+    --vyasa-highlight-green: #6ee7a0;
+    --vyasa-highlight-blue: #7cc4ff;
+    --vyasa-highlight-pink: #ff8fc7;
+    --vyasa-highlight-alpha: 45%;
+}
+.dark { --vyasa-highlight-alpha: 28%; }
+::highlight(vyasa-user-highlight-yellow) { color: var(--vyasa-ink); background: color-mix(in srgb, var(--vyasa-highlight-yellow) var(--vyasa-highlight-alpha), transparent); }
+::highlight(vyasa-user-highlight-green) { color: var(--vyasa-ink); background: color-mix(in srgb, var(--vyasa-highlight-green) var(--vyasa-highlight-alpha), transparent); }
+::highlight(vyasa-user-highlight-blue) { color: var(--vyasa-ink); background: color-mix(in srgb, var(--vyasa-highlight-blue) var(--vyasa-highlight-alpha), transparent); }
+::highlight(vyasa-user-highlight-pink) { color: var(--vyasa-ink); background: color-mix(in srgb, var(--vyasa-highlight-pink) var(--vyasa-highlight-alpha), transparent); }
+.vyasa-highlight-swatch { width: 1rem; height: 1rem; border-radius: var(--vyasa-radius-pill); border: 1px solid var(--vyasa-border-strong); background: var(--swatch); }
+.vyasa-highlight-swatch[data-highlight-color="yellow"] { --swatch: var(--vyasa-highlight-yellow); }
+.vyasa-highlight-swatch[data-highlight-color="green"] { --swatch: var(--vyasa-highlight-green); }
+.vyasa-highlight-swatch[data-highlight-color="blue"] { --swatch: var(--vyasa-highlight-blue); }
+.vyasa-highlight-swatch[data-highlight-color="pink"] { --swatch: var(--vyasa-highlight-pink); }
+[id^="vyasa-selection-highlight-"][aria-pressed="true"] { box-shadow: 0 0 0 2px var(--vyasa-ink); }

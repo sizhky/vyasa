@@ -1030,7 +1030,15 @@ document.addEventListener('toggle', (event) => {
 
 let standaloneMetaKey = false;
 
+// Deepest hovered plain details toggles with its nested details; else a hovered summary clicks.
 function toggleHoveredDetails() {
+    const plain = [...document.querySelectorAll('#main-content details:not(.vyasa-heading-fold):hover')].pop();
+    if (plain) {
+        const shouldOpen = !plain.open;
+        plain.open = shouldOpen;
+        plain.querySelectorAll('details').forEach((nested) => { nested.open = shouldOpen; });
+        return true;
+    }
     const summary = [...document.querySelectorAll('details > summary:hover')].pop();
     if (!summary) return false;
     summary.click();
@@ -1039,7 +1047,7 @@ function toggleHoveredDetails() {
 
 window.addEventListener('keydown', (event) => {
     if (event.key === 'Meta') {
-        standaloneMetaKey = !event.defaultPrevented && !event.repeat
+        standaloneMetaKey = !event.repeat
             && !shortcutsSuspended() && !isEditableShortcutEvent(event)
             && !event.shiftKey && !event.altKey && !event.ctrlKey
             && !document.querySelector('a[data-vyasa-link-preview="true"]:hover');
@@ -1170,24 +1178,6 @@ document.addEventListener('click', (event) => {
         details.open = !details.open;
         syncHeadingActionStates(document);
     }
-});
-
-let hoveredPlainDetails = null;
-let metaChorded = false;
-document.addEventListener('mouseover', (event) => {
-    hoveredPlainDetails = event.target.closest?.('#main-content details:not(.vyasa-heading-fold)') || null;
-});
-document.addEventListener('keydown', (event) => {
-    if (event.key !== 'Meta') metaChorded = true;
-});
-document.addEventListener('keyup', (event) => {
-    if (event.key !== 'Meta') return;
-    const chorded = metaChorded;
-    metaChorded = false;
-    if (chorded || !hoveredPlainDetails?.isConnected) return;
-    const shouldOpen = !hoveredPlainDetails.open;
-    hoveredPlainDetails.open = shouldOpen;
-    hoveredPlainDetails.querySelectorAll('details').forEach((nested) => { nested.open = shouldOpen; });
 });
 
 function syncHeadingActionStates(root = document) {
@@ -1996,7 +1986,7 @@ function initImageFocus() {
 
     document.addEventListener('click', (event) => {
         const image = event.target.closest?.('#main-content img, .vyasa-zen-slide-body img');
-        if (!image) return;
+        if (!image || image.hasAttribute('data-vyasa-no-image-focus')) return;
         event.preventDefault();
         event.stopPropagation();
         const expanded = document.createElement('img');
@@ -2146,6 +2136,7 @@ const GOOGLE_FONT_QUERIES = {
     'Noto Serif': 'family=Noto+Serif:wght@400;500;600;700',
     'Nunito Sans': 'family=Nunito+Sans:wght@400;500;600;700;800',
     Onest: 'family=Onest:wght@400;500;600;700;800',
+    Outfit: 'family=Outfit:wght@400;500;600;700',
     'Plus Jakarta Sans': 'family=Plus+Jakarta+Sans:wght@400;500;600;700;800',
     'PT Serif': 'family=PT+Serif:wght@400;700',
     'Public Sans': 'family=Public+Sans:wght@400;500;600;700;800',

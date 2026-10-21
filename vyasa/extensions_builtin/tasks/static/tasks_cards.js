@@ -355,8 +355,8 @@ export function tasksPreviewSectionLabel(link, index = 0) {
     return reference.symbol
         || (reference.region && `region ${reference.region}`)
         || (reference.lines && `lines ${reference.lines}`)
-        || reference.focus
         || (text && text !== href && text !== file ? text : '')
+        || reference.focus
         || `Section ${index + 1}`;
 }
 
@@ -416,6 +416,7 @@ export function renderTasksCardNodeIcon(React, node, model, options = {}) {
         alt: '',
         loading: 'lazy',
         draggable: false,
+        'data-vyasa-no-image-focus': '',
         className: tasksIsIconifyImage(image) ? 'vyasa-tasks-node-image vyasa-tasks-node-image--icon' : 'vyasa-tasks-node-image',
         style: { ...style, objectFit: 'contain' },
     });
