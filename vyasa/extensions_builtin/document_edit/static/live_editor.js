@@ -1193,7 +1193,13 @@ export function createLiveEditor(mount, source, deps) {
   const built = buildDoc(source, schema, parser, deps.sourceBlocks, { title: deps.title ?? -1 });
   const serializer = makeSerializer();
   const view = new PM.EditorView(mount, {
-    state: PM.EditorState.create({ doc: built.doc, plugins: plugins(schema, deps) }),
+    // The caret starts in the first text, not on the first block: frontmatter
+    // comes first, and a selected block is replaced by the first key typed.
+    state: PM.EditorState.create({
+      doc: built.doc,
+      selection: PM.Selection.findFrom(built.doc.resolve(0), 1, true) ?? undefined,
+      plugins: plugins(schema, deps),
+    }),
     nodeViews: {
       vyasa_block: (node, editorView, getPos) =>
         node.attrs.kind === 'frontmatter' && deps.frontmatter && parseProperties(node.attrs.source)

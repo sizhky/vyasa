@@ -95,7 +95,8 @@
    add no margin, and it has to outrank `#main-content p.text-base`. A loose
    list renders <p> in the reading view too, so it keeps the paragraph gap. */
 #main-content .vyasa-live-editor [data-tight] > li > p { margin: 0; }
-.vyasa-live-editor .ProseMirror-hideselection *::selection { background: transparent; }
+/* ProseMirror puts this class on the editor root itself. */
+.vyasa-live-editor.ProseMirror-hideselection *::selection { background: transparent; }
 .vyasa-live-editor .ProseMirror-gapcursor { display: none; pointer-events: none; position: absolute; }
 .vyasa-live-editor .ProseMirror-gapcursor::after {
     content: "";
