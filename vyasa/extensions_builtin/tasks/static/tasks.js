@@ -2179,6 +2179,17 @@ async function renderTasksGraphs(rootElement = document) {
                 }
                 return matched.length;
             }, [currentGraphEdges, fitNodesBesideCards, selectedEdgeRecord]);
+            // F over a group frames that group, the same way F frames a hovered node.
+            const fitHoveredGroup = React.useCallback((reactFlow, duration = 300) => {
+                const groupId = groupToggleHoverIdRef.current;
+                const groupNode = groupId ? reactFlow?.getNode(groupId) : null;
+                logTasksDebug('fitHoveredGroup', { widgetId, groupId, found: Boolean(groupNode) });
+                if (!groupNode) return false;
+                if (!fitNodesBesideCards(reactFlow, [groupNode], duration)) {
+                    reactFlow.fitView({ nodes: [groupNode], duration, padding: 0.12, includeHiddenNodes: true });
+                }
+                return true;
+            }, [fitNodesBesideCards, widgetId]);
             React.useEffect(() => {
                 const baseModel = baseProjectionState.model;
                 const validFilterKeys = new Set(tasksFilterOptions(baseModel).map((option) => option.key));
@@ -3623,7 +3634,7 @@ async function renderTasksGraphs(rootElement = document) {
                             && !(codeModeEntryRef.current || codeModePinnedRef.current?.entry)
                             && !(key === 't' && groupToggleHoverIdRef.current)
                             && !(key === 'v' && (hoverCardTargetRef.current || edgeCardOpen || selectedNodeIdRef.current))
-                            && !(key === 'f' && !event.shiftKey && (hoverCardTargetRef.current || hoveredNodeIdRef.current))
+                            && !(key === 'f' && !event.shiftKey && (hoverCardTargetRef.current || hoveredNodeIdRef.current || groupToggleHoverIdRef.current))
                             && !(key === 'g' && hoveredNodeIdRef.current)
                             && !(isTasksHopCode(event.code) && hoveredNodeIdRef.current)) return;
                         // The document shortcuts in scripts.js bind J/K to scroll, C to
@@ -3679,7 +3690,7 @@ async function renderTasksGraphs(rootElement = document) {
                             event.preventDefault();
                             if (optionEdgeFit) {
                                 fitSelectedEdgeConnection(reactFlow);
-                            } else if (!edgeCardOpen || !fitSelectedEdgeConnection(reactFlow)) {
+                            } else if (!fitHoveredGroup(reactFlow) && (!edgeCardOpen || !fitSelectedEdgeConnection(reactFlow))) {
                                 fitCurrentHighlight(reactFlow, { reason: 'shortcut-f' });
                             }
                             return;
@@ -3864,7 +3875,7 @@ async function renderTasksGraphs(rootElement = document) {
                         window.removeEventListener('blur', stopMomentum);
                         stopMomentum();
                     };
-                }, [reactFlow, currentGraphEdges, currentSelectionIds, growSelectionOneHop, shrinkSelectionOneHop, model, rawGraph, sourceModel, egoMode, helpOpen, edgeCardOpen, edgeCardField, selectEdgeRecord, setFiltersCollapsedGuarded, setGroupHoverCardsEnabledGlobal, setHoverCardScrollModeGlobal, fitCurrentHighlight, fitSelectedEdgeConnection, focusDetailCard, panViewport, graphMinZoom, gitHistoryAvailable, gitReviewEnabled, toggleGitReview]);
+                }, [reactFlow, currentGraphEdges, currentSelectionIds, growSelectionOneHop, shrinkSelectionOneHop, model, rawGraph, sourceModel, egoMode, helpOpen, edgeCardOpen, edgeCardField, selectEdgeRecord, setFiltersCollapsedGuarded, setGroupHoverCardsEnabledGlobal, setHoverCardScrollModeGlobal, fitCurrentHighlight, fitSelectedEdgeConnection, fitHoveredGroup, focusDetailCard, panViewport, graphMinZoom, gitHistoryAvailable, gitReviewEnabled, toggleGitReview]);
                 return null;
             };
             const handlePinnedCardKeyDown = (event, notesRef, navigate) => {
@@ -4728,7 +4739,7 @@ async function renderTasksGraphs(rootElement = document) {
                     row('Enter', 'pin hovered node / open selected edge'),
                     row('Enter on card', 'focus Notes'),
                     row('Shift + Enter', 'center pinned node or fit pinned edge'),
-                    row('F', 'fit view or active edge'),
+                    row('F', 'fit view, hovered group, or active edge'),
                     row('Option + F', 'fit highlighted edge'),
                     row('W / Q', 'hold edge preview / opposite node card'),
                     row('W + Enter', 'pin edge details'),
