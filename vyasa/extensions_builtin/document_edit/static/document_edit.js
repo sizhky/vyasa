@@ -253,9 +253,9 @@ export function sourceBlocks(text) {
   const BLOCKS_URL = (slug) => `/api/documents/blocks/${slug}`;
   const AUTOSAVE_MS = 800;
   const HEADING = 'h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]';
-  // Elements that own their double-click: native controls, and the diagrams and
-  // embeds that zoom or select on it.
-  const OWN_DBLCLICK = 'a, button, input, textarea, select, summary, label, svg, canvas, iframe, video, audio, [contenteditable], [data-vyasa-proposal]';
+  // Elements that own their click: native controls, fold rows, the diagrams and
+  // embeds that zoom or pan, proposals, and annotation comments.
+  const OWN_CLICK = 'a, button, input, textarea, select, summary, label, svg, canvas, iframe, video, audio, [contenteditable], [data-vyasa-proposal], .vyasa-comment-anchor, .vyasa-comments';
 
   const blockMode = { original: '', root: null, live: null, saved: '', busy: false, saveTimer: 0, saving: null };
 
@@ -485,7 +485,7 @@ export function sourceBlocks(text) {
     return saved;
   }
 
-  // `event` is the double-click; the Edit button passes null and places no caret.
+  // `event` is the click; the Edit button passes null and places no caret.
   async function enterBlocks(event) {
     clearProposalViews();
     const host = bodyHost();
@@ -527,7 +527,7 @@ export function sourceBlocks(text) {
     pill.setAttribute('aria-label', 'Editing. Click to go back to reading.');
     pill.title = 'Back to reading (Esc)';
     pill.innerHTML = '<span class="vyasa-edit-pill-dot" aria-hidden="true"></span><span>Editing</span>' +
-      '<span data-vyasa-editor-status data-kind="idle"></span>';
+      '<span data-vyasa-editor-status data-kind="idle"></span><span class="vyasa-edit-pill-done">Done</span>';
     pill.addEventListener('mousedown', (event) => event.preventDefault());
     pill.addEventListener('click', () => exitBlocks());
     document.body.appendChild(pill);
@@ -903,13 +903,17 @@ export function sourceBlocks(text) {
     if (review.pop && !review.pop.contains(event.target)) hideHunkPop();
   });
 
-  document.addEventListener('dblclick', (event) => {
+  // A click in the article edits it where you clicked, as in Word. A drag that
+  // selects text (to copy), a modified click, and clicks on things that own
+  // their click (OWN_CLICK) keep reading.
+  document.addEventListener('click', (event) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     if (blockMode.root || blockMode.busy || event.defaultPrevented) return;
     const host = bodyHost();
     if (!host || !button() || !host.contains(event.target)) return;
-    if (event.target.closest(OWN_DBLCLICK)) return;
-    event.preventDefault();
-    window.getSelection()?.removeAllRanges();
+    if (event.target.closest(OWN_CLICK)) return;
+    const selection = window.getSelection();
+    if (selection && !selection.isCollapsed) return;
     enterBlocks(event);
   });
 

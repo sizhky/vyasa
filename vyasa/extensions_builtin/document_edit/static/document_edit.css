@@ -1,30 +1,42 @@
-/* Edit mode: a floating pill, so nothing above the article changes. It shows
-   the save status and returns to reading when clicked. */
+/* Edit mode: a floating pill at the bottom centre, in the accent color, clear
+   of the page's corner buttons. Nothing above the article changes; the pill
+   shows the save status and returns to reading when clicked. */
 .vyasa-edit-pill {
     position: fixed;
-    right: var(--vyasa-space-5);
-    bottom: var(--vyasa-space-5);
-    z-index: 1400;
+    left: 50%;
+    bottom: var(--vyasa-space-6);
+    z-index: 1500;
+    transform: translateX(-50%);
     display: inline-flex;
     align-items: center;
-    gap: var(--vyasa-space-2);
-    padding: var(--vyasa-space-2) var(--vyasa-space-4);
-    border: 1px solid var(--vyasa-border);
+    gap: var(--vyasa-space-3);
+    padding: var(--vyasa-space-3) var(--vyasa-space-5);
+    border: 0;
     border-radius: var(--vyasa-radius-pill, 999px);
-    background: var(--vyasa-surface);
-    color: var(--vyasa-text);
-    box-shadow: var(--vyasa-shadow-sm);
-    font: var(--vyasa-weight-medium) var(--vyasa-text-sm)/var(--vyasa-leading-tight) var(--vyasa-font-ui);
+    background: var(--vyasa-accent-9);
+    color: var(--vyasa-accent-contrast, #fff);
+    box-shadow: var(--vyasa-shadow-lg);
+    font: var(--vyasa-weight-semibold, 600) var(--vyasa-text-base)/var(--vyasa-leading-tight) var(--vyasa-font-ui);
     cursor: pointer;
+    transition: filter var(--vyasa-duration-fast) var(--vyasa-ease);
 }
 
-.vyasa-edit-pill:hover { background: var(--vyasa-hover); }
-.vyasa-edit-pill-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--vyasa-accent-9); }
+.vyasa-edit-pill:hover { filter: brightness(1.08); }
+.vyasa-edit-pill-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: vyasa-edit-pill-pulse 1.6s ease-in-out infinite;
+}
+@keyframes vyasa-edit-pill-pulse { 50% { opacity: 0.35; } }
 .vyasa-edit-pill [data-vyasa-editor-status]:empty { display: none; }
-.vyasa-edit-pill [data-vyasa-editor-status] { color: var(--vyasa-text-muted); }
-.vyasa-edit-pill [data-kind="dirty"] { color: var(--vyasa-warning); }
-.vyasa-edit-pill [data-kind="ok"] { color: var(--vyasa-success); }
-.vyasa-edit-pill [data-kind="error"] { color: var(--vyasa-danger); }
+.vyasa-edit-pill [data-vyasa-editor-status] { opacity: 0.85; font-weight: var(--vyasa-weight-regular); }
+.vyasa-edit-pill-done {
+    padding: var(--vyasa-space-1) var(--vyasa-space-3);
+    border-radius: var(--vyasa-radius-pill, 999px);
+    background: color-mix(in srgb, currentColor 18%, transparent);
+}
 
 .vyasa-page-action-button-active {
     background: var(--vyasa-accent-10);
