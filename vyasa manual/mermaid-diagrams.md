@@ -98,7 +98,6 @@ The controls are wired to JavaScript functions in `vyasa/extensions_builtin/merm
 
 #### Additional Features
 - **Fullscreen modal**: Dark backdrop with blur, ESC key and background click to close
-- **Tab height stabilization**: Measures all tab panels, sets container to max height on load and after swaps
 - **Math rendering**: Auto-runs KaTeX after swaps and on initial load
 
 ## flowchart TD

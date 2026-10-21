@@ -524,7 +524,6 @@ function initRevealDiagramRefresh() {
             afterMermaid(false);
         }
         window.__vyasaRenderD2?.(current);
-        initTabPanelHeights(current);
         requestAnimationFrame(() => centerRevealSlideDiagrams(current));
         setTimeout(() => centerRevealSlideDiagrams(current), 60);
     };
