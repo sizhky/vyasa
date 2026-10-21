@@ -204,9 +204,9 @@ flowchart TD
     G5N7 -->|call| G0N2
     G1N3 --> G2N0
     G1N1 --> G3N3
-    classDef edge fill:#dbeafe,stroke:#2563eb
-    classDef data fill:#fef3c7,stroke:#d97706
-    classDef svc fill:#dcfce7,stroke:#16a34a
+    classDef edge fill:#1d4ed8,stroke:#60a5fa,color:#fff
+    classDef data fill:#b45309,stroke:#fbbf24,color:#fff
+    classDef svc fill:#15803d,stroke:#4ade80,color:#fff
     class G0N0,G0N1,G0N2,G0N3,G0N4 edge
     class G3N0,G3N1,G3N2,G3N3,G3N4,G3N5 data
     class G2N0,G2N1,G2N2,G2N3,G2N4,G2N5,G2N6 svc
@@ -332,7 +332,7 @@ sequenceDiagram
         G->>O: Fetch
         O-->>W: Status
     end
-    rect rgb(240, 240, 255)
+    rect rgba(99, 102, 241, 0.18)
         U->>W: Cancel order
         W->>O: DELETE /orders/42
         O->>P: Refund
@@ -1396,8 +1396,8 @@ block
   Catalog --> Cache
   Search --> Index
   svc --> Bus
-  style Client fill:#969,stroke:#333
-  style Bus fill:#696,stroke:#333
+  style Client fill:#7e3a7e,stroke:#d8a8d8,color:#fff
+  style Bus fill:#3a7e3a,stroke:#a8d8a8,color:#fff
 ```
 ::tab{title="Markdown Source" copy-from="Rendered"}
 :::
