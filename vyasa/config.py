@@ -209,6 +209,22 @@ class VyasaConfig:
                 roots.append(path)
         return list(dict.fromkeys(roots))
 
+    def get_unlisted_roots(self) -> list[Path]:
+        """Folders whose files links and previews may address, but that are never listed.
+
+        Unlike `vyasa_roots`, these apply under a CLI root too: an app that
+        serves one docs folder can let its links reach the project around it.
+        """
+        raw_roots = self.get('unlisted_roots', 'VYASA_UNLISTED_ROOTS', [])
+        base = self._loaded_config_path.parent if self._loaded_config_path else Path.cwd()
+        roots = []
+        for value in self._coerce_list(raw_roots):
+            path = Path(str(value)).expanduser()
+            path = (path if path.is_absolute() else base / path).resolve()
+            if path.is_dir():
+                roots.append(path)
+        return list(dict.fromkeys(roots))
+
     def get_git_mirror_root(self) -> Path:
         """Directory holding bare mirrors maintained by the fetcher."""
         raw = self.get('git_mirror_root', 'VYASA_GIT_MIRROR_ROOT', '.vyasa-mirrors')
