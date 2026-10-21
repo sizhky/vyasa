@@ -355,8 +355,8 @@ export function tasksPreviewSectionLabel(link, index = 0) {
     return reference.symbol
         || (reference.region && `region ${reference.region}`)
         || (reference.lines && `lines ${reference.lines}`)
-        || reference.focus
         || (text && text !== href && text !== file ? text : '')
+        || reference.focus
         || `Section ${index + 1}`;
 }
 
