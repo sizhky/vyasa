@@ -610,30 +610,6 @@ function initCommandPalette() {
     });
 }
 
-function initTabPanelHeights(rootElement = document) {
-    const containers = rootElement.querySelectorAll('.tabs-container');
-    containers.forEach((container) => {
-        const panels = container.querySelectorAll('.tab-panel');
-        let maxHeight = 0;
-        panels.forEach((panel) => {
-            const wasActive = panel.classList.contains('active');
-            panel.style.position = 'relative';
-            panel.style.visibility = 'visible';
-            panel.style.opacity = '1';
-            panel.style.pointerEvents = 'auto';
-            maxHeight = Math.max(maxHeight, panel.offsetHeight);
-            if (!wasActive) {
-                panel.style.position = 'absolute';
-                panel.style.visibility = 'hidden';
-                panel.style.opacity = '0';
-                panel.style.pointerEvents = 'none';
-            }
-        });
-        const tabsContent = container.querySelector('.tabs-content');
-        if (tabsContent && maxHeight > 0) tabsContent.style.minHeight = `${maxHeight}px`;
-    });
-}
-
 function refreshVyasaTableScrollShadows(root = document) {
     const scope = root && root.querySelectorAll ? root : document;
     scope.querySelectorAll('.vyasa-table-scroll').forEach((el) => {
@@ -2455,7 +2431,6 @@ document.addEventListener('DOMContentLoaded', () => {
     window.__vyasaInitCodeTools?.(document);
     window.__vyasaInitSearchClearButtons?.(document);
     ensurePdfFocusState();
-    initTabPanelHeights(document);
     normalizeCriticalTextColors(document);
     recordStyleProbe('domcontentloaded');
     [100, 500, 1500].forEach((ms) => setTimeout(() => recordStyleProbe(`t+${ms}`), ms));
@@ -2492,7 +2467,6 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
     window.__vyasaInitCodeTools?.(event.target);
     window.__vyasaInitSearchClearButtons?.(event.target);
     ensurePdfFocusState();
-    initTabPanelHeights(event.target || document);
     if (event.target.id === 'posts-sidebar') {
         window.__vyasaPendingPostsSidebarState = null;
     }
