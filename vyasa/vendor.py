@@ -33,7 +33,7 @@ BROWSER_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36
 PACKAGES = (
     ("https://cdn.jsdelivr.net/npm/uikit@3.16.14/", "uikit@3.16.14", ("dist",)),
     ("https://cdn.jsdelivr.net/npm/katex@0.16.9/", "katex@0.16.9", ("dist",)),
-    ("https://cdn.jsdelivr.net/npm/mermaid@11/", "mermaid@11", ("dist",)),
+    ("https://cdn.jsdelivr.net/npm/pele@1/", "pele@1", ("dist",)),
     ("https://unpkg.com/react@18/", "react@18", ("umd",)),
     ("https://unpkg.com/react-dom@18/", "react-dom@18", ("umd",)),
     ("https://unpkg.com/@xyflow/react@12.8.4/", "@xyflow/react@12.8.4", ("dist/umd", "dist/style.css")),

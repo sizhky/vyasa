@@ -1,8 +1,18 @@
-import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+import { mount } from 'https://cdn.jsdelivr.net/npm/pele@1/dist/pele.js';
 import { bindPanZoomGestures, initialViewportScale } from '/static/viewport_core.js';
 
-const GANTT_WIDTH = 1200;
 const mermaidStates = {};
+const peleMounts = new WeakMap();
+
+// Pele draws synchronously and themes through --pele-* CSS variables, so a theme switch needs no re-render.
+function runDiagrams({ nodes }) {
+    nodes.forEach((pre) => {
+        if (pre.querySelector('svg')) return;
+        peleMounts.get(pre)?.destroy();
+        peleMounts.set(pre, mount(pre, pre.textContent, { zoom: false }));
+    });
+    return Promise.resolve();
+}
 const mermaidFileLogReset = new Set();
 const mermaidDebugEnabled = () => (
     window.VYASA_DEBUG_MERMAID === true ||
@@ -264,7 +274,7 @@ function renderMermaidInScope(scope = document) {
         mermaidNodes.push(pre);
     });
     if (mermaidNodes.length > 0) {
-        return mermaid.run({ nodes: mermaidNodes }).then(() => {
+        return runDiagrams({ nodes: mermaidNodes }).then(() => {
             scheduleMermaidInteraction();
         });
     }
@@ -402,106 +412,18 @@ window.openMermaidFullscreen = function(id) {
     });
     
     // Render mermaid in the fullscreen view
-    mermaid.run({ nodes: [pre] }).then(() => {
+    runDiagrams({ nodes: [pre] }).then(() => {
         setTimeout(() => initMermaidInteraction(), 100);
     });
 };
 
-function getCurrentTheme() {
-    return document.documentElement.classList.contains('dark') ? 'dark' : 'default';
-}
-
-function getDynamicGanttWidth() {
-    // Check if any mermaid wrapper has custom gantt width
-    const wrappers = document.querySelectorAll('.mermaid-wrapper[data-gantt-width]');
-    if (wrappers.length > 0) {
-        // Use the first custom width found, or max width if multiple
-        const widths = Array.from(wrappers).map(w => parseInt(w.getAttribute('data-gantt-width')) || GANTT_WIDTH);
-        return Math.max(...widths);
-    }
-    return GANTT_WIDTH;
-}
-
-function initializeMermaid() {
-    mermaid.initialize({
-        startOnLoad: false,
-        theme: getCurrentTheme(),
-        fontSize: 16,
-        htmlLabels: false,
-        gantt: {
-            useWidth: getDynamicGanttWidth(),
-            useMaxWidth: false
-        }
-    });
-}
-
-function reinitializeMermaid() {
-    // Skip if this is the initial load (let it render naturally first)
-    if (isInitialLoad) {
-        return;
-    }
-    
-    initializeMermaid();
-    
-    // Find all mermaid wrappers and re-render them
-    const shouldLockHeight = (wrapper) => {
-        const height = (wrapper.style.height || '').trim();
-        return height && height !== 'auto' && height !== 'initial' && height !== 'unset';
-    };
-
-    document.querySelectorAll('.mermaid-wrapper').forEach(wrapper => {
-        const originalCode = wrapper.getAttribute('data-mermaid-code');
-        if (originalCode) {
-            // Preserve the current computed height before clearing (height should already be set explicitly)
-            if (shouldLockHeight(wrapper)) {
-                const currentHeight = wrapper.getBoundingClientRect().height;
-                wrapper.style.height = currentHeight + 'px';
-            }
-            
-            // Delete the old state so it can be recreated
-            delete mermaidStates[wrapper.id];
-            delete wrapper.dataset.mermaidInteractive;
-            
-            // Decode HTML entities
-            const textarea = document.createElement('textarea');
-            textarea.innerHTML = originalCode;
-            const code = textarea.value;
-            
-            // Clear the wrapper
-            wrapper.innerHTML = '';
-            
-            // Re-add the pre element with mermaid code
-            const newPre = document.createElement('pre');
-            newPre.className = 'mermaid';
-            newPre.style.width = '100%';
-            newPre.style.height = '100%';
-            newPre.style.display = 'flex';
-            newPre.style.alignItems = 'center';
-            newPre.style.justifyContent = 'center';
-            newPre.textContent = code;
-            wrapper.appendChild(newPre);
-        }
-    });
-    
-    // Re-run mermaid
-    mermaid.run().then(() => {
-        scheduleMermaidInteraction({
-            onReady: () => {}
-        });
-    });
-}
-
-initializeMermaid();
-
-// Track if this is the initial load
-let isInitialLoad = true;
 
 // Initialize interaction after mermaid renders
 document.addEventListener('DOMContentLoaded', () => {
     mermaidDebugSnapshot('before mermaid.run (DOMContentLoaded)');
     const mermaidNodes = collectRenderableMermaidNodes(document);
     const renderPromise = mermaidNodes.length > 0
-        ? mermaid.run({ nodes: mermaidNodes })
+        ? runDiagrams({ nodes: mermaidNodes })
         : Promise.resolve();
     renderPromise.then(() => {
         mermaidDebugSnapshot('after mermaid.run (DOMContentLoaded)');
@@ -519,7 +441,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     const currentHeight = wrapper.getBoundingClientRect().height;
                     wrapper.style.height = currentHeight + 'px';
                 });
-                isInitialLoad = false;
             }
         });
     });
@@ -596,7 +517,7 @@ function initRevealDiagramRefresh() {
             }
         };
         if (mermaidNodes.length > 0) {
-            mermaid.run({ nodes: mermaidNodes }).then(() => {
+            runDiagrams({ nodes: mermaidNodes }).then(() => {
                 afterMermaid(true);
             }).catch(() => {});
         } else {
@@ -616,7 +537,7 @@ window.__vyasaRenderMermaidInScope = renderMermaidInScope;
 document.addEventListener('DOMContentLoaded', () => {
     mermaidDebugSnapshot('before mermaid.run (DOMContentLoaded)');
     const mermaidNodes = collectRenderableMermaidNodes(document);
-    const renderPromise = mermaidNodes.length > 0 ? mermaid.run({ nodes: mermaidNodes }) : Promise.resolve();
+    const renderPromise = mermaidNodes.length > 0 ? runDiagrams({ nodes: mermaidNodes }) : Promise.resolve();
     renderPromise.then(() => {
         mermaidDebugSnapshot('after mermaid.run (DOMContentLoaded)');
         scheduleMermaidInteraction({ onReady: () => { document.querySelectorAll('.mermaid-wrapper').forEach(wrapper => wrapper.closest('.vyasa-reveal-unit')?.classList.add('vyasa-reveal-unit-ready')); } });
@@ -627,8 +548,8 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
     mermaidDebugSnapshot('before mermaid.run (htmx:afterSwap)');
     document.querySelectorAll('.mermaid-wrapper').forEach(wrapper => { delete mermaidStates[wrapper.id]; delete wrapper.dataset.mermaidInteractive; });
     const mermaidNodes = collectRenderableMermaidNodes(swapScope);
-    const renderPromise = mermaidNodes.length > 0 ? mermaid.run({ nodes: mermaidNodes }) : Promise.resolve();
+    const renderPromise = mermaidNodes.length > 0 ? runDiagrams({ nodes: mermaidNodes }) : Promise.resolve();
     renderPromise.then(() => { mermaidDebugSnapshot('after mermaid.run (htmx:afterSwap)'); scheduleMermaidInteraction(); }).catch(() => { scheduleMermaidInteraction(); });
 });
-const __vyasaMermaidThemeObserver = new MutationObserver((mutations) => { mutations.forEach((mutation) => { if (mutation.attributeName === 'class') { reinitializeMermaid(); window.__vyasaRenderD2?.(); } }); });
+const __vyasaMermaidThemeObserver = new MutationObserver((mutations) => { mutations.forEach((mutation) => { if (mutation.attributeName === 'class') { window.__vyasaRenderD2?.(); } }); });
 __vyasaMermaidThemeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style'] });
