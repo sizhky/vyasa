@@ -1,3 +1,4 @@
+from ...assets import asset_url
 from ...document_pages import DocumentActionItem, edit_document_button
 from ...extensions import AssetBundle, ExtensionMeta, VyasaExtensionBase
 
@@ -37,7 +38,12 @@ def _edit_action(context):
         return None
     return DocumentActionItem(
         id="documents.edit",
-        node=edit_document_button(context.current_path),
+        # Versioned like every other asset, so a changed editor is never served from cache.
+        node=edit_document_button(
+            context.current_path,
+            asset_url("/static/extensions/document_edit/live_editor.js"),
+            asset_url("/static/extensions/document_edit/prosemirror.bundle.js"),
+        ),
         order=20,
     )
 

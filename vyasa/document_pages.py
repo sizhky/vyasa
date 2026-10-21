@@ -193,13 +193,15 @@ def copy_text_button(label: str, text: str, target_id: str, toast_id: str, *, al
     )
 
 
-def edit_document_button(slug: str):
-    """Toggle block editing: the page stays rendered and only the active block shows markdown."""
+def edit_document_button(slug: str, editor_url: str = "", bundle_url: str = ""):
+    """Toggle live editing in place; the editor module and its ProseMirror bundle load from these URLs on first use."""
     return Button(
         action_icon("file-edit"),
         Span("Edit", cls="text-sm font-medium"),
         type="button",
         data_vyasa_edit_document=str(slug or "").strip("/"),
+        data_vyasa_live_editor=editor_url or None,
+        data_vyasa_prosemirror=bundle_url or None,
         aria_pressed="false",
         data_tooltip="Edit this document (E)",
         aria_label="Edit this document",

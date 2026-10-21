@@ -50,26 +50,6 @@ html.vyasa-editing #page-container {
     cursor: pointer;
 }
 
-.vyasa-block {
-    position: relative;
-    cursor: text;
-}
-
-/* A rule in the left gutter marks the block a click would edit, without
-   moving any text. */
-.vyasa-block::before {
-    content: "";
-    position: absolute;
-    inset: 0 auto 0 calc(-1 * var(--vyasa-space-4));
-    width: 2px;
-    border-radius: 1px;
-    background: transparent;
-    transition: background-color var(--vyasa-duration-fast) var(--vyasa-ease);
-}
-
-.vyasa-block:hover::before { background: var(--vyasa-border); }
-.vyasa-block-active::before { background: var(--vyasa-accent-7); }
-
 .vyasa-block-frontmatter {
     display: inline-block;
     margin-bottom: var(--vyasa-space-4);
@@ -80,40 +60,88 @@ html.vyasa-editing #page-container {
     font: var(--vyasa-weight-medium) var(--vyasa-text-xs)/var(--vyasa-leading-tight) var(--vyasa-font-ui);
 }
 
-/* Boxless: the typography comes from the block's own render (see
-   matchTypography), so text keeps its font, size, and place on the page. */
-.vyasa-block-input {
+/* Live editor (live_editor.js). Prose nodes carry the reading view's classes,
+   so these rules only cover what ProseMirror itself needs and the atoms. */
+.vyasa-live-editor {
+    position: relative;
+    outline: none;
+    white-space: pre-wrap;
+    white-space: break-spaces;
+    word-wrap: break-word;
+    font-variant-ligatures: none;
+}
+
+.vyasa-live-editor pre { white-space: pre-wrap; }
+.vyasa-live-editor li { position: relative; }
+/* The reading view writes a tight list item's text straight into the <li>;
+   ProseMirror wraps it in a paragraph. Inside a tight list that paragraph must
+   add no margin, and it has to outrank `#main-content p.text-base`. A loose
+   list renders <p> in the reading view too, so it keeps the paragraph gap. */
+#main-content .vyasa-live-editor [data-tight] > li > p { margin: 0; }
+.vyasa-live-editor .ProseMirror-hideselection *::selection { background: transparent; }
+.vyasa-live-editor .ProseMirror-gapcursor { display: none; pointer-events: none; position: absolute; }
+.vyasa-live-editor .ProseMirror-gapcursor::after {
+    content: "";
+    display: block;
+    position: absolute;
+    top: -2px;
+    width: 20px;
+    border-top: 1px solid var(--vyasa-text);
+    animation: vyasa-gapcursor-blink 1.1s steps(2, start) infinite;
+}
+.vyasa-live-editor.ProseMirror-focused .ProseMirror-gapcursor { display: block; }
+@keyframes vyasa-gapcursor-blink { to { visibility: hidden; } }
+
+/* An atom is a block shown as rendered; a click opens its source. */
+.vyasa-live-atom {
+    position: relative;
+    cursor: pointer;
+}
+
+.vyasa-live-atom::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 calc(-1 * var(--vyasa-space-4));
+    width: 2px;
+    border-radius: 1px;
+    background: transparent;
+    transition: background-color var(--vyasa-duration-fast) var(--vyasa-ease);
+}
+
+.vyasa-live-atom:hover::before { background: var(--vyasa-border); }
+
+/* The `# Title` the reading view shows in the page header: kept, not shown twice. */
+.vyasa-live-atom[data-kind="title"] { display: none; }
+
+/* The editor holds the clicked block in place itself (holdPosition). */
+.vyasa-block-editor { overflow-anchor: none; }
+.vyasa-live-atom-selected::before,
+.vyasa-live-atom:focus-within::before { background: var(--vyasa-accent-7); }
+
+/* Source of an atom: code in both modes, so it keeps the code face. */
+.vyasa-live-atom-input {
     display: block;
     width: 100%;
-    margin: 0;
+    margin-block: var(--vyasa-space-2) var(--vyasa-space-5);
     box-sizing: border-box;
-    padding: 0;
+    padding: var(--vyasa-space-3) var(--vyasa-space-4);
     border: 0;
-    border-radius: 0;
-    background: transparent;
-    color: inherit;
-    font: inherit;
+    border-radius: var(--vyasa-radius-md);
+    background: var(--vyasa-bg-subtle);
+    color: var(--vyasa-text);
+    font-family: var(--vyasa-font-mono);
+    font-size: var(--vyasa-text-sm);
+    line-height: var(--vyasa-leading-prose);
     resize: none;
     overflow: hidden;
     outline: none;
     tab-size: 2;
     white-space: pre-wrap;
     overflow-wrap: break-word;
-    caret-color: var(--vyasa-accent-9, currentColor);
 }
 
-/* Fences and frontmatter are code in both modes, so their source keeps the
-   code face and a code surface. */
-.vyasa-block[data-kind="fence"] .vyasa-block-input,
-.vyasa-block[data-kind="frontmatter"] .vyasa-block-input {
-    margin-block: var(--vyasa-space-2) var(--vyasa-space-5);
-    padding: var(--vyasa-space-3) var(--vyasa-space-4);
-    border-radius: var(--vyasa-radius-md);
-    background: var(--vyasa-bg-subtle);
-    font-family: var(--vyasa-font-mono);
-    font-size: var(--vyasa-text-sm);
-    line-height: var(--vyasa-leading-prose);
-}
+/* Tailwind's forms plugin rings a focused textarea; the editor marks focus itself. */
+.vyasa-live-atom-input:focus { box-shadow: none; }
 
 /* Proposals: an agent's pending edit, shown in place of its section. The
    section keeps its reading typography; only the changes are marked. */
@@ -131,8 +159,6 @@ html.vyasa-editing #page-container {
     background: var(--vyasa-accent-9);
 }
 
-.vyasa-proposal .vyasa-block { cursor: default; }
-.vyasa-proposal .vyasa-block::before { display: none; }
 
 .vyasa-proposal-bar {
     display: flex;
@@ -212,3 +238,136 @@ del.vyasa-diff-del {
     box-shadow: var(--vyasa-shadow-sm);
     font: var(--vyasa-weight-medium) var(--vyasa-text-xs)/var(--vyasa-leading-tight) var(--vyasa-font-ui);
 }
+
+/* Live preview markup: the markdown of the spot being edited, muted. */
+.vyasa-live-markup {
+    color: var(--vyasa-text-faint);
+    font-weight: var(--vyasa-weight-regular);
+    font-style: normal;
+    letter-spacing: normal;
+    user-select: none;
+}
+
+.vyasa-live-link-href {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: var(--vyasa-text-muted);
+    font: inherit;
+    font-weight: var(--vyasa-weight-regular);
+}
+
+.vyasa-live-link-href:focus { box-shadow: none; color: var(--vyasa-text); }
+
+/* Tables keep the reading view's classes; editing adds the selected-cell tint. */
+.vyasa-live-editor table { border-collapse: collapse; }
+.vyasa-live-editor td,
+.vyasa-live-editor th { position: relative; min-width: 3em; }
+.vyasa-live-editor .selectedCell::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: color-mix(in srgb, var(--vyasa-accent-9) 12%, transparent);
+    pointer-events: none;
+}
+
+/* While editing, the frontmatter is edited in the document as properties, so
+   the reading view's front matter block above it would show it twice. */
+html.vyasa-editing .vyasa-frontmatter-block:not(.vyasa-live-properties) { display: none; }
+
+.vyasa-live-properties-rows { padding-top: var(--vyasa-space-3); }
+
+.vyasa-live-property {
+    display: grid;
+    grid-template-columns: minmax(8rem, 12rem) 1fr;
+    gap: var(--vyasa-space-3);
+    align-items: baseline;
+    padding-block: var(--vyasa-space-1);
+}
+
+.vyasa-live-property input {
+    width: 100%;
+    margin: 0;
+    padding: var(--vyasa-space-1) var(--vyasa-space-2);
+    border: 1px solid transparent;
+    border-radius: var(--vyasa-radius-md);
+    background: transparent;
+    color: var(--vyasa-text);
+    font: var(--vyasa-text-sm)/var(--vyasa-leading-tight) var(--vyasa-font-ui);
+    outline: none;
+}
+
+.vyasa-live-property input:hover { border-color: var(--vyasa-border); }
+.vyasa-live-property input:focus { border-color: var(--vyasa-accent-7); box-shadow: none; }
+.vyasa-live-property-key { color: var(--vyasa-text-muted) !important; }
+
+.vyasa-live-properties-add {
+    margin-top: var(--vyasa-space-1);
+    padding: var(--vyasa-space-1) var(--vyasa-space-2);
+    border: 0;
+    background: transparent;
+    color: var(--vyasa-text-faint);
+    font: var(--vyasa-text-xs)/var(--vyasa-leading-tight) var(--vyasa-font-ui);
+    cursor: pointer;
+}
+
+.vyasa-live-properties-add:hover { color: var(--vyasa-text); }
+
+/* Table doodads: grips over the current column and row, + on the table's edges. */
+.vyasa-live-mount { position: relative; }
+
+.vyasa-live-table-controls { position: absolute; inset: 0 auto auto 0; pointer-events: none; }
+.vyasa-live-table-controls[hidden] { display: none; }
+.vyasa-live-table-controls button {
+    position: absolute;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    border-radius: var(--vyasa-radius-sm, 4px);
+    background: transparent;
+    color: var(--vyasa-text-faint);
+    font: var(--vyasa-weight-medium) var(--vyasa-text-sm)/1 var(--vyasa-font-ui);
+    cursor: pointer;
+    pointer-events: auto;
+    transition: background-color var(--vyasa-duration-fast) var(--vyasa-ease), color var(--vyasa-duration-fast) var(--vyasa-ease);
+}
+
+.vyasa-live-table-controls button:hover { background: var(--vyasa-hover); color: var(--vyasa-text); }
+.vyasa-live-grip { width: 24px; height: 24px; letter-spacing: -1px; }
+.vyasa-live-table-add { border: 1px dashed var(--vyasa-border) !important; opacity: 0.6; }
+.vyasa-live-table-add:hover { opacity: 1; }
+
+/* Menus: column, row, and right-click. */
+.vyasa-live-menu {
+    position: fixed;
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    min-width: 13rem;
+    padding: var(--vyasa-space-1);
+    border: 1px solid var(--vyasa-border);
+    border-radius: var(--vyasa-radius-lg);
+    background: var(--vyasa-surface);
+    box-shadow: var(--vyasa-shadow-lg);
+    font: var(--vyasa-text-sm)/var(--vyasa-leading-tight) var(--vyasa-font-ui);
+}
+
+.vyasa-live-menu button {
+    padding: var(--vyasa-space-2) var(--vyasa-space-3);
+    border: 0;
+    border-radius: var(--vyasa-radius-md);
+    background: transparent;
+    color: var(--vyasa-text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.vyasa-live-menu button:hover,
+.vyasa-live-menu button:focus { background: var(--vyasa-hover); outline: none; }
+.vyasa-live-menu button:disabled { color: var(--vyasa-text-faint); cursor: default; background: transparent; }
+.vyasa-live-menu-rule { height: 1px; margin: var(--vyasa-space-1) var(--vyasa-space-2); background: var(--vyasa-border); }

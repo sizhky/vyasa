@@ -32,7 +32,7 @@ test('heading scan skips frontmatter so its keys never count', () => {
     assert.deepEqual(headingLinesFromSource(text), [5]);
 });
 
-const { sectionRanges, replaceLines, reconcileBlocks, sourceOffsetForSnippet, caretOffset } = sync;
+const { sectionRanges, reconcileBlocks } = sync;
 
 test('sections run from each heading to the next, with the preamble first', () => {
     const text = ['Intro', '', '## A', 'a', '', '### B', 'b'].join('\n');
@@ -57,29 +57,12 @@ test('sections refuse a pairing the counts cannot explain', () => {
     assert.equal(sectionRanges(['Intro', '## A', '## B'].join('\n'), 1), null);
 });
 
-test('replacing a line range splices the new lines in place', () => {
-    const text = ['a', 'b', 'c', 'd'].join('\n');
-    assert.equal(replaceLines(text, { start: 1, end: 3 }, 'x\ny\nz'), 'a\nx\ny\nz\nd');
-});
-
 test('reconcile keeps unchanged blocks at both ends', () => {
     assert.deepEqual(reconcileBlocks(['a', 'b', 'c'], ['a', 'B', 'B2', 'c']), { prefix: 1, suffix: 1 });
     // An unclosed fence that swallows the rest leaves no suffix to keep.
     assert.deepEqual(reconcileBlocks(['a', 'b', 'c'], ['a', 'bc']), { prefix: 1, suffix: 0 });
     // Prefix and suffix never overlap when a block is duplicated.
     assert.deepEqual(reconcileBlocks(['a', 'a'], ['a', 'a', 'a']), { prefix: 2, suffix: 0 });
-});
-
-test('a click snippet finds its caret past stripped markup', () => {
-    const source = 'Some **bold** words here';
-    assert.equal(sourceOffsetForSnippet(source, 'Some bold wor'), source.indexOf('words') + 3);
-    assert.equal(sourceOffsetForSnippet(source, 'zz'), null);
-});
-
-test('a caret offset counts earlier lines and clamps the column', () => {
-    assert.equal(caretOffset('ab\ncde', 1, 1), 4);
-    assert.equal(caretOffset('ab\ncde', 1, 99), 6);
-    assert.equal(caretOffset('ab', 5, 0), 0);
 });
 
 const { sourceBlocks } = sync;

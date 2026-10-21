@@ -23,9 +23,9 @@ export function headingLinesFromSource(text) {
   }
   return found;
 }
-// In-place editing: a double-click opens one section, from its heading to the
-// next heading of any level, as source. Entry 0 is the text above the first
-// heading. The reading view drops a leading `# Title` line, so the source may
+// Source line ranges of the reading view's sections: entry 0 is the text above
+// the first heading, then one range per heading up to the next heading of any
+// level. The reading view drops a leading `# Title` line, so the source may
 // hold exactly one heading more than the page; any other gap means the pairing
 // is a guess, and null tells the caller to stop using it.
 export function sectionRanges(text, renderedCount) {
@@ -46,10 +46,6 @@ export function sectionRanges(text, renderedCount) {
   const edges = [bodyStart, ...heads, lines.length];
   return edges.slice(0, -1).map((start, i) => ({ start, end: edges[i + 1] }));
 }
-export function replaceLines(text, range, body) {
-  const lines = text.split('\n');
-  return [...lines.slice(0, range.start), ...body.split('\n'), ...lines.slice(range.end)].join('\n');
-}
 // After an edit the source is split again. Blocks whose key (kind and text) is
 // unchanged at the start and at the end keep their rendered node; only the
 // middle is rendered again.
@@ -63,24 +59,6 @@ export function reconcileBlocks(oldKeys, newKeys) {
     oldKeys[oldKeys.length - 1 - suffix] === newKeys[newKeys.length - 1 - suffix]
   ) suffix += 1;
   return { prefix, suffix };
-}
-// A click lands in rendered text, which has lost its markup. The longest tail
-// of the text before the click that still occurs in the source puts the caret
-// after it; null when nothing matches.
-export function sourceOffsetForSnippet(source, before) {
-  for (let length = Math.min(before.length, 32); length >= 3; length -= 1) {
-    const tail = before.slice(before.length - length);
-    const index = source.indexOf(tail);
-    if (index >= 0) return index + tail.length;
-  }
-  return null;
-}
-export function caretOffset(text, line, column) {
-  const lines = text.split('\n');
-  const row = Math.max(0, Math.min(line, lines.length - 1));
-  let offset = 0;
-  for (let i = 0; i < row; i += 1) offset += lines[i].length + 1;
-  return offset + Math.max(0, Math.min(column, lines[row].length));
 }
 // Block editing splits the source into top-level blocks, each rendered on its
 // own, so the block under the cursor can show source while the rest stays
@@ -278,15 +256,11 @@ export function sourceBlocks(text) {
   // Elements that own their double-click: native controls, and the diagrams and
   // embeds that zoom or select on it.
   const OWN_DBLCLICK = 'a, button, input, textarea, select, summary, label, svg, canvas, iframe, video, audio, [contenteditable], [data-vyasa-proposal]';
-  // In block mode a click edits the block, except on controls. A diagram is
-  // not a control here: clicking it opens its source, as in Obsidian.
-  const OWN_CLICK = 'button, input, select, summary, label, iframe, video, audio';
 
-  const blockMode = { original: '', root: null, list: null, items: [], active: -1, input: null, saved: '', busy: false, saveTimer: 0, saving: null };
+  const blockMode = { original: '', root: null, live: null, saved: '', busy: false, saveTimer: 0, saving: null };
 
   // The first render wraps the blocks in `div.w-full`; a saved render does not.
   const contentRoot = (host) => host.querySelector(':scope > div.w-full') || host;
-  const plainText = (node) => (node.textContent || '').replace(/\s+/g, ' ').trim();
 
   // Top-level blocks per section. Group 0 holds what sits above the first heading.
   function sectionGroups(root) {
@@ -320,10 +294,7 @@ export function sourceBlocks(text) {
     return node.textContent.slice(Math.max(0, offset - 32), offset);
   }
 
-  const currentSource = () => {
-    const item = blockMode.items[blockMode.active];
-    return item && blockMode.input ? replaceLines(blockMode.source, item, blockMode.input.value) : blockMode.source;
-  };
+  const currentSource = () => (blockMode.live ? blockMode.live.serialize() : blockMode.saved);
 
   function makeItem(block, lines) {
     const node = document.createElement('div');
@@ -343,21 +314,23 @@ export function sourceBlocks(text) {
     view.appendChild(pre);
   }
 
+  // Server renders of several markdown blocks in one request; null when it fails.
+  async function fetchBlocks(texts) {
+    try {
+      const response = await fetch(BLOCKS_URL(state.slug), { method: 'POST', body: JSON.stringify({ blocks: texts }) });
+      return response.ok ? await response.json() : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
   // One request for every block that needs a render; bundles load once, then
   // each new block is announced on its own so runtimes scan only that block.
+  // A block that cannot render shows its source instead.
   async function renderBlocks(items) {
     const todo = items.filter((item) => item.kind !== 'frontmatter');
     if (!todo.length) return;
-    let payload = null;
-    try {
-      const response = await fetch(BLOCKS_URL(state.slug), {
-        method: 'POST',
-        body: JSON.stringify({ blocks: todo.map((item) => item.text) }),
-      });
-      if (response.ok) payload = await response.json();
-    } catch (error) {
-      /* a block that cannot render shows its source instead */
-    }
+    const payload = await fetchBlocks(todo.map((item) => item.text));
     todo.forEach((item, index) => {
       const html = payload && payload.blocks ? payload.blocks[index] : null;
       if (html == null) showSource(item.view, item.text);
@@ -367,8 +340,6 @@ export function sourceBlocks(text) {
     todo.forEach((item) => { if (item.node.isConnected) announce(item.view); });
   }
 
-  // Re-split after an edit, keep the nodes of unchanged blocks at both ends,
-  // and render only the blocks in between.
   // Re-split `text` into `list`, keep the nodes of unchanged blocks at both
   // ends, and render only the blocks in between. Shared by the block editor
   // and the proposal view, which both swap one block at a time.
@@ -392,144 +363,69 @@ export function sourceBlocks(text) {
     return { items, rendered: renderBlocks(middle) };
   }
 
-  function applySource(next) {
-    blockMode.items = patchBlocks(blockMode.list, blockMode.items, next).items;
-    blockMode.source = next;
+  // --- live editing ------------------------------------------------------
+  // The editor itself is live_editor.js, loaded on first use so the reading
+  // view never pays for ProseMirror. This side gives it the server: atom
+  // renders, the reading view's classes, and the revision-checked save.
+  // Both URLs come versioned from the Edit button, so neither is served stale.
+  async function loadLiveEditor() {
+    const node = button();
+    const local = (name) => new URL(`./${name}`, import.meta.url).href;
+    try {
+      const editor = await import(node?.dataset.vyasaLiveEditor || local('live_editor.js'));
+      await editor.useBundle(node?.dataset.vyasaProsemirror || local('prosemirror.bundle.js'));
+      return editor;
+    } catch (error) {
+      return null;
+    }
+  }
+  const CLASS_PROBE = [
+    '# a', '## a', '### a', '#### a', '##### a', '###### a', 'a `b` **c** *d* [e](#e)', '- a', '1. a', '> a', '---',
+    '| a |\n| --- |\n| b |',
+  ].join('\n\n');
+  let readingClasses = null;
+
+  // The classes the reading view gives each element, read off a server render,
+  // so the editor never keeps a second copy of the class map.
+  async function probeClasses() {
+    if (readingClasses) return readingClasses;
+    const payload = await fetchBlocks([CLASS_PROBE]);
+    const box = document.createElement('div');
+    box.innerHTML = (payload && payload.blocks && payload.blocks[0]) || '';
+    const pick = (selector) => box.querySelector(selector)?.getAttribute('class') || '';
+    const found = {
+      p: pick('p'), ul: pick('ul'), ol: pick('ol'), li: pick('li'), blockquote: pick('blockquote'), hr: pick('hr'),
+      code: pick('p code'), strong: pick('strong'), em: pick('em'), a: pick('p a'),
+      table: pick('table'), th: pick('th'), td: pick('td'),
+    };
+    for (let level = 1; level <= 6; level += 1) found[`h${level}`] = pick(`h${level}`);
+    // A failed probe is not cached, so the next edit asks again.
+    if (payload) readingClasses = found;
+    return found;
   }
 
-  function commitActive() {
-    const index = blockMode.active;
-    const input = blockMode.input;
-    if (index < 0 || !input) return;
-    const item = blockMode.items[index];
-    // Clear first: removing a focused textarea can fire its blur, and blur commits.
-    blockMode.active = -1;
-    blockMode.input = null;
-    input.remove();
-    item.node.classList.remove('vyasa-block-active');
-    item.view.hidden = false;
-    if (input.value !== item.text) applySource(replaceLines(blockMode.source, item, input.value));
-  }
-
-  // The source takes the type of its own render, so a paragraph is edited in
-  // the paragraph font and a heading at heading size; only the markup differs.
-  // Fences and frontmatter are code, and keep the code style from the CSS.
-  const TYPE_PROPS = ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'color'];
-  function matchTypography(input, item) {
-    if (item.kind === 'fence' || item.kind === 'frontmatter') return;
-    const block = item.view.firstElementChild;
-    if (!block) return;
-    const text = block.matches('h1, h2, h3, h4, h5, h6, p') ? block : block.querySelector('p, li, td, th') || block;
-    const type = window.getComputedStyle(text);
-    const box = window.getComputedStyle(block);
-    TYPE_PROPS.forEach((name) => { input.style[name] = type[name]; });
-    input.style.marginTop = box.marginTop;
-    input.style.marginBottom = box.marginBottom;
-    // Lists and quotes indent their text. Pull the source in by the same inset,
-    // less the width of its marker, so `- ` sits in the bullet column and the
-    // item text starts where the rendered text did.
-    if (!block.matches('ul, ol, blockquote')) return;
-    const inset = text.getBoundingClientRect().left - item.view.getBoundingClientRect().left;
-    const marker = (item.text.match(/^\s*(?:[-*+]\s+(?:\[[ xX]\]\s+)?|\d+[.)]\s+|>\s?)/) || [''])[0];
-    input.style.paddingLeft = `${Math.max(0, inset - textWidth(marker, type))}px`;
-  }
-
-  let measurer = null;
-  function textWidth(text, type) {
-    if (!text) return 0;
-    measurer = measurer || document.createElement('canvas').getContext('2d');
-    measurer.font = `${type.fontStyle} ${type.fontWeight} ${type.fontSize} ${type.fontFamily}`;
-    return measurer.measureText(text).width;
-  }
-
-  // `caret` is 'start', 'end', a number, or { snippet } from a click.
-  function activate(node, caret) {
-    const current = blockMode.items[blockMode.active];
-    if (current && current.node === node) return;
-    commitActive();
-    const index = blockMode.items.findIndex((item) => item.node === node);
-    if (index < 0) return;
-    const item = blockMode.items[index];
-    const input = document.createElement('textarea');
-    input.className = 'vyasa-block-input';
-    input.rows = 1;
-    input.spellcheck = true;
-    input.setAttribute('aria-label', `Markdown source of this ${item.kind} block`);
-    input.value = item.text;
-    matchTypography(input, item);
-    item.view.hidden = true;
-    node.classList.add('vyasa-block-active');
-    node.appendChild(input);
-    blockMode.active = index;
-    blockMode.input = input;
-    growInput(input);
-    input.focus({ preventScroll: true });
-    let at = item.text.length;
-    if (caret === 'start') at = 0;
-    else if (typeof caret === 'number') at = caret;
-    else if (caret && caret.snippet) at = sourceOffsetForSnippet(item.text, caret.snippet) ?? at;
-    input.setSelectionRange(at, at);
-    input.addEventListener('input', () => {
-      growInput(input);
-      scheduleSave();
-    });
-    input.addEventListener('keydown', onBlockKey);
-    input.addEventListener('blur', (event) => {
-      if (!blockMode.root || blockMode.root.contains(event.relatedTarget)) return;
-      if (blockMode.input === input) commitActive();
-    });
-  }
-
-  // Focus the block holding `line` of the current source, caret at `column`.
-  function activateAtLine(line, column) {
-    const item = blockMode.items.find((block) => line < block.end) || blockMode.items[blockMode.items.length - 1];
-    if (!item) return;
-    activate(item.node, caretOffset(item.text, line - item.start, line < item.start ? 0 : column));
-  }
-
-  // Backspace at the start of a block removes the blank lines that separate it
-  // from the block above; with none left, it joins the two lines.
-  function mergeWithPrevious() {
-    const startLine = blockMode.items[blockMode.active].start;
-    commitActive();
-    const index = blockMode.items.findIndex((item) => item.start === startLine);
-    const previous = blockMode.items[index - 1];
-    if (index < 1 || !previous) return;
-    const lines = blockMode.source.split('\n');
-    if (startLine > previous.end) {
-      lines.splice(previous.end, startLine - previous.end);
-      applySource(lines.join('\n'));
-      activateAtLine(previous.end, 0);
+  // Atoms ask for their render one at a time; collect them for one request.
+  const atomQueue = [];
+  function renderAtom(target, text, kind) {
+    if (kind === 'title') return; // hidden: the page header shows it
+    if (kind === 'frontmatter') {
+      target.innerHTML = '<div class="vyasa-block-frontmatter">Frontmatter</div>';
       return;
     }
-    const column = lines[startLine - 1].length;
-    lines.splice(startLine - 1, 2, lines[startLine - 1] + lines[startLine]);
-    applySource(lines.join('\n'));
-    activateAtLine(startLine - 1, column);
+    atomQueue.push({ target, text });
+    if (atomQueue.length === 1) queueMicrotask(flushAtoms);
   }
 
-  function onBlockKey(event) {
-    const input = event.target;
-    const collapsed = input.selectionStart === input.selectionEnd;
-    const index = blockMode.active;
-    const neighbour = (step) => blockMode.items[index + step]?.node;
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
-      event.preventDefault();
-      commitActive();
-      saveNow();
-    } else if (event.key === 'Escape') {
-      event.preventDefault();
-      exitBlocks();
-    } else if (event.key === 'ArrowUp' && collapsed && neighbour(-1) && !input.value.slice(0, input.selectionStart).includes('\n')) {
-      event.preventDefault();
-      activate(neighbour(-1), 'end');
-    } else if (event.key === 'ArrowDown' && collapsed && neighbour(1) && !input.value.slice(input.selectionEnd).includes('\n')) {
-      event.preventDefault();
-      activate(neighbour(1), 'start');
-    } else if (event.key === 'Backspace' && collapsed && input.selectionStart === 0 && index > 0) {
-      event.preventDefault();
-      mergeWithPrevious();
-    }
+  async function flushAtoms() {
+    const batch = atomQueue.splice(0);
+    const payload = await fetchBlocks(batch.map((item) => item.text));
+    batch.forEach((item, index) => {
+      const html = payload && payload.blocks ? payload.blocks[index] : null;
+      if (html == null) showSource(item.target, item.text);
+      else item.target.innerHTML = html;
+    });
+    if (payload) await loadBundles(payload);
+    batch.forEach((item) => { if (item.target.isConnected) announce(item.target); });
   }
 
   function scheduleSave() {
@@ -558,28 +454,29 @@ export function sourceBlocks(text) {
     return saved;
   }
 
-  // `event` is the double-click; the Edit button passes null and activates nothing.
+  // `event` is the double-click; the Edit button passes null and places no caret.
   async function enterBlocks(event) {
     clearProposalViews();
     const host = bodyHost();
     const slug = button()?.dataset.vyasaEditDocument || '';
     if (!host || !slug) return;
+    state.slug = slug;
     const root = contentRoot(host);
     let block = event ? event.target : null;
     while (block && block.parentElement !== root) block = block.parentElement;
     const anchor = block ? block.getBoundingClientRect().top : 0;
-    const hint = block ? plainText(block) : '';
     const snippet = event ? snippetAtPoint(event.clientX, event.clientY) : '';
+    const point = event ? { left: event.clientX, top: event.clientY } : null;
     const groups = sectionGroups(root);
-    const section = groups.findIndex((group) => group.includes(block));
     blockMode.busy = true;
-    const payload = await readSource(slug);
+    const [payload, editor, classes] = await Promise.all([
+      readSource(slug),
+      loadLiveEditor(),
+      probeClasses(),
+    ]);
     blockMode.busy = false;
-    if (!payload || blockMode.root) return;
+    if (!payload || !editor || blockMode.root) return;
     const source = payload.source || '';
-    const ranges = sectionRanges(source, groups.length - 1);
-    const line = ranges && section >= 0 ? ranges[section].start : 0;
-    state.slug = slug;
     state.revision = payload.revision || '';
     const wrap = document.createElement('div');
     wrap.className = 'w-full vyasa-block-editor';
@@ -587,54 +484,110 @@ export function sourceBlocks(text) {
     wrap.innerHTML =
       '<div class="vyasa-document-editor-bar vyasa-block-editor-bar">' +
       '<span data-vyasa-editor-status data-kind="idle"></span>' +
-      '<span class="vyasa-document-editor-hint">Click a block to edit. Arrows move between blocks. Esc finishes.</span>' +
+      '<span class="vyasa-document-editor-hint">Type to edit. Click a diagram, table or code block for its source. Esc finishes.</span>' +
       '<button type="button" class="vyasa-block-editor-done" data-vyasa-block-done>Done</button>' +
-      '</div><div class="vyasa-block-list"></div>';
-    Object.assign(blockMode, { root: wrap, list: wrap.querySelector('.vyasa-block-list'), source, saved: source, original: source, active: -1, input: null });
-    const first = patchBlocks(blockMode.list, [], source);
-    blockMode.items = first.items;
-    wrap.addEventListener('mousedown', onBlockPointer);
+      '</div><div class="vyasa-live-mount"></div>';
     wrap.addEventListener('click', onBlockClick);
     host.parentNode.insertBefore(wrap, host);
     host.hidden = true;
     document.documentElement.classList.add('vyasa-editing');
     markButton(true);
-    await first.rendered;
-    if (blockMode.root !== wrap || !block) return;
-    // Prefer the block that renders to the same text as the one clicked, then
-    // the first block of its section.
-    const matches = blockMode.items.filter((item) => hint && plainText(item.view) === hint);
-    const target = matches.find((item) => item.start >= line) || matches[0]
-      || blockMode.items.find((item) => item.start >= line) || blockMode.items[0];
-    if (!target) return;
-    activate(target.node, { snippet });
-    // Keep the edited block where the eye was.
-    window.scrollBy(0, target.node.getBoundingClientRect().top - anchor);
+    Object.assign(blockMode, { root: wrap, saved: source, original: source, moved: [] });
+    const reading = readingElements(source, groups);
+    const fold = document.querySelector('.vyasa-frontmatter-block:not(.vyasa-live-properties)');
+    blockMode.live = editor.createLiveEditor(wrap.querySelector('.vyasa-live-mount'), source, {
+      sourceBlocks,
+      classes,
+      title: reading.title,
+      frontmatter: fold ? { block: fold.className, summary: fold.querySelector('summary')?.className } : null,
+      adopt: (index) => adopt(reading.elements.get(index)),
+      renderAtom,
+      grow: growInput,
+      onChange: scheduleSave,
+      onSave: () => saveNow(),
+      onExit: () => exitBlocks(),
+    });
+    if (!block) {
+      blockMode.live.view.focus();
+      return;
+    }
+    const index = [...reading.elements].find(([, element]) => element === block)?.[0];
+    if (index == null) {
+      blockMode.live.view.focus();
+      return;
+    }
+    // Line the block up with where it was read, then put the caret under the
+    // pointer: the same point now covers the same character.
+    const node = blockMode.live.blockDom(index);
+    if (node && node.getBoundingClientRect) {
+      window.scrollBy(0, node.getBoundingClientRect().top - anchor);
+      holdPosition(node, anchor);
+    }
+    blockMode.live.focusBlock(index, snippet, point);
   }
 
-  function onBlockPointer(event) {
-    const node = event.target.closest('.vyasa-block');
-    if (!node || event.target === blockMode.input || event.target.closest(OWN_CLICK)) return;
-    if (event.target.closest('a') && (event.metaKey || event.ctrlKey)) return;
-    // Keeps focus in the textarea until the new block takes it, so no blur
-    // commits in between and the clicked node stays put.
-    event.preventDefault();
-    activate(node, { snippet: snippetAtPoint(event.clientX, event.clientY) });
+  // Keep `node` at `top` while late layout (fonts, images, a diagram drawing)
+  // settles, until the reader scrolls or types.
+  function holdPosition(node, top) {
+    const align = () => {
+      if (!node.isConnected || !blockMode.root) return stop();
+      const drift = node.getBoundingClientRect().top - top;
+      if (Math.abs(drift) >= 1) window.scrollBy(0, drift);
+    };
+    const observer = new ResizeObserver(align);
+    const events = ['wheel', 'touchmove', 'keydown', 'mousedown'];
+    const stop = () => {
+      observer.disconnect();
+      events.forEach((name) => window.removeEventListener(name, stop, true));
+    };
+    observer.observe(blockMode.root);
+    events.forEach((name) => window.addEventListener(name, stop, { capture: true, passive: true }));
+    window.setTimeout(stop, 2000);
+  }
+
+  // Move a reading-view element into the editor, remembering where it lived.
+  function adopt(element) {
+    if (!element || !element.isConnected) return null;
+    blockMode.moved.push({ element, parent: element.parentNode, next: element.nextSibling });
+    return element;
+  }
+
+  // The reading view's top-level element for each source block, and the index
+  // of the `# Title` block it drops into the page header (-1 when none). The
+  // sections pair headings with source lines; inside a section, elements and
+  // blocks pair in order when their counts agree, and stay unpaired otherwise.
+  function readingElements(source, groups) {
+    const elements = new Map();
+    const ranges = sectionRanges(source, groups.length - 1);
+    if (!ranges) return { elements, title: -1 };
+    const blocks = sourceBlocks(source);
+    const lines = source.split('\n');
+    let title = -1;
+    ranges.forEach((range, section) => {
+      const inside = blocks
+        .map((block, index) => index)
+        .filter((index) => blocks[index].kind !== 'frontmatter' && blocks[index].start >= range.start && blocks[index].start < range.end);
+      const first = blocks[inside[0]];
+      if (section === 0 && first && /^#\s/.test(lines[first.start]) && !(groups[0][0] && groups[0][0].matches(HEADING))) {
+        title = inside.shift();
+      }
+      if (groups[section].length !== inside.length) return;
+      inside.forEach((index, order) => elements.set(index, groups[section][order]));
+    });
+    return { elements, title };
   }
 
   function onBlockClick(event) {
-    if (event.target.closest('[data-vyasa-block-done]')) {
-      exitBlocks();
-      return;
-    }
-    // A plain click on a link edits it; Cmd/Ctrl+click follows it.
-    if (event.target.closest('.vyasa-block a') && !(event.metaKey || event.ctrlKey)) event.preventDefault();
+    if (event.target.closest('[data-vyasa-block-done]')) exitBlocks();
   }
 
   function leaveBlocks() {
     const wrap = blockMode.root;
     window.clearTimeout(blockMode.saveTimer);
-    Object.assign(blockMode, { root: null, list: null, items: [], active: -1, input: null, source: '', saved: '' });
+    if (blockMode.live) blockMode.live.destroy();
+    // Put adopted reading-view elements back, last first, so each `next` is home.
+    (blockMode.moved || []).reverse().forEach(({ element, parent, next }) => parent.insertBefore(element, next));
+    Object.assign(blockMode, { root: null, live: null, saved: '', moved: [] });
     state.dirty = false;
     if (wrap) wrap.remove();
     const host = bodyHost();
@@ -648,7 +601,6 @@ export function sourceBlocks(text) {
   // The render runs after the view is visible, so diagrams measure real space.
   async function exitBlocks() {
     if (!blockMode.root) return true;
-    commitActive();
     if (!(await saveNow())) return false;
     const source = blockMode.saved;
     const changed = source !== blockMode.original;
@@ -901,7 +853,6 @@ export function sourceBlocks(text) {
 
   document.addEventListener('vyasa:page-change', () => {
     if (blockMode.root) {
-      commitActive();
       saveNow();
       leaveBlocks();
     }
