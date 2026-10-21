@@ -135,6 +135,37 @@
 .vyasa-live-atom-selected::before,
 .vyasa-live-atom:focus-within::before { background: var(--vyasa-accent-7); }
 
+/* The pencil that opens a rendered block's source: inside the block's top-left
+   corner (diagram controls sit top-right; the margin can be off-screen in a
+   narrow pane), shown while the block is hovered or selected, gone while its
+   source is open. */
+.vyasa-live-atom-edit {
+    position: absolute;
+    top: var(--vyasa-space-2);
+    left: var(--vyasa-space-2);
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0;
+    border: 1px solid var(--vyasa-border);
+    border-radius: var(--vyasa-radius-md);
+    background: var(--vyasa-surface);
+    color: var(--vyasa-text-muted);
+    box-shadow: var(--vyasa-shadow-sm);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity var(--vyasa-duration-fast) var(--vyasa-ease), color var(--vyasa-duration-fast) var(--vyasa-ease);
+}
+
+.vyasa-live-atom-edit svg { width: 1rem; height: 1rem; }
+.vyasa-live-atom:hover > .vyasa-live-atom-edit,
+.vyasa-live-atom-selected > .vyasa-live-atom-edit { opacity: 1; }
+.vyasa-live-atom-edit:hover { color: var(--vyasa-accent-9); }
+.vyasa-live-atom-editing > .vyasa-live-atom-edit { display: none; }
+
 /* The hidden copy a live preview renders into before it is shown: laid out at
    the render's width so diagrams measure real space, never seen. */
 .vyasa-live-atom-stage {

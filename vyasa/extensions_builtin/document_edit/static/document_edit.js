@@ -227,7 +227,7 @@ export function sourceBlocks(text) {
     const node = button();
     if (!node) return;
     if (blockMode.root) exitBlocks();
-    else if (!blockMode.busy) enterBlocks(null);
+    else if (!blockMode.busy) enterBlocks();
   }
 
   document.addEventListener('click', (event) => {
@@ -253,10 +253,6 @@ export function sourceBlocks(text) {
   const BLOCKS_URL = (slug) => `/api/documents/blocks/${slug}`;
   const AUTOSAVE_MS = 800;
   const HEADING = 'h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]';
-  // Elements that own their click: native controls, fold rows, the diagrams and
-  // embeds that zoom or pan, proposals, and annotation comments.
-  const OWN_CLICK = 'a, button, input, textarea, select, summary, label, svg, canvas, iframe, video, audio, [contenteditable], [data-vyasa-proposal], .vyasa-comment-anchor, .vyasa-comments';
-
   const blockMode = { original: '', root: null, live: null, saved: '', busy: false, saveTimer: 0, saving: null };
 
   // The element whose children are the article's blocks. A first render wraps
@@ -309,20 +305,6 @@ export function sourceBlocks(text) {
   function growInput(input) {
     input.style.height = '0px';
     input.style.height = `${input.scrollHeight + input.offsetHeight - input.clientHeight}px`;
-  }
-
-  function snippetAtPoint(x, y) {
-    let node = null;
-    let offset = 0;
-    if (document.caretRangeFromPoint) {
-      const range = document.caretRangeFromPoint(x, y);
-      if (range) [node, offset] = [range.startContainer, range.startOffset];
-    } else if (document.caretPositionFromPoint) {
-      const position = document.caretPositionFromPoint(x, y);
-      if (position) [node, offset] = [position.offsetNode, position.offset];
-    }
-    if (!node || node.nodeType !== Node.TEXT_NODE) return '';
-    return node.textContent.slice(Math.max(0, offset - 32), offset);
   }
 
   const currentSource = () => (blockMode.live ? blockMode.live.serialize() : blockMode.saved);
@@ -466,7 +448,8 @@ export function sourceBlocks(text) {
     await loadBundles(payload);
     announce(stage);
     await quiet(stage);
-    const shown = sequence === liveSequence && stage.isConnected && !stage.querySelector('[data-vyasa-render-error]');
+    const failed = stage.matches('[data-vyasa-render-error]') || stage.querySelector('[data-vyasa-render-error]');
+    const shown = sequence === liveSequence && stage.isConnected && !failed;
     if (shown) target.replaceChildren(...stage.childNodes);
     stage.remove();
     return shown;
@@ -530,24 +513,15 @@ export function sourceBlocks(text) {
     return saved;
   }
 
-  // `event` is the click; the Edit button passes null and places no caret.
-  async function enterBlocks(event) {
+  // Edit mode starts only from the Edit button or E; it adds nothing above the
+  // article, so no line moves, and clicks then place the caret.
+  async function enterBlocks() {
     clearProposalViews();
     const host = bodyHost();
     const slug = button()?.dataset.vyasaEditDocument || '';
     if (!host || !slug) return;
     state.slug = slug;
-    const root = contentRoot(host);
-    // The reading block under the pointer. The event's target can be a wrapper:
-    // when the DOM changes between the two clicks, the browser reports their
-    // common ancestor, so the point decides. A fold's heading holds only the
-    // heading, so a click in its section lands on the section's block.
-    const under = event ? document.elementFromPoint(event.clientX, event.clientY) || event.target : null;
-    const block = under ? readingBlocks(root).find((node) => node.contains(under)) || nearestBlock(root, event.clientY) : null;
-    const anchor = block ? block.getBoundingClientRect().top : 0;
-    const snippet = event ? snippetAtPoint(event.clientX, event.clientY) : '';
-    const point = event ? { left: event.clientX, top: event.clientY } : null;
-    const groups = sectionGroups(root);
+    const groups = sectionGroups(contentRoot(host));
     blockMode.busy = true;
     const [payload, editor, classes] = await Promise.all([
       readSource(slug),
@@ -598,54 +572,7 @@ export function sourceBlocks(text) {
       onSave: () => saveNow(),
       onExit: () => exitBlocks(),
     });
-    if (!block) {
-      blockMode.live.view.focus();
-      return;
-    }
-    const index = [...reading.elements].find(([, element]) => element === block)?.[0];
-    if (index == null) {
-      blockMode.live.view.focus();
-      return;
-    }
-    // Line the block up with where it was read, then put the caret under the
-    // pointer: the same point now covers the same character.
-    const node = blockMode.live.blockDom(index);
-    if (node && node.getBoundingClientRect) {
-      window.scrollBy(0, node.getBoundingClientRect().top - anchor);
-      holdPosition(node, anchor);
-    }
-    blockMode.live.focusBlock(index, snippet, point);
-  }
-
-  // A double-click in the gap between blocks edits the block nearest the pointer.
-  function nearestBlock(root, y) {
-    let best = null;
-    let distance = Infinity;
-    readingBlocks(root).forEach((node) => {
-      const box = node.getBoundingClientRect();
-      const gap = y < box.top ? box.top - y : y > box.bottom ? y - box.bottom : 0;
-      if (gap < distance) [best, distance] = [node, gap];
-    });
-    return best;
-  }
-
-  // Keep `node` at `top` while late layout (fonts, images, a diagram drawing)
-  // settles, until the reader scrolls or types.
-  function holdPosition(node, top) {
-    const align = () => {
-      if (!node.isConnected || !blockMode.root) return stop();
-      const drift = node.getBoundingClientRect().top - top;
-      if (Math.abs(drift) >= 1) window.scrollBy(0, drift);
-    };
-    const observer = new ResizeObserver(align);
-    const events = ['wheel', 'touchmove', 'keydown', 'mousedown'];
-    const stop = () => {
-      observer.disconnect();
-      events.forEach((name) => window.removeEventListener(name, stop, true));
-    };
-    observer.observe(blockMode.root);
-    events.forEach((name) => window.addEventListener(name, stop, { capture: true, passive: true }));
-    window.setTimeout(stop, 2000);
+    blockMode.live.view.focus();
   }
 
   // Move a reading-view element into the editor, remembering where it lived.
@@ -947,20 +874,6 @@ export function sourceBlocks(text) {
 
   document.addEventListener('mousedown', (event) => {
     if (review.pop && !review.pop.contains(event.target)) hideHunkPop();
-  });
-
-  // A click in the article edits it where you clicked, as in Word. A drag that
-  // selects text (to copy), a modified click, and clicks on things that own
-  // their click (OWN_CLICK) keep reading.
-  document.addEventListener('click', (event) => {
-    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    if (blockMode.root || blockMode.busy || event.defaultPrevented) return;
-    const host = bodyHost();
-    if (!host || !button() || !host.contains(event.target)) return;
-    if (event.target.closest(OWN_CLICK)) return;
-    const selection = window.getSelection();
-    if (selection && !selection.isCollapsed) return;
-    enterBlocks(event);
   });
 
   document.addEventListener('vyasa:page-change', () => {

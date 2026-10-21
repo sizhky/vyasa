@@ -946,9 +946,23 @@ class AtomView {
     const drawn = deps.adopt ? deps.adopt(node.attrs.index) : null;
     if (drawn) this.preview.appendChild(drawn);
     else deps.renderAtom(this.preview, node.attrs.source, node.attrs.kind);
-    // A left press opens the source; a right-click is a menu (contextMenus), not an edit.
+    // A pencil on hover opens the source. A left press elsewhere does too,
+    // except on a drawing (svg, canvas), which keeps its own pan and zoom; a
+    // right-click is a menu (contextMenus), not an edit.
+    this.pencil = document.createElement('button');
+    this.pencil.type = 'button';
+    this.pencil.className = 'vyasa-live-atom-edit';
+    this.pencil.title = 'Edit source (Enter)';
+    this.pencil.setAttribute('aria-label', `Edit the source of this ${node.attrs.kind} block`);
+    this.pencil.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+    this.pencil.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      this.open();
+    });
+    this.dom.appendChild(this.pencil);
     this.dom.addEventListener('mousedown', (event) => {
-      if (event.button !== 0 || this.input || event.target.closest('button, summary, input, select')) return;
+      if (event.button !== 0 || this.input || event.target.closest('button, summary, input, select, svg, canvas')) return;
       event.preventDefault();
       this.open();
     });
@@ -1161,19 +1175,6 @@ class PropertiesView {
   }
 }
 
-// Position of the character after `offset` characters of `node`'s text.
-function textPosition(node, start, offset) {
-  let found = null;
-  let seen = 0;
-  node.descendants((child, pos) => {
-    if (found != null || !child.isText) return found == null;
-    if (seen + child.text.length >= offset) found = start + 1 + pos + (offset - seen);
-    seen += child.text.length;
-    return false;
-  });
-  return found;
-}
-
 export function createLiveEditor(mount, source, deps) {
   const schema = makeSchema(deps.classes);
   const parser = makeParser(schema);
@@ -1202,59 +1203,9 @@ export function createLiveEditor(mount, source, deps) {
     const { selection } = view.state;
     if (selection instanceof PM.NodeSelection) view.nodeDOM(selection.from)?.dispatchEvent(new CustomEvent('vyasa:open'));
   };
-  const findBlock = (index) => {
-    let target = null;
-    view.state.doc.forEach((child, offset) => {
-      if (!target && built.origin.get(child)?.index === index) target = { child, offset };
-    });
-    return target;
-  };
   return {
     view,
     serialize: () => serializeDoc(view.state.doc, built, serializer),
-    // The top-level element of source block `index`, to line it up before the caret lands.
-    blockDom(index) {
-      const target = findBlock(index);
-      return target ? view.nodeDOM(target.offset) : null;
-    },
-    // Put the caret in the block that was source block `index`: at `point`
-    // (screen coordinates) when it falls inside the block, else after
-    // `snippet`. An atom opens its source instead.
-    focusBlock(index, snippet, point) {
-      const target = findBlock(index);
-      if (!target) {
-        view.focus();
-        return null;
-      }
-      const { child, offset } = target;
-      // Only a hit inside the block's text counts: a point in the gap beside it
-      // resolves to a block boundary, which `near` would carry into a neighbour.
-      const hit = point && child.type.name !== 'vyasa_block' ? view.posAtCoords(point) : null;
-      const $hit = hit && hit.pos > offset && hit.pos < offset + child.nodeSize ? view.state.doc.resolve(hit.pos) : null;
-      if ($hit && $hit.parent.isTextblock) {
-        view.dispatch(view.state.tr.setSelection(PM.TextSelection.create(view.state.doc, hit.pos)));
-        view.focus();
-        return view.nodeDOM(offset);
-      }
-      if (child.type.name === 'vyasa_block') {
-        view.dispatch(view.state.tr.setSelection(PM.NodeSelection.create(view.state.doc, offset)));
-        deps.openSelected();
-        return view.nodeDOM(offset);
-      }
-      const text = child.textContent;
-      let at = text.length;
-      for (let length = Math.min(snippet.length, 32); length >= 3; length -= 1) {
-        const found = text.indexOf(snippet.slice(snippet.length - length));
-        if (found >= 0) {
-          at = found + length;
-          break;
-        }
-      }
-      const pos = textPosition(child, offset, at) ?? offset + 1;
-      view.dispatch(view.state.tr.setSelection(PM.TextSelection.create(view.state.doc, pos)));
-      view.focus();
-      return view.nodeDOM(offset);
-    },
     destroy: () => {
       closeMenu();
       view.destroy();

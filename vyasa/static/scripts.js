@@ -2048,7 +2048,31 @@ function renderMathSafely(root) {
         if (!parent || ['CODE', 'PRE', 'SCRIPT', 'STYLE', 'TEXTAREA'].includes(parent.tagName) || parent.closest('.katex')) continue;
         if (node.nodeValue && node.nodeValue.includes('$')) node.nodeValue = node.nodeValue.replace(/\$(?=\d)/g, marker);
     }
-    renderMathInElement(root, { delimiters: [{ left: '$$', right: '$$', display: true }, { left: '$', right: '$', display: false }], throwOnError: false });
+    // A parse error reaches errorCallback, and auto-render leaves the raw text.
+    // Mark the rendered root as a failed render (cleared by a clean render): the
+    // mark the live editor reads to keep the last good math while it is typed.
+    let failed = '';
+    renderMathInElement(root, {
+        delimiters: [{ left: '$$', right: '$$', display: true }, { left: '$', right: '$', display: false }],
+        throwOnError: false,
+        errorCallback: (message, error) => {
+            failed = String(error && error.message || message);
+            console.error(message, error);
+        },
+    });
+    // An unclosed brace hides the closing `$$` from auto-render, which then
+    // leaves the block as text without an error; a `$$` left over is a failure too.
+    if (!failed) {
+        const leftover = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+            acceptNode: (text) => (text.nodeValue.includes('$$') && !text.parentElement?.closest('code, pre, script, style, textarea, .katex')
+                ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP),
+        }).nextNode();
+        if (leftover) failed = 'unclosed math';
+    }
+    if (root instanceof Element) {
+        if (failed) root.setAttribute('data-vyasa-render-error', failed.slice(0, 200));
+        else root.removeAttribute('data-vyasa-render-error');
+    }
     walker.currentNode = root;
     while ((node = walker.nextNode())) if (node.nodeValue && node.nodeValue.includes(marker)) node.nodeValue = node.nodeValue.split(marker).join('$');
 }
