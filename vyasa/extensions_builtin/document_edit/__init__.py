@@ -1,13 +1,19 @@
 from ...document_pages import DocumentActionItem, edit_document_button
 from ...extensions import AssetBundle, ExtensionMeta, VyasaExtensionBase
 
-from .api import edits_enabled, register_document_preview_routes, register_document_source_routes
+from .api import (
+    edits_enabled,
+    register_document_block_routes,
+    register_document_preview_routes,
+    register_document_source_routes,
+)
 
 
 class DocumentEditExtension(VyasaExtensionBase):
     def register(self, app) -> None:
         app.routes.add("/api/documents/source", register_document_source_routes, methods=("GET", "POST"))
         app.routes.add("/api/documents/preview", register_document_preview_routes, methods=("POST",))
+        app.routes.add("/api/documents/blocks", register_document_block_routes, methods=("POST",))
         app.documents.action(_edit_action)
         app.assets.bundle(
             AssetBundle(
@@ -52,7 +58,7 @@ EXTENSION = DocumentEditExtension(
             "bundle:document_edit.runtime",
         ),
         requires=("slot:layout", "cap:markdown_pipeline"),
-        route_prefixes=("/api/documents/source", "/api/documents/preview"),
+        route_prefixes=("/api/documents/source", "/api/documents/preview", "/api/documents/blocks"),
         scope_disable=True,
     )
 )

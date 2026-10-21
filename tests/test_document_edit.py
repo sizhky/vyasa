@@ -7,6 +7,7 @@ from vyasa.document_pages import DocumentActionContext, resolve_document_actions
 from vyasa.extensions import build_extension_runtime, set_extension_runtime
 from vyasa.extensions_builtin.document_edit import EXTENSION
 from vyasa.extensions_builtin.document_edit.api import (
+    register_document_block_routes,
     register_document_preview_routes,
     register_document_source_routes,
 )
@@ -249,3 +250,38 @@ def test_atomic_write_replaces_content_in_one_step(tmp_path):
 
     assert target.read_text(encoding="utf-8") == "second\n"
     assert list(tmp_path.joinpath("deep").glob("*.tmp")) == []
+
+
+def test_blocks_render_one_html_per_block_with_shared_bundles(tmp_path, monkeypatch):
+    set_extension_runtime(build_extension_runtime({}))
+    _with_content_root(tmp_path, monkeypatch)
+    target = tmp_path / "notes.md"
+    target.write_text("# Old\n", encoding="utf-8")
+
+    handlers = {}
+
+    def rt(pattern, **kwargs):
+        return lambda fn: handlers.setdefault(pattern, fn)
+
+    register_document_block_routes(rt, None)
+    blocks = handlers["/api/documents/blocks/{path:path}"]
+    body = json.dumps({"blocks": ["# Kept heading", "| a |\n|---|\n| 1 |", "```mermaid\ngraph TD;\nA-->B;\n```"]})
+    payload = _payload(asyncio.run(blocks("notes", _request(body=body.encode()))))
+
+    # A leading `# ` block stays a heading: only whole-file renders drop the title.
+    assert len(payload["blocks"]) == 3
+    assert "<h1" in payload["blocks"][0]
+    assert "<table" in payload["blocks"][1]
+    assert any("mermaid" in url for url in payload["js"])
+    assert target.read_text(encoding="utf-8") == "# Old\n"
+
+
+def test_blocks_reject_a_body_that_is_not_a_list_of_strings(tmp_path, monkeypatch):
+    _with_content_root(tmp_path, monkeypatch)
+    (tmp_path / "notes.md").write_text("# Old\n", encoding="utf-8")
+    handlers = {}
+    register_document_block_routes(lambda pattern, **kw: (lambda fn: handlers.setdefault(pattern, fn)), None)
+    blocks = handlers["/api/documents/blocks/{path:path}"]
+
+    assert asyncio.run(blocks("notes", _request(body=b'{"blocks": [1]}'))).status_code == 400
+    assert asyncio.run(blocks("notes", _request(body=b"not json"))).status_code == 400

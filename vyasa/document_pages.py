@@ -194,7 +194,7 @@ def copy_text_button(label: str, text: str, target_id: str, toast_id: str, *, al
 
 
 def edit_document_button(slug: str):
-    """Toggle the reading view into an editor that sits in the same column."""
+    """Toggle block editing: the page stays rendered and only the active block shows markdown."""
     return Button(
         action_icon("file-edit"),
         Span("Edit", cls="text-sm font-medium"),

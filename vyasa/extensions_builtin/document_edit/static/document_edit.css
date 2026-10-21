@@ -1,45 +1,3 @@
-/* The editor stands in the same column as the reading view, at the same
-   width, font, and line height, so the eye does not move when you toggle. */
-/* The reading column is 46rem, and half of that is too narrow to write in, so
-   the editor grows outward while it is open. It takes the whole column when the
-   column is already wider than that, and pulls outward when it is narrower. */
-.vyasa-document-editor {
-    display: flex;
-    flex-direction: column;
-    gap: var(--vyasa-space-3);
-    width: max(100%, min(72rem, calc(100vw - var(--vyasa-reserved-left, 0px) - var(--vyasa-reserved-right, 0px) - 3rem)));
-    margin-inline: min(0px, calc(50% - 36rem));
-}
-
-.vyasa-document-editor-panes {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--vyasa-space-5);
-    align-items: stretch;
-    height: max(24rem, calc(100vh - 16rem));
-}
-
-.vyasa-document-editor-panes > * {
-    min-width: 0;
-    overflow-y: auto;
-}
-
-@media (max-width: 60rem) {
-    .vyasa-document-editor {
-        width: 100%;
-        margin-inline: 0;
-    }
-
-    .vyasa-document-editor-panes {
-        grid-template-columns: 1fr;
-        height: auto;
-    }
-
-    .vyasa-document-editor-panes > * {
-        overflow-y: visible;
-    }
-}
-
 .vyasa-document-editor-bar {
     display: flex;
     align-items: center;
@@ -57,72 +15,102 @@
     color: var(--vyasa-text-faint);
 }
 
-.vyasa-document-editor-input {
-    width: 100%;
-    height: 100%;
-    min-height: 18rem;
-    box-sizing: border-box;
-    padding: var(--vyasa-space-4);
-    border: 1px solid var(--vyasa-border);
-    border-radius: var(--vyasa-radius-md);
-    background: var(--vyasa-bg-subtle);
-    color: var(--vyasa-text);
-    font-family: var(--vyasa-font-mono);
-    font-size: var(--vyasa-text-base);
-    line-height: var(--vyasa-leading-prose);
-    resize: none;
-    overflow-y: auto;
-    outline: none;
-    tab-size: 2;
-    white-space: pre-wrap;
-    overflow-wrap: break-word;
-    transition: border-color var(--vyasa-duration-fast) var(--vyasa-ease), background-color var(--vyasa-duration-fast) var(--vyasa-ease);
-}
-
-.vyasa-document-editor-input:focus {
-    border-color: var(--vyasa-accent-7);
-    background: var(--vyasa-surface);
-}
-
-.vyasa-document-editor-input::placeholder { color: var(--vyasa-text-faint); }
-
-/* The preview is the reading view, so it keeps the reading font and needs no
-   box of its own -- only a rule to divide it from the editor beside it. */
-.vyasa-document-editor-preview {
-    box-sizing: border-box;
-    padding: 0 var(--vyasa-space-5) 0 var(--vyasa-space-7);
-    border-right: 1px solid var(--vyasa-border);
-}
-
-@media (max-width: 60rem) {
-    /* Stacked, the editor belongs on top: reading can scroll, typing cannot. */
-    .vyasa-document-editor-input {
-        order: -1;
-    }
-
-    .vyasa-document-editor-preview {
-        padding: var(--vyasa-space-5) 0 0 var(--vyasa-space-7);
-        border-right: 0;
-        border-top: 1px solid var(--vyasa-border);
-    }
-}
-
 .vyasa-page-action-button-active {
     background: var(--vyasa-accent-10);
     border-color: var(--vyasa-accent-10);
 }
 
-/* Off-screen twin of the editor, used only to measure where a heading line sits.
-   It carries no border: the width it is given already excludes one, and adding
-   it back would narrow the content box and move where lines wrap. */
-.vyasa-document-editor-mirror {
-    position: absolute;
+/* Edit mode tints the page a few percent toward the accent, so the mode is
+   visible everywhere without moving anything. The tokens live on
+   #page-container, which also paints the page, so the tint is set there. */
+html.vyasa-editing #page-container {
+    --vyasa-edit-tint: color-mix(in srgb, var(--vyasa-primary) 5%, var(--vyasa-paper));
+    background: var(--vyasa-edit-tint) !important;
+    transition: background-color var(--vyasa-duration-fast) var(--vyasa-ease);
+}
+
+/* Block editor: the page as separately rendered blocks. Blocks carry no box of
+   their own, so margins collapse exactly as in the reading view; only the
+   active block turns into a source textarea where it stood. */
+.vyasa-block-editor-bar {
+    position: sticky;
     top: 0;
-    left: -99999px;
+    z-index: 5;
+    padding-block: var(--vyasa-space-2);
+    background: var(--vyasa-edit-tint, var(--vyasa-bg));
+}
+
+.vyasa-block-editor-done {
+    padding: var(--vyasa-space-1) var(--vyasa-space-3);
+    border: 1px solid var(--vyasa-border);
+    border-radius: var(--vyasa-radius-md);
+    background: var(--vyasa-surface);
+    color: var(--vyasa-text);
+    font: inherit;
+    cursor: pointer;
+}
+
+.vyasa-block {
+    position: relative;
+    cursor: text;
+}
+
+/* A rule in the left gutter marks the block a click would edit, without
+   moving any text. */
+.vyasa-block::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 calc(-1 * var(--vyasa-space-4));
+    width: 2px;
+    border-radius: 1px;
+    background: transparent;
+    transition: background-color var(--vyasa-duration-fast) var(--vyasa-ease);
+}
+
+.vyasa-block:hover::before { background: var(--vyasa-border); }
+.vyasa-block-active::before { background: var(--vyasa-accent-7); }
+
+.vyasa-block-frontmatter {
+    display: inline-block;
+    margin-bottom: var(--vyasa-space-4);
+    padding: var(--vyasa-space-1) var(--vyasa-space-3);
+    border-radius: var(--vyasa-radius-md);
+    background: var(--vyasa-bg-subtle);
+    color: var(--vyasa-text-muted);
+    font: var(--vyasa-weight-medium) var(--vyasa-text-xs)/var(--vyasa-leading-tight) var(--vyasa-font-ui);
+}
+
+/* Boxless: the typography comes from the block's own render (see
+   matchTypography), so text keeps its font, size, and place on the page. */
+.vyasa-block-input {
+    display: block;
+    width: 100%;
+    margin: 0;
     box-sizing: border-box;
+    padding: 0;
     border: 0;
-    visibility: hidden;
-    pointer-events: none;
+    border-radius: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    resize: none;
+    overflow: hidden;
+    outline: none;
+    tab-size: 2;
     white-space: pre-wrap;
     overflow-wrap: break-word;
+    caret-color: var(--vyasa-accent-9, currentColor);
+}
+
+/* Fences and frontmatter are code in both modes, so their source keeps the
+   code face and a code surface. */
+.vyasa-block[data-kind="fence"] .vyasa-block-input,
+.vyasa-block[data-kind="frontmatter"] .vyasa-block-input {
+    margin-block: var(--vyasa-space-2) var(--vyasa-space-5);
+    padding: var(--vyasa-space-3) var(--vyasa-space-4);
+    border-radius: var(--vyasa-radius-md);
+    background: var(--vyasa-bg-subtle);
+    font-family: var(--vyasa-font-mono);
+    font-size: var(--vyasa-text-sm);
+    line-height: var(--vyasa-leading-prose);
 }

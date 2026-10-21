@@ -54,10 +54,10 @@ def _resolve_document(path: str, request, runtime) -> Path | None:
     return file_path
 
 
-def _render_body(text: str, *, slug: str, stem: str) -> dict:
-    """Render file text the same way the reading view does.
+def _render_fragments(texts: list[str], *, slug: str) -> dict:
+    """Render markdown fragments the way the reading view does, sharing one asset collector.
 
-    Reports the asset bundles the render asked for alongside the HTML. A block
+    Reports the asset bundles the renders asked for alongside the HTML. A block
     type the page did not open with -- a first mermaid diagram, say -- needs its
     runtime fetched, and a `<script>` inside injected HTML never runs.
     """
@@ -65,13 +65,12 @@ def _render_body(text: str, *, slug: str, stem: str) -> dict:
     from ...assets import asset_url
     from ...extensions import get_extension_runtime
 
-    metadata, body = parse_frontmatter_text(text, source=slug)
-    _title, render_content = resolve_markdown_title_text(metadata, body, stem)
     runtime = get_extension_runtime()
     collector = runtime.new_asset_collector() if runtime is not None else None
-    html = _render_markdown_fragment(
-        strip_more_marker(render_content), current_path=slug, asset_collector=collector
-    )
+    htmls = [
+        _render_markdown_fragment(strip_more_marker(text), current_path=slug, asset_collector=collector)
+        for text in texts
+    ]
     css: list[str] = []
     js: list[str] = []
     for name in (collector.requested if collector else ()):
@@ -80,7 +79,15 @@ def _render_body(text: str, *, slug: str, stem: str) -> dict:
             continue
         css.extend(asset_url(href) for href in bundle.css)
         js.extend(asset_url(src) for src in bundle.js)
-    return {"html": html, "css": css, "js": js}
+    return {"html": htmls, "css": css, "js": js}
+
+
+def _render_body(text: str, *, slug: str, stem: str) -> dict:
+    """Render whole-file text, frontmatter and title handled as the reading view does."""
+    metadata, body = parse_frontmatter_text(text, source=slug)
+    _title, render_content = resolve_markdown_title_text(metadata, body, stem)
+    rendered = _render_fragments([render_content], slug=slug)
+    return {**rendered, "html": rendered["html"][0]}
 
 
 def register_document_source_routes(rt, runtime) -> None:
@@ -153,3 +160,26 @@ def register_document_preview_routes(rt, runtime) -> None:
             return _json({"error": "not found"}, 404)
         text = (await request.body()).decode("utf-8", "replace")
         return _json(_render_body(text, slug=str(path or "").strip("/"), stem=file_path.stem))
+
+
+def register_document_block_routes(rt, runtime) -> None:
+    @publish_api(
+        rt,
+        namespace="documents",
+        operation_id="documents.blocks.preview",
+        path="/api/documents/blocks/{path:path}",
+        methods=("POST",),
+        body={"blocks": "array<string>"},
+    )
+    async def preview_document_blocks(path: str, request):
+        """Render each top-level block on its own, so the block editor can swap one at a time."""
+        if _resolve_document(path, request, runtime) is None:
+            return _json({"error": "not found"}, 404)
+        try:
+            blocks = json.loads((await request.body()).decode("utf-8", "replace")).get("blocks")
+        except (ValueError, AttributeError):
+            blocks = None
+        if not isinstance(blocks, list) or not all(isinstance(block, str) for block in blocks):
+            return _json({"error": "expected {\"blocks\": [string, ...]}"}, 400)
+        rendered = _render_fragments(blocks, slug=str(path or "").strip("/"))
+        return _json({"blocks": rendered["html"], "css": rendered["css"], "js": rendered["js"]})

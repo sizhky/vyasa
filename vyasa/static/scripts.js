@@ -219,7 +219,7 @@ function initUnknownTagMarkers(root = document) {
     const elements = root instanceof Element && root.matches('*') ? [root, ...root.querySelectorAll('*')] : root.querySelectorAll('*');
     elements.forEach((element) => {
         if (!(element instanceof HTMLUnknownElement) || element.hasAttribute('data-vyasa-tag-markers')) return;
-        if (!element.closest('#main-content, [data-vyasa-editor-preview]')) return;
+        if (!element.closest('#main-content')) return;
         if (element.closest('a, code, pre, script, style, textarea, title')) return;
         const parent = element.parentElement;
         if (parent instanceof HTMLUnknownElement && parent.tagName === element.tagName
@@ -1081,10 +1081,10 @@ async function softRefreshActiveContent(detail = {}) {
     const activePath = currentPostsSearchPath();
     const changed = Array.isArray(detail.activePaths) ? detail.activePaths : [];
     if (!changed.length || !changed.includes(activePath)) return;
-    // Saving from the editor writes the file, which brings us here. The swap
-    // replaces #main-content, and the editor lives inside it, so it would take
-    // the open editor away. The save response already carried fresh HTML.
-    if (document.querySelector('[data-vyasa-document-editor]')) return;
+    // Autosave from the block editor writes the file, which brings us here. The
+    // swap replaces #main-content, and the editor lives inside it, so it would
+    // take the open editor away. Leaving edit mode renders the saved file.
+    if (document.querySelector('[data-vyasa-block-editor]')) return;
     console.info('[vyasa] soft reload active content', { activePath, detail });
     if (window.htmx?.ajax) {
         await window.htmx.ajax('GET', window.location.href, { target: '#main-content', swap: 'outerHTML show:window:top settle:0.1s' });
