@@ -4,7 +4,7 @@ title: Transformer
 
 # Transformer
 
-The encoder and decoder from "Attention Is All You Need", drawn as a grid figure.
+The encoder and defcoder from "Attention Is All You Need", drawn as a grid figure.
 
 ```items
 ---
