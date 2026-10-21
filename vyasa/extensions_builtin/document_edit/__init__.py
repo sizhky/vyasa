@@ -1,13 +1,23 @@
+from ...assets import asset_url
 from ...document_pages import DocumentActionItem, edit_document_button
 from ...extensions import AssetBundle, ExtensionMeta, VyasaExtensionBase
 
-from .api import edits_enabled, register_document_preview_routes, register_document_source_routes
+from .api import (
+    edits_enabled,
+    register_document_block_routes,
+    register_document_proposal_routes,
+    register_document_preview_routes,
+    register_document_source_routes,
+)
 
 
 class DocumentEditExtension(VyasaExtensionBase):
     def register(self, app) -> None:
         app.routes.add("/api/documents/source", register_document_source_routes, methods=("GET", "POST"))
         app.routes.add("/api/documents/preview", register_document_preview_routes, methods=("POST",))
+        app.routes.add("/api/documents/blocks", register_document_block_routes, methods=("POST",))
+        app.routes.add("/api/documents/proposals", register_document_proposal_routes, methods=("GET", "POST"))
+        app.routes.add("/api/document-proposals", register_document_proposal_routes, methods=("POST",))
         app.documents.action(_edit_action)
         app.assets.bundle(
             AssetBundle(
@@ -28,7 +38,12 @@ def _edit_action(context):
         return None
     return DocumentActionItem(
         id="documents.edit",
-        node=edit_document_button(context.current_path),
+        # Versioned like every other asset, so a changed editor is never served from cache.
+        node=edit_document_button(
+            context.current_path,
+            asset_url("/static/extensions/document_edit/live_editor.js"),
+            asset_url("/static/extensions/document_edit/prosemirror.bundle.js"),
+        ),
         order=20,
     )
 
@@ -52,7 +67,13 @@ EXTENSION = DocumentEditExtension(
             "bundle:document_edit.runtime",
         ),
         requires=("slot:layout", "cap:markdown_pipeline"),
-        route_prefixes=("/api/documents/source", "/api/documents/preview"),
+        route_prefixes=(
+            "/api/documents/source",
+            "/api/documents/preview",
+            "/api/documents/blocks",
+            "/api/documents/proposals",
+            "/api/document-proposals",
+        ),
         scope_disable=True,
     )
 )

@@ -7,6 +7,7 @@ from vyasa.document_pages import DocumentActionContext, resolve_document_actions
 from vyasa.extensions import build_extension_runtime, set_extension_runtime
 from vyasa.extensions_builtin.document_edit import EXTENSION
 from vyasa.extensions_builtin.document_edit.api import (
+    register_document_block_routes,
     register_document_preview_routes,
     register_document_source_routes,
 )
@@ -249,3 +250,138 @@ def test_atomic_write_replaces_content_in_one_step(tmp_path):
 
     assert target.read_text(encoding="utf-8") == "second\n"
     assert list(tmp_path.joinpath("deep").glob("*.tmp")) == []
+
+
+def test_blocks_render_one_html_per_block_with_shared_bundles(tmp_path, monkeypatch):
+    set_extension_runtime(build_extension_runtime({}))
+    _with_content_root(tmp_path, monkeypatch)
+    target = tmp_path / "notes.md"
+    target.write_text("# Old\n", encoding="utf-8")
+
+    handlers = {}
+
+    def rt(pattern, **kwargs):
+        return lambda fn: handlers.setdefault(pattern, fn)
+
+    register_document_block_routes(rt, None)
+    blocks = handlers["/api/documents/blocks/{path:path}"]
+    body = json.dumps({"blocks": ["# Kept heading", "| a |\n|---|\n| 1 |", "```mermaid\ngraph TD;\nA-->B;\n```"]})
+    payload = _payload(asyncio.run(blocks("notes", _request(body=body.encode()))))
+
+    # A leading `# ` block stays a heading: only whole-file renders drop the title.
+    assert len(payload["blocks"]) == 3
+    assert "<h1" in payload["blocks"][0]
+    assert "<table" in payload["blocks"][1]
+    assert any("mermaid" in url for url in payload["js"])
+    assert target.read_text(encoding="utf-8") == "# Old\n"
+
+
+def test_blocks_reject_a_body_that_is_not_a_list_of_strings(tmp_path, monkeypatch):
+    _with_content_root(tmp_path, monkeypatch)
+    (tmp_path / "notes.md").write_text("# Old\n", encoding="utf-8")
+    handlers = {}
+    register_document_block_routes(lambda pattern, **kw: (lambda fn: handlers.setdefault(pattern, fn)), None)
+    blocks = handlers["/api/documents/blocks/{path:path}"]
+
+    assert asyncio.run(blocks("notes", _request(body=b'{"blocks": [1]}'))).status_code == 400
+    assert asyncio.run(blocks("notes", _request(body=b"not json"))).status_code == 400
+
+
+def _proposal_routes():
+    from vyasa.extensions_builtin.document_edit.api import register_document_proposal_routes
+    from vyasa.extensions_builtin.document_edit.proposals import STORE
+
+    STORE._items.clear()
+    handlers = {}
+
+    def rt(pattern, **kwargs):
+        def keep(fn):
+            handlers[(pattern, tuple(kwargs.get("methods", ("GET",))))] = fn
+            return fn
+
+        return keep
+
+    register_document_proposal_routes(rt, None)
+    write = handlers[("/api/documents/proposals/{path:path}", ("POST",))]
+    listing = handlers[("/api/documents/proposals/{path:path}", ("GET",))]
+    resolve = handlers[("/api/document-proposals/{proposal_id}/{action}", ("POST",))]
+    return write, listing, resolve
+
+
+def _post(handler, *args, body):
+    return _payload(asyncio.run(handler(*args, _request(body=json.dumps(body).encode()))))
+
+
+def test_proposal_never_writes_until_accepted(tmp_path, monkeypatch):
+    set_extension_runtime(build_extension_runtime({}))
+    _with_content_root(tmp_path, monkeypatch)
+    target = tmp_path / "notes.md"
+    target.write_text("# T\n\n## Now\nthe quick brown fox\n\n## Log\nkeep\n", encoding="utf-8")
+    write, listing, resolve = _proposal_routes()
+
+    made = _post(write, "notes", body={"heading": "## Now", "text": "the slow brown fox jumps", "origin": "card 7"})
+
+    assert target.read_text(encoding="utf-8").count("quick") == 1
+    assert [h["kind"] for h in made["hunks"]] == ["replace", "insert"]
+    assert 'data-vyasa-hunk="0">slow</ins>' in made["marked"]
+    listed = _payload(listing("notes", _request()))
+    assert [p["id"] for p in listed["proposals"]] == [made["id"]]
+
+
+def test_accepting_one_hunk_writes_only_that_hunk(tmp_path, monkeypatch):
+    set_extension_runtime(build_extension_runtime({}))
+    _with_content_root(tmp_path, monkeypatch)
+    target = tmp_path / "notes.md"
+    target.write_text("# T\n\n## Now\nthe quick brown fox\n\n## Log\nkeep\n", encoding="utf-8")
+    write, _listing, resolve = _proposal_routes()
+    made = _post(write, "notes", body={"heading": "## Now", "text": "the slow brown fox jumps"})
+
+    after = _post(resolve, made["id"], "accept", body={"hunks": [0]})
+
+    assert target.read_text(encoding="utf-8") == "# T\n\n## Now\nthe slow brown fox\n\n## Log\nkeep\n"
+    assert "slow" in after["html"]
+    # What is left is the other hunk, now numbered against the new base.
+    assert [h["kind"] for h in after["proposal"]["hunks"]] == ["insert"]
+    rejected = _post(resolve, made["id"], "reject", body={})
+    assert rejected["proposal"] is None
+    assert "jumps" not in target.read_text(encoding="utf-8")
+
+
+def test_a_streaming_proposal_shows_the_unreached_tail_as_pending(tmp_path, monkeypatch):
+    set_extension_runtime(build_extension_runtime({}))
+    _with_content_root(tmp_path, monkeypatch)
+    (tmp_path / "notes.md").write_text("## Now\none two three\n", encoding="utf-8")
+    write, _listing, resolve = _proposal_routes()
+
+    made = _post(write, "notes", body={"heading": "## Now", "text": "one 2", "partial": True})
+
+    assert 'class="vyasa-diff-pending">two three</span>' in made["marked"]
+    assert asyncio.run(resolve(made["id"], "accept", _request(body=b"{}"))).status_code == 409
+    done = _post(write, "notes", body={"id": made["id"], "text": "one 2 three"})
+    assert "vyasa-diff-pending" not in done["marked"]
+
+
+def test_a_write_to_the_section_elsewhere_rebases_and_flags_the_proposal(tmp_path, monkeypatch):
+    set_extension_runtime(build_extension_runtime({}))
+    _with_content_root(tmp_path, monkeypatch)
+    target = tmp_path / "notes.md"
+    target.write_text("## Now\nalpha\n", encoding="utf-8")
+    write, listing, _resolve = _proposal_routes()
+    _post(write, "notes", body={"heading": "## Now", "text": "beta"})
+
+    atomic_write_bytes(target, b"## Now\ngamma\n")
+    import os
+    os.utime(target, ns=(target.stat().st_atime_ns, target.stat().st_mtime_ns + 1000))
+    listed = _payload(listing("notes", _request()))["proposals"][0]
+
+    assert listed["stale_base"] is True
+    assert "gamma" in listed["marked"] and "beta" in listed["marked"]
+
+
+def test_proposals_refuse_a_remote_client(tmp_path, monkeypatch):
+    _with_content_root(tmp_path, monkeypatch)
+    (tmp_path / "notes.md").write_text("## Now\nx\n", encoding="utf-8")
+    write, _listing, _resolve = _proposal_routes()
+    body = json.dumps({"heading": "## Now", "text": "y"}).encode()
+
+    assert asyncio.run(write("notes", _request(host="10.0.0.9", body=body))).status_code == 403

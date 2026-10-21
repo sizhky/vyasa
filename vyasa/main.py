@@ -187,8 +187,15 @@ def cli() -> None:
     parser.add_argument('--feedback', action='store_true', help='Enable the feedback extension')
     parser.add_argument('--edit', action='store_true', help='Let documents be edited from the reading view (off by default)')
     parser.add_argument('--kg-defaults', help='Site-wide KG style defaults, e.g. "node_look=outline edge_path=orthogonal" (overrides .vyasa and env)')
+    parser.add_argument('--base-config', help='A .vyasa-format file of settings, theme and stylesheets that every page starts from; a .vyasa in the root overrides it')
+    parser.add_argument('--unlisted-root', action='append', default=[], metavar='DIR',
+                        help='A folder links and previews may reach but navigation never lists (repeatable)')
     
     args = parser.parse_args()
+    if args.base_config:
+        os.environ['VYASA_BASE_CONFIG'] = str(Path(args.base_config).expanduser().resolve())
+    if args.unlisted_root:
+        os.environ['VYASA_UNLISTED_ROOTS'] = ",".join(str(Path(item).expanduser().resolve()) for item in args.unlisted_root)
     if args.feedback:
         os.environ['VYASA_FEEDBACK_CLI'] = 'true'
     if args.kg_defaults:

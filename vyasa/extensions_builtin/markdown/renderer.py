@@ -445,6 +445,32 @@ def _asset_url(path):
     return asset_url(path)
 
 
+def _content_href_for_file_path(href: str) -> str | None:
+    """The content URL of a link written as an absolute file path, when that file
+    lies under an addressable root; None otherwise, and the link stays as written,
+    so nothing outside the roots is ever served.
+
+    `:line` and `$prefix` targets, the query and the fragment carry over.
+    """
+    parsed = urlsplit(href)
+    path = unquote(parsed.path or "")
+    target = ""
+    line = re.search(r":\d+(?::\d+)?$", path)
+    if line:
+        path, target = path[: line.start()], line.group()
+    elif "$" in path:
+        path, marker, prefix = path.partition("$")
+        target = f"{marker}{prefix}"
+    candidate = Path(path)
+    if not candidate.is_absolute() or not candidate.exists():
+        return None
+    slug = content_slug_for_path(candidate, strip_suffix=candidate.suffix.lower() == ".md")
+    if not slug:
+        return None
+    tail = (f"?{parsed.query}" if parsed.query else "") + (f"#{parsed.fragment}" if parsed.fragment else "")
+    return content_url_for_slug(slug) + target + tail
+
+
 def _slug_for_resolved_path(resolved, current_path, strip_suffix=True):
     parts = Path(str(current_path).strip("/")).parts
     aliases = {alias for alias, _ in get_content_mounts() if alias}
@@ -883,6 +909,8 @@ class ContentRenderer(FrankenRenderer):
         is_hash = href.startswith("#")
         is_external = href.startswith(("http://", "https://", "mailto:", "tel:", "vscode:", "//"))
         is_absolute_internal = href.startswith("/") and not href.startswith("//")
+        if is_absolute_internal and not href.startswith(("/posts/", "/slides/", "/download/")):
+            href = _content_href_for_file_path(href) or href
         is_relative = not is_external and not is_absolute_internal
         download_flag = bool(token.title and "download=true" in token.title.lower())
         if "?download=true" in href.lower():

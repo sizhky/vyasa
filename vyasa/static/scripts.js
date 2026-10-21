@@ -219,7 +219,7 @@ function initUnknownTagMarkers(root = document) {
     const elements = root instanceof Element && root.matches('*') ? [root, ...root.querySelectorAll('*')] : root.querySelectorAll('*');
     elements.forEach((element) => {
         if (!(element instanceof HTMLUnknownElement) || element.hasAttribute('data-vyasa-tag-markers')) return;
-        if (!element.closest('#main-content, [data-vyasa-editor-preview]')) return;
+        if (!element.closest('#main-content')) return;
         if (element.closest('a, code, pre, script, style, textarea, title')) return;
         const parent = element.parentElement;
         if (parent instanceof HTMLUnknownElement && parent.tagName === element.tagName
@@ -1081,10 +1081,11 @@ async function softRefreshActiveContent(detail = {}) {
     const activePath = currentPostsSearchPath();
     const changed = Array.isArray(detail.activePaths) ? detail.activePaths : [];
     if (!changed.length || !changed.includes(activePath)) return;
-    // Saving from the editor writes the file, which brings us here. The swap
-    // replaces #main-content, and the editor lives inside it, so it would take
-    // the open editor away. The save response already carried fresh HTML.
-    if (document.querySelector('[data-vyasa-document-editor]')) return;
+    // Document editing writes the file, which brings us here. The swap replaces
+    // #main-content and scrolls to the top, which would take an open editor
+    // away or lose the reader's place right after their own write; the page
+    // that wrote asks us to hold (see document_edit.js).
+    if (window.__vyasaHoldSoftRefresh?.()) return;
     console.info('[vyasa] soft reload active content', { activePath, detail });
     if (window.htmx?.ajax) {
         await window.htmx.ajax('GET', window.location.href, { target: '#main-content', swap: 'outerHTML show:window:top settle:0.1s' });
@@ -2047,7 +2048,31 @@ function renderMathSafely(root) {
         if (!parent || ['CODE', 'PRE', 'SCRIPT', 'STYLE', 'TEXTAREA'].includes(parent.tagName) || parent.closest('.katex')) continue;
         if (node.nodeValue && node.nodeValue.includes('$')) node.nodeValue = node.nodeValue.replace(/\$(?=\d)/g, marker);
     }
-    renderMathInElement(root, { delimiters: [{ left: '$$', right: '$$', display: true }, { left: '$', right: '$', display: false }], throwOnError: false });
+    // A parse error reaches errorCallback, and auto-render leaves the raw text.
+    // Mark the rendered root as a failed render (cleared by a clean render): the
+    // mark the live editor reads to keep the last good math while it is typed.
+    let failed = '';
+    renderMathInElement(root, {
+        delimiters: [{ left: '$$', right: '$$', display: true }, { left: '$', right: '$', display: false }],
+        throwOnError: false,
+        errorCallback: (message, error) => {
+            failed = String(error && error.message || message);
+            console.error(message, error);
+        },
+    });
+    // An unclosed brace hides the closing `$$` from auto-render, which then
+    // leaves the block as text without an error; a `$$` left over is a failure too.
+    if (!failed) {
+        const leftover = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+            acceptNode: (text) => (text.nodeValue.includes('$$') && !text.parentElement?.closest('code, pre, script, style, textarea, .katex')
+                ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP),
+        }).nextNode();
+        if (leftover) failed = 'unclosed math';
+    }
+    if (root instanceof Element) {
+        if (failed) root.setAttribute('data-vyasa-render-error', failed.slice(0, 200));
+        else root.removeAttribute('data-vyasa-render-error');
+    }
     walker.currentNode = root;
     while ((node = walker.nextNode())) if (node.nodeValue && node.nodeValue.includes(marker)) node.nodeValue = node.nodeValue.split(marker).join('$');
 }

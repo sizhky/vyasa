@@ -85,6 +85,7 @@ class VyasaConfig:
         self._loaded_config_path: Optional[Path] = None
         self._mkdocs_root: Optional[Path] = None
         self._explicit_config_path = config_path is not None
+        self._base_only: set[str] = set()
         self._load_config(config_path)
     
     def _load_config(self, config_path: Optional[Path] = None):
@@ -135,6 +136,9 @@ class VyasaConfig:
             except Exception:
                 self._config = {}
                 self._loaded_config_path = None
+        base = self._base_layer()
+        self._base_only = {key for key in base if key not in self._config}
+        self._config = {**base, **self._config}
         env_preset = str(os.getenv("VYASA_THEME_PRESET", "")).strip()
         debug_theme = str(os.getenv("VYASA_THEME_DEBUG", "")).lower() in {"true", "1", "yes", "on"}
         configured_preset = str(self._config.get("theme_preset", "")).strip()
@@ -147,8 +151,32 @@ class VyasaConfig:
                 if debug_theme:
                     self._config["theme_preset"] = preset_name
     
+    def _base_layer(self) -> dict:
+        """Settings from `VYASA_BASE_CONFIG` (`--base-config`), the layer every page starts from.
+
+        An app that serves many folders keeps one file of settings, theme
+        tokens and stylesheets, so no folder has to carry its own. A `.vyasa`
+        found in the root still overrides it key by key, and environment
+        variables do too (see `get`). Path-valued keys resolve against the base
+        file's own folder, since the `.vyasa` that is also loaded lives elsewhere.
+        """
+        raw = os.getenv('VYASA_BASE_CONFIG')
+        if not raw:
+            return {}
+        path = Path(raw).expanduser().resolve()
+        try:
+            import tomllib
+
+            data = tomllib.loads(path.read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            return {}
+        for key in ('stylesheets', 'unlisted_roots', 'vyasa_roots'):
+            if key in data:
+                data[key] = [str((path.parent / Path(str(value)).expanduser()).resolve()) for value in self._coerce_list(data[key])]
+        return data
+
     def get(self, key: str, env_var: str, default: Any = None) -> Any:
-        """Get configuration value with priority: config file > env var > default.
+        """Get configuration value with priority: config file > env var > base config > default.
         
         Args:
             key: Key in the .vyasa config file
@@ -159,13 +187,17 @@ class VyasaConfig:
             Configuration value
         """
         # First check config file
-        if key in self._config:
+        if key in self._config and key not in self._base_only:
             return self._config[key]
         
         # Then check environment variable
         env_value = os.getenv(env_var)
         if env_value is not None:
             return env_value
+
+        # Then the base config layer
+        if key in self._config:
+            return self._config[key]
         
         # Finally return default
         return default
@@ -208,6 +240,38 @@ class VyasaConfig:
             if path.is_dir() and path != self.get_root_folder():
                 roots.append(path)
         return list(dict.fromkeys(roots))
+
+    def get_unlisted_roots(self) -> list[Path]:
+        """Folders whose files links and previews may address, but that are never listed.
+
+        Unlike `vyasa_roots`, these apply under a CLI root too: an app that
+        serves one docs folder can let its links reach the project around it.
+        """
+        # Config and `--unlisted-root` add up: a flag never hides a configured root.
+        raw_roots = self._coerce_list(self._config.get('unlisted_roots')) + self._coerce_list(os.getenv('VYASA_UNLISTED_ROOTS'))
+        base = self._loaded_config_path.parent if self._loaded_config_path else Path.cwd()
+        roots = []
+        for value in raw_roots:
+            path = Path(str(value)).expanduser()
+            path = (path if path.is_absolute() else base / path).resolve()
+            if path.is_dir():
+                roots.append(path)
+        return list(dict.fromkeys(roots))
+
+    def get_stylesheets(self) -> list[Path]:
+        """CSS files from the `stylesheets` setting, served to every page.
+
+        They are read from wherever they live (see `/_vyasa/stylesheets`), so a
+        site's look need not be copied into its content folder.
+        """
+        base = self._loaded_config_path.parent if self._loaded_config_path else Path.cwd()
+        sheets = []
+        for value in self._coerce_list(self.get('stylesheets', 'VYASA_STYLESHEETS', [])):
+            path = Path(str(value)).expanduser()
+            path = (path if path.is_absolute() else base / path).resolve()
+            if path.is_file():
+                sheets.append(path)
+        return list(dict.fromkeys(sheets))
 
     def get_git_mirror_root(self) -> Path:
         """Directory holding bare mirrors maintained by the fetcher."""

@@ -64,6 +64,8 @@ async function renderOne(node) {
         spec = JSON.parse(script.textContent);
     } catch (error) {
         mount.innerHTML = '<div class="vyasa-vega__failed">spec is not valid JSON</div>';
+        // The live editor keeps the last good render while this mark is set.
+        node.setAttribute('data-vyasa-render-error', 'spec is not valid JSON');
         return;
     }
     try {
@@ -88,8 +90,10 @@ async function renderOne(node) {
             config: readTheme(),
         });
         node._vyasaVegaView = result.view;
+        node.removeAttribute('data-vyasa-render-error');
     } catch (error) {
         mount.innerHTML = `<div class="vyasa-vega__failed">${String(error && error.message || error)}</div>`;
+        node.setAttribute('data-vyasa-render-error', String(error && error.message || error).slice(0, 200));
     }
 }
 

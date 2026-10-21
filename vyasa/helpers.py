@@ -182,9 +182,31 @@ def unlisted_content_roots() -> list[tuple[str, Path]]:
     """
     from .code_source import CACHE_ROOT, CACHE_SLUG_PREFIX
 
-    if not CACHE_ROOT.is_dir():
-        return []
-    return [(CACHE_SLUG_PREFIX, CACHE_ROOT.resolve())]
+    roots = [(CACHE_SLUG_PREFIX, CACHE_ROOT.resolve())] if CACHE_ROOT.is_dir() else []
+    return roots + configured_unlisted_roots()
+
+
+def configured_unlisted_roots() -> list[tuple[str, Path]]:
+    """`unlisted_roots` under their folder names, as `vyasa_roots` are aliased.
+
+    A name already used by a listed mount or by an entry of the primary root is
+    skipped, so an unlisted root never shadows content that is listed.
+    """
+    from .config import get_config
+
+    cfg = get_config()
+    taken = {alias for alias, _ in get_content_mounts()}
+    try:
+        primary = cfg.get_root_folder()
+        taken |= {item.name for item in primary.iterdir()} | {item.stem for item in primary.iterdir() if item.is_file()}
+    except OSError:
+        pass
+    roots = []
+    for root in cfg.get_unlisted_roots():
+        if root.name and root.name not in taken:
+            taken.add(root.name)
+            roots.append((root.name, root))
+    return roots
 
 
 def addressable_content_roots() -> list[tuple[str, Path]]:

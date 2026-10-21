@@ -175,3 +175,4 @@ checklink/cookies.txt
 # Quarto
 .quarto
 projects/
+editor-ui/node_modules/

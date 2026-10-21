@@ -20,5 +20,6 @@ def theme_registry(base_dir: Path | None = None) -> dict[str, ThemeExtension]:
     registry = builtin_theme_registry()
     registry[DICE_THEME.id] = DICE_THEME
     for theme_name in list_local_theme_files(base_dir):
-        registry[theme_name] = theme_from_toml(theme_name)
+        # A local theme lives in base_dir/.vyasa-themes, so its loader needs base_dir too.
+        registry[theme_name] = theme_from_toml(theme_name, base_dir)
     return registry

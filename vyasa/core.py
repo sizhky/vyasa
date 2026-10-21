@@ -272,6 +272,13 @@ hdrs = (
             // network would otherwise leave the tab with no live reload at all.
             const WORKER_HANDSHAKE_TIMEOUT_MS = 4000;
             const reload = () => window.location.reload();
+            // Edits proposed by an agent are not file changes; the page that
+            // shows them listens for this event.
+            const announce = (raw) => {
+                let detail = {};
+                try { detail = JSON.parse(raw || "{}"); } catch (error) {}
+                document.dispatchEvent(new CustomEvent("vyasa:proposal", { detail }));
+            };
             const softRefresh = (raw) => {
                 let detail = {};
                 try { detail = JSON.parse(raw || "{}"); } catch (error) {}
@@ -286,6 +293,7 @@ hdrs = (
                 const source = new EventSource("/_vyasa/reload");
                 source.addEventListener("refresh", (event) => softRefresh(event.data));
                 source.addEventListener("reload", reload);
+                source.addEventListener("proposal", (event) => announce(event.data));
                 source.onerror = () => setTimeout(() => fetch("/", { cache: "no-store" }).then(reload).catch(() => {}), 1000);
             };
             // One SharedWorker holds a single stream for every tab of this origin.
@@ -304,6 +312,7 @@ hdrs = (
                         if (message.type === "ready") { ready = true; clearTimeout(fallback); }
                         else if (message.type === "refresh") softRefresh(message.data);
                         else if (message.type === "reload") reload();
+                        else if (message.type === "proposal") announce(message.data);
                     };
                     worker.port.start();
                     window.addEventListener("pagehide", () => worker.port.postMessage("close"));
@@ -703,6 +712,10 @@ class _ReloadHub:
         for queue in self._subscribers:
             queue.put_nowait(message)
 
+    def publish(self, event: str, data: str) -> None:
+        """Send one named event to every open page; call it from the server's event loop."""
+        self._broadcast(f"event: {event}\ndata: {data}\n\n")
+
     def _run(self, stop):
         from watchfiles import watch
 
@@ -736,6 +749,15 @@ def _get_reload_hub():
     return _reload_hub
 
 
+def publish_live_event(event: str, payload: dict) -> None:
+    """Tell open pages about a change that is not a file change, over the live-reload stream.
+
+    Pages with live reload off never hear it; they see the change on their next load.
+    """
+    if _reload_hub is not None:
+        _reload_hub.publish(event, json.dumps(payload))
+
+
 async def _live_reload_events():
     yield "event: ready\ndata: ok\n\n"
     try:
@@ -754,6 +776,18 @@ async def _live_reload_events():
                 yield ": keepalive\n\n"
     finally:
         hub.unsubscribe(queue)
+
+
+@rt("/_vyasa/stylesheets/{index}")
+def configured_stylesheet(index: int):
+    """One CSS file of the `stylesheets` setting, by its place in the list.
+
+    Only configured files are served, so the index can name nothing else.
+    """
+    sheets = get_config().get_stylesheets()
+    if not 0 <= index < len(sheets):
+        return Response(status_code=404)
+    return Response(sheets[index].read_text(encoding="utf-8"), media_type="text/css", headers={"Cache-Control": "no-cache"})
 
 
 @rt("/_vyasa/reload")

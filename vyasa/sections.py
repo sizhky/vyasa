@@ -108,6 +108,50 @@ def extract_markdown_section(
     return None
 
 
+def section_span(text: str, heading: str) -> tuple[int, int, str] | None:
+    """Character span of the body under ``heading`` in the full text, and the heading's anchor.
+
+    The body stops at the next heading of any level, so subsections stay out,
+    which is what ``sutragana doc write`` replaces. None when the heading is
+    missing; ValueError when it occurs more than once.
+
+    >>> text = "---\\nx: 1\\n---\\n# T\\n\\n## Now\\n- a\\n\\n### Sub\\nkeep\\n"
+    >>> start, end, anchor = section_span(text, "## Now")
+    >>> text[start:end], anchor
+    ('- a\\n\\n', 'now')
+    >>> section_span(text, "## Missing") is None
+    True
+    """
+    body, headings = _headings(text)
+    found = [i for i, h in enumerate(headings) if h.markup == heading.strip()]
+    if len(found) > 1:
+        raise ValueError(f"The heading {heading!r} occurs {len(found)} times; make it unique first")
+    if not found:
+        return None
+    front = len(text) - len(body)
+    head = headings[found[0]]
+    end = next((later.start for later in headings[found[0] + 1 :]), len(body))
+    return front + head.content_start, front + end, head.anchor
+
+
+def replace_markdown_section(text: str, heading: str, content: str) -> str:
+    """Write ``content`` as the body under ``heading``; a missing heading is added at the end.
+
+    One blank line separates the body from the next heading, and frontmatter is kept.
+
+    >>> replace_markdown_section("# T\\n\\n## Now\\n- a\\n\\n## Log\\n", "## Now", "- b\\n- c")
+    '# T\\n\\n## Now\\n- b\\n- c\\n\\n## Log\\n'
+    >>> replace_markdown_section("# T\\n", "## New", "x")
+    '# T\\n\\n## New\\nx\\n'
+    """
+    span = section_span(text, heading)
+    if span is None:
+        return text.rstrip("\n") + f"\n\n{heading.strip()}\n{content.strip()}\n"
+    start, end, _anchor = span
+    tail = "\n\n" if end < len(text) else "\n"
+    return text[:start] + content.strip("\n") + tail + text[end:]
+
+
 def extract_markdown_section_by_anchor(text: str, target_anchor: str) -> str | None:
     body, headings = _headings(text)
     for index, heading in enumerate(headings):
