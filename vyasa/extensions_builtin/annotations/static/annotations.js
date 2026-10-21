@@ -723,10 +723,14 @@ function initAnnotations(root = document) {
         document.getElementById('vyasa-selection-actions')?.remove();
         document.getElementById('vyasa-annotation-composer')?.remove();
     };
+    // Highlights and comments are for reading: editing a document (document_edit)
+    // announces itself, and its open bar would cover the line being edited.
+    document.addEventListener('vyasa:editing', clearUi);
     main.addEventListener('mouseup', () => {
         const sel = window.getSelection();
         clearUi();
         if (!sel || sel.isCollapsed || !main.contains(sel.anchorNode) || !main.contains(sel.focusNode)) return;
+        if (sel.anchorNode.parentElement?.closest('[contenteditable="true"]')) return;
         const text = sel.toString().trim();
         if (!text) return;
         const rect = sel.getRangeAt(0).getBoundingClientRect();

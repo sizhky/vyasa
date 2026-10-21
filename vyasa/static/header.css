@@ -29,6 +29,7 @@ code, pre { font-family: var(--vyasa-font-mono); }
    on #page-container as well: preset values are inline on that element.
    ========================================================================== */
 :root {
+    --vyasa-heading-action-size: 1.5rem;
     /* Type families: one sans for UI and prose, one mono. */
     --vyasa-font-sans: 'Geist', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
     --vyasa-font-body: var(--vyasa-font-sans);
@@ -1301,7 +1302,8 @@ details[open] > .vyasa-callout-summary .vyasa-callout-chevron { transform: rotat
     border-radius: 0 var(--vyasa-radius-sm) var(--vyasa-radius-sm) 0;
 }
 .vyasa-heading-permalink { opacity: 0; transition: opacity var(--vyasa-duration-fast) var(--vyasa-ease); }
-.vyasa-heading-action { opacity: 0; border: 0; border-radius: var(--vyasa-radius-sm); background: transparent; color: var(--vyasa-text-faint); width: 1.5rem; height: 1.5rem; flex: 0 0 1.5rem; display: inline-flex; align-items: center; justify-content: center; padding: 0; margin: 0; line-height: 1; text-decoration: none; transition: opacity var(--vyasa-duration-fast) var(--vyasa-ease), color var(--vyasa-duration-fast) var(--vyasa-ease), background-color var(--vyasa-duration-fast) var(--vyasa-ease); cursor: pointer; }
+/* A heading's row is as tall as its action buttons, even while they are invisible; the editor's headings reuse the size (document_edit.css). */
+.vyasa-heading-action { opacity: 0; border: 0; border-radius: var(--vyasa-radius-sm); background: transparent; color: var(--vyasa-text-faint); width: var(--vyasa-heading-action-size); height: var(--vyasa-heading-action-size); flex: 0 0 var(--vyasa-heading-action-size); display: inline-flex; align-items: center; justify-content: center; padding: 0; margin: 0; line-height: 1; text-decoration: none; transition: opacity var(--vyasa-duration-fast) var(--vyasa-ease), color var(--vyasa-duration-fast) var(--vyasa-ease), background-color var(--vyasa-duration-fast) var(--vyasa-ease); cursor: pointer; }
 .vyasa-heading-action :is(uk-icon, [uk-icon]), .vyasa-heading-permalink :is(uk-icon, [uk-icon]) { display: inline-flex; align-items: center; justify-content: center; width: var(--vyasa-icon-size); height: var(--vyasa-icon-size); }
 .vyasa-heading-action :is(uk-icon, [uk-icon]) svg, .vyasa-heading-permalink :is(uk-icon, [uk-icon]) svg { width: var(--vyasa-icon-size); height: var(--vyasa-icon-size); stroke-width: var(--vyasa-icon-stroke); }
 .vyasa-heading-permalink-icon, .vyasa-heading-permalink-copied { display: inline-flex; align-items: center; justify-content: center; }

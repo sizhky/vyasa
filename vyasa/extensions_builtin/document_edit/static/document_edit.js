@@ -219,8 +219,8 @@ export function sourceBlocks(text) {
     if (!node) return;
     node.setAttribute('aria-pressed', open ? 'true' : 'false');
     node.classList.toggle('vyasa-page-action-button-active', open);
-    const label = node.querySelector('span');
-    if (label) label.textContent = open ? 'Done editing' : 'Edit';
+    // The label stays "Edit": a longer one would widen the button and could
+    // reflow the action row, moving the article.
   }
 
   function toggle() {
@@ -259,14 +259,45 @@ export function sourceBlocks(text) {
 
   const blockMode = { original: '', root: null, live: null, saved: '', busy: false, saveTimer: 0, saving: null };
 
-  // The first render wraps the blocks in `div.w-full`; a saved render does not.
-  const contentRoot = (host) => host.querySelector(':scope > div.w-full') || host;
+  // The element whose children are the article's blocks. A first render wraps
+  // them in one or more `div.w-full` (the renderer and its caller each add one);
+  // a saved render does not. Descend through wrappers that hold nothing else.
+  const contentRoot = (host) => {
+    let root = host;
+    for (;;) {
+      const kids = Array.from(root.children).filter((node) => !/^(LINK|SCRIPT|STYLE)$/.test(node.tagName));
+      if (kids.length !== 1 || !kids[0].matches('div.w-full')) return root;
+      root = kids[0];
+    }
+  };
 
-  // Top-level blocks per section. Group 0 holds what sits above the first heading.
+  // The article's blocks in reading order. The page folds each heading's
+  // section into `details.vyasa-heading-fold` (scripts.js, initHeadingFolds):
+  // the heading sits in its summary and the section in its body, so a fold
+  // stands for its heading followed by its body's blocks.
+  function readingBlocks(root) {
+    const blocks = [];
+    const walk = (parent) => {
+      Array.from(parent.children).forEach((node) => {
+        if (/^(LINK|SCRIPT|STYLE)$/.test(node.tagName)) return;
+        if (!node.matches('details.vyasa-heading-fold')) {
+          blocks.push(node);
+          return;
+        }
+        const heading = node.querySelector(':scope > summary > :is(h1, h2, h3, h4, h5, h6)');
+        if (heading) blocks.push(heading);
+        const body = node.querySelector(':scope > .vyasa-heading-fold-body');
+        if (body) walk(body);
+      });
+    };
+    walk(root);
+    return blocks;
+  }
+
+  // Blocks per section. Group 0 holds what sits above the first heading.
   function sectionGroups(root) {
     const groups = [[]];
-    Array.from(root.children).forEach((node) => {
-      if (/^(LINK|SCRIPT|STYLE)$/.test(node.tagName)) return;
+    readingBlocks(root).forEach((node) => {
       if (node.matches(HEADING)) groups.push([]);
       groups[groups.length - 1].push(node);
     });
@@ -462,8 +493,12 @@ export function sourceBlocks(text) {
     if (!host || !slug) return;
     state.slug = slug;
     const root = contentRoot(host);
-    let block = event ? event.target : null;
-    while (block && block.parentElement !== root) block = block.parentElement;
+    // The reading block under the pointer. The event's target can be a wrapper:
+    // when the DOM changes between the two clicks, the browser reports their
+    // common ancestor, so the point decides. A fold's heading holds only the
+    // heading, so a click in its section lands on the section's block.
+    const under = event ? document.elementFromPoint(event.clientX, event.clientY) || event.target : null;
+    const block = under ? readingBlocks(root).find((node) => node.contains(under)) || nearestBlock(root, event.clientY) : null;
     const anchor = block ? block.getBoundingClientRect().top : 0;
     const snippet = event ? snippetAtPoint(event.clientX, event.clientY) : '';
     const point = event ? { left: event.clientX, top: event.clientY } : null;
@@ -481,18 +516,28 @@ export function sourceBlocks(text) {
     const wrap = document.createElement('div');
     wrap.className = 'w-full vyasa-block-editor';
     wrap.setAttribute('data-vyasa-block-editor', 'true');
-    wrap.innerHTML =
-      '<div class="vyasa-document-editor-bar vyasa-block-editor-bar">' +
-      '<span data-vyasa-editor-status data-kind="idle"></span>' +
-      '<span class="vyasa-document-editor-hint">Type to edit. Click a diagram, table or code block for its source. Esc finishes.</span>' +
-      '<button type="button" class="vyasa-block-editor-done" data-vyasa-block-done>Done</button>' +
-      '</div><div class="vyasa-live-mount"></div>';
-    wrap.addEventListener('click', onBlockClick);
+    // Nothing is added above the article, so no line moves when editing starts.
+    // Edit mode shows as a floating pill that also carries the save status and
+    // takes you back to reading.
+    wrap.innerHTML = '<div class="vyasa-live-mount"></div>';
+    const pill = document.createElement('button');
+    pill.type = 'button';
+    pill.className = 'vyasa-edit-pill';
+    pill.setAttribute('data-vyasa-block-done', 'true');
+    pill.setAttribute('aria-label', 'Editing. Click to go back to reading.');
+    pill.title = 'Back to reading (Esc)';
+    pill.innerHTML = '<span class="vyasa-edit-pill-dot" aria-hidden="true"></span><span>Editing</span>' +
+      '<span data-vyasa-editor-status data-kind="idle"></span>';
+    pill.addEventListener('mousedown', (event) => event.preventDefault());
+    pill.addEventListener('click', () => exitBlocks());
+    document.body.appendChild(pill);
     host.parentNode.insertBefore(wrap, host);
     host.hidden = true;
     document.documentElement.classList.add('vyasa-editing');
+    // Reading-only tools (annotations' selection bar) close on this.
+    document.dispatchEvent(new CustomEvent('vyasa:editing', { detail: { editing: true } }));
     markButton(true);
-    Object.assign(blockMode, { root: wrap, saved: source, original: source, moved: [] });
+    Object.assign(blockMode, { root: wrap, pill, saved: source, original: source, moved: [] });
     const reading = readingElements(source, groups);
     const fold = document.querySelector('.vyasa-frontmatter-block:not(.vyasa-live-properties)');
     blockMode.live = editor.createLiveEditor(wrap.querySelector('.vyasa-live-mount'), source, {
@@ -524,6 +569,18 @@ export function sourceBlocks(text) {
       holdPosition(node, anchor);
     }
     blockMode.live.focusBlock(index, snippet, point);
+  }
+
+  // A double-click in the gap between blocks edits the block nearest the pointer.
+  function nearestBlock(root, y) {
+    let best = null;
+    let distance = Infinity;
+    readingBlocks(root).forEach((node) => {
+      const box = node.getBoundingClientRect();
+      const gap = y < box.top ? box.top - y : y > box.bottom ? y - box.bottom : 0;
+      if (gap < distance) [best, distance] = [node, gap];
+    });
+    return best;
   }
 
   // Keep `node` at `top` while late layout (fonts, images, a diagram drawing)
@@ -577,10 +634,6 @@ export function sourceBlocks(text) {
     return { elements, title };
   }
 
-  function onBlockClick(event) {
-    if (event.target.closest('[data-vyasa-block-done]')) exitBlocks();
-  }
-
   function leaveBlocks() {
     const wrap = blockMode.root;
     window.clearTimeout(blockMode.saveTimer);
@@ -590,9 +643,12 @@ export function sourceBlocks(text) {
     Object.assign(blockMode, { root: null, live: null, saved: '', moved: [] });
     state.dirty = false;
     if (wrap) wrap.remove();
+    if (blockMode.pill) blockMode.pill.remove();
+    blockMode.pill = null;
     const host = bodyHost();
     if (host) host.hidden = false;
     document.documentElement.classList.remove('vyasa-editing');
+    document.dispatchEvent(new CustomEvent('vyasa:editing', { detail: { editing: false } }));
     markButton(false);
     refreshProposals();
   }
@@ -687,7 +743,13 @@ export function sourceBlocks(text) {
     wrap.addEventListener('mouseover', onHunkHover);
     wrap.addEventListener('mouseout', onHunkHover);
     if (found) {
-      found.heading.after(wrap);
+      // Never inside a fold's summary: before the section's first block, or at
+      // the start of the fold's body when the section is empty.
+      const fold = found.heading.closest('details.vyasa-heading-fold');
+      const foldBody = fold && fold.querySelector(':scope > .vyasa-heading-fold-body');
+      if (found.body[0]) found.body[0].before(wrap);
+      else if (foldBody) foldBody.prepend(wrap);
+      else found.heading.after(wrap);
       found.body.forEach((node) => { node.hidden = true; });
     } else {
       // A section that does not exist yet arrives at the end, heading and all.

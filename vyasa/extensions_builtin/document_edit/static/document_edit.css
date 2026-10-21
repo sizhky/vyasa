@@ -1,55 +1,39 @@
-.vyasa-document-editor-bar {
-    display: flex;
+/* Edit mode: a floating pill, so nothing above the article changes. It shows
+   the save status and returns to reading when clicked. */
+.vyasa-edit-pill {
+    position: fixed;
+    right: var(--vyasa-space-5);
+    bottom: var(--vyasa-space-5);
+    z-index: 1400;
+    display: inline-flex;
     align-items: center;
-    justify-content: space-between;
-    gap: var(--vyasa-space-4);
-    color: var(--vyasa-text-muted);
-    font: var(--vyasa-weight-medium) var(--vyasa-text-xs)/var(--vyasa-leading-tight) var(--vyasa-font-ui);
+    gap: var(--vyasa-space-2);
+    padding: var(--vyasa-space-2) var(--vyasa-space-4);
+    border: 1px solid var(--vyasa-border);
+    border-radius: var(--vyasa-radius-pill, 999px);
+    background: var(--vyasa-surface);
+    color: var(--vyasa-text);
+    box-shadow: var(--vyasa-shadow-sm);
+    font: var(--vyasa-weight-medium) var(--vyasa-text-sm)/var(--vyasa-leading-tight) var(--vyasa-font-ui);
+    cursor: pointer;
 }
 
-.vyasa-document-editor-bar [data-kind="dirty"] { color: var(--vyasa-warning); }
-.vyasa-document-editor-bar [data-kind="ok"] { color: var(--vyasa-success); }
-.vyasa-document-editor-bar [data-kind="error"] { color: var(--vyasa-danger); }
-
-.vyasa-document-editor-hint {
-    color: var(--vyasa-text-faint);
-}
+.vyasa-edit-pill:hover { background: var(--vyasa-hover); }
+.vyasa-edit-pill-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--vyasa-accent-9); }
+.vyasa-edit-pill [data-vyasa-editor-status]:empty { display: none; }
+.vyasa-edit-pill [data-vyasa-editor-status] { color: var(--vyasa-text-muted); }
+.vyasa-edit-pill [data-kind="dirty"] { color: var(--vyasa-warning); }
+.vyasa-edit-pill [data-kind="ok"] { color: var(--vyasa-success); }
+.vyasa-edit-pill [data-kind="error"] { color: var(--vyasa-danger); }
 
 .vyasa-page-action-button-active {
     background: var(--vyasa-accent-10);
     border-color: var(--vyasa-accent-10);
 }
 
-/* Edit mode tints the page a few percent toward the accent, so the mode is
-   visible everywhere without moving anything. The tokens live on
-   #page-container, which also paints the page, so the tint is set there. */
-html.vyasa-editing #page-container {
-    --vyasa-edit-tint: color-mix(in srgb, var(--vyasa-primary) 5%, var(--vyasa-paper));
-    background: var(--vyasa-edit-tint) !important;
-    transition: background-color var(--vyasa-duration-fast) var(--vyasa-ease);
-}
-
 /* Block editor: the page as separately rendered blocks. Blocks carry no box of
    their own, so margins collapse exactly as in the reading view; only the
    active block turns into a source textarea where it stood. */
-.vyasa-block-editor-bar {
-    position: sticky;
-    top: 0;
-    z-index: 5;
-    padding-block: var(--vyasa-space-2);
-    background: var(--vyasa-edit-tint, var(--vyasa-bg));
-}
-
-.vyasa-block-editor-done {
-    padding: var(--vyasa-space-1) var(--vyasa-space-3);
-    border: 1px solid var(--vyasa-border);
-    border-radius: var(--vyasa-radius-md);
-    background: var(--vyasa-surface);
-    color: var(--vyasa-text);
-    font: inherit;
-    cursor: pointer;
-}
-
 .vyasa-block-frontmatter {
     display: inline-block;
     margin-bottom: var(--vyasa-space-4);
@@ -62,14 +46,35 @@ html.vyasa-editing #page-container {
 
 /* Live editor (live_editor.js). Prose nodes carry the reading view's classes,
    so these rules only cover what ProseMirror itself needs and the atoms. */
+/* Reading and editing look the same: no focus ring, border, padding or color
+   of its own marks the editable region; the Editing pill says which mode this
+   is. Franken UI styles every `.ProseMirror` as a form field (border, 0.5rem
+   padding, overflow, a focus ring), which moved every line; this undoes it
+   for the reading column. Its first/last paragraph margins already lose to
+   `#main-content p.text-base`, as in the reading view. */
+#main-content .ProseMirror.vyasa-live-editor,
+#main-content .ProseMirror.vyasa-live-editor:focus,
+#main-content .ProseMirror.vyasa-live-editor:focus-visible {
+    overflow: visible;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    outline: none !important;
+    box-shadow: none !important;
+}
+
 .vyasa-live-editor {
     position: relative;
-    outline: none;
     white-space: pre-wrap;
     white-space: break-spaces;
     word-wrap: break-word;
     font-variant-ligatures: none;
 }
+
+/* A reading heading is a flex row as tall as its (invisible) action buttons;
+   an editor heading has no buttons, so it takes the same height directly. */
+#main-content .vyasa-live-editor .vyasa-doc-heading { min-height: var(--vyasa-heading-action-size); }
 
 .vyasa-live-editor pre { white-space: pre-wrap; }
 .vyasa-live-editor li { position: relative; }
@@ -246,6 +251,16 @@ del.vyasa-diff-del {
     font-style: normal;
     letter-spacing: normal;
     user-select: none;
+}
+
+/* A heading's hashes hang left of its text: shown, but taking no room. */
+.vyasa-live-markup-heading {
+    position: absolute;
+    top: 50%;
+    right: 100%;
+    margin-right: var(--vyasa-space-2);
+    transform: translateY(-50%);
+    white-space: pre;
 }
 
 .vyasa-live-link-href {

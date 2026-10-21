@@ -368,7 +368,9 @@ function markupPlugin(schema) {
         const found = [];
         if (parent.type === nodes.heading) {
           const hashes = `${'#'.repeat(parent.attrs.level)} `;
-          found.push(PM.Decoration.widget(start, () => muted(hashes), { side: -1, key: `h-${hashes}` }));
+          // The hashes hang in the margin, so the heading's text does not move.
+          const hang = () => Object.assign(muted(hashes), { className: 'vyasa-live-markup vyasa-live-markup-heading' });
+          found.push(PM.Decoration.widget(start, hang, { side: -1, key: `h-${hashes}` }));
         }
         delimiters.forEach(([type, mark]) => {
           const range = markRange(parent, offset, type);
@@ -1205,9 +1207,12 @@ export function createLiveEditor(mount, source, deps) {
         return null;
       }
       const { child, offset } = target;
+      // Only a hit inside the block's text counts: a point in the gap beside it
+      // resolves to a block boundary, which `near` would carry into a neighbour.
       const hit = point && child.type.name !== 'vyasa_block' ? view.posAtCoords(point) : null;
-      if (hit && hit.pos > offset && hit.pos < offset + child.nodeSize) {
-        view.dispatch(view.state.tr.setSelection(PM.TextSelection.near(view.state.doc.resolve(hit.pos))));
+      const $hit = hit && hit.pos > offset && hit.pos < offset + child.nodeSize ? view.state.doc.resolve(hit.pos) : null;
+      if ($hit && $hit.parent.isTextblock) {
+        view.dispatch(view.state.tr.setSelection(PM.TextSelection.create(view.state.doc, hit.pos)));
         view.focus();
         return view.nodeDOM(offset);
       }
