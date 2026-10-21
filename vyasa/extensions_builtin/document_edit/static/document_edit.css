@@ -114,3 +114,101 @@ html.vyasa-editing #page-container {
     font-size: var(--vyasa-text-sm);
     line-height: var(--vyasa-leading-prose);
 }
+
+/* Proposals: an agent's pending edit, shown in place of its section. The
+   section keeps its reading typography; only the changes are marked. */
+.vyasa-proposal {
+    position: relative;
+    margin-block: var(--vyasa-space-2) var(--vyasa-space-4);
+}
+
+.vyasa-proposal::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 calc(-1 * var(--vyasa-space-4));
+    width: 2px;
+    border-radius: 1px;
+    background: var(--vyasa-accent-9);
+}
+
+.vyasa-proposal .vyasa-block { cursor: default; }
+.vyasa-proposal .vyasa-block::before { display: none; }
+
+.vyasa-proposal-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--vyasa-space-3);
+    margin-bottom: var(--vyasa-space-2);
+    color: var(--vyasa-text-muted);
+    font: var(--vyasa-weight-medium) var(--vyasa-text-xs)/var(--vyasa-leading-tight) var(--vyasa-font-ui);
+}
+
+.vyasa-proposal-origin { color: var(--vyasa-accent-11); }
+
+.vyasa-proposal-actions {
+    display: inline-flex;
+    gap: var(--vyasa-space-2);
+    margin-left: auto;
+}
+
+.vyasa-proposal-actions button,
+.vyasa-hunk-pop button {
+    padding: var(--vyasa-space-1) var(--vyasa-space-3);
+    border: 1px solid var(--vyasa-border);
+    border-radius: var(--vyasa-radius-md);
+    background: var(--vyasa-surface);
+    color: var(--vyasa-text);
+    font: inherit;
+    cursor: pointer;
+}
+
+.vyasa-proposal-actions button:disabled { opacity: 0.5; cursor: default; }
+
+.vyasa-proposal-partial .vyasa-proposal-status { color: var(--vyasa-accent-11); }
+
+ins.vyasa-diff-ins,
+del.vyasa-diff-del {
+    border-radius: 2px;
+    cursor: pointer;
+    transition: box-shadow var(--vyasa-duration-fast) var(--vyasa-ease);
+}
+
+ins.vyasa-diff-ins {
+    text-decoration: none;
+    background: color-mix(in srgb, var(--vyasa-success) 18%, transparent);
+}
+
+del.vyasa-diff-del {
+    color: var(--vyasa-text-muted);
+    text-decoration: line-through;
+    text-decoration-color: color-mix(in srgb, var(--vyasa-danger) 70%, transparent);
+    background: color-mix(in srgb, var(--vyasa-danger) 10%, transparent);
+}
+
+/* Base text the streaming agent has not reached yet: still there, not removed. */
+.vyasa-diff-pending { opacity: 0.45; }
+
+/* A changed fenced block cannot carry inline marks; this line stands for it. */
+.vyasa-diff-block {
+    margin-bottom: calc(-1 * var(--vyasa-space-2));
+    color: var(--vyasa-accent-11);
+    font: var(--vyasa-weight-medium) var(--vyasa-text-xs)/var(--vyasa-leading-tight) var(--vyasa-font-ui);
+    cursor: pointer;
+}
+
+.vyasa-diff-block::before { content: "Changed block below. Click to accept or reject."; }
+
+.vyasa-hunk-hot { box-shadow: 0 0 0 1px var(--vyasa-accent-7); }
+
+.vyasa-hunk-pop {
+    position: absolute;
+    z-index: 50;
+    display: inline-flex;
+    gap: var(--vyasa-space-1);
+    padding: var(--vyasa-space-1);
+    border: 1px solid var(--vyasa-border);
+    border-radius: var(--vyasa-radius-md);
+    background: var(--vyasa-surface);
+    box-shadow: var(--vyasa-shadow-sm);
+    font: var(--vyasa-weight-medium) var(--vyasa-text-xs)/var(--vyasa-leading-tight) var(--vyasa-font-ui);
+}

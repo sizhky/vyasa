@@ -54,6 +54,9 @@ const connect = () => {
     broadcast({ type: "refresh", data: event.data || "{}" });
   });
   source.addEventListener("reload", () => broadcast({ type: "reload" }));
+  source.addEventListener("proposal", (event) => {
+    broadcast({ type: "proposal", data: event.data || "{}" });
+  });
   source.onerror = () => {
     connected = false;
     probeUntilServerReturns();

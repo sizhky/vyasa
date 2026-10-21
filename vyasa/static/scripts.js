@@ -1081,10 +1081,11 @@ async function softRefreshActiveContent(detail = {}) {
     const activePath = currentPostsSearchPath();
     const changed = Array.isArray(detail.activePaths) ? detail.activePaths : [];
     if (!changed.length || !changed.includes(activePath)) return;
-    // Autosave from the block editor writes the file, which brings us here. The
-    // swap replaces #main-content, and the editor lives inside it, so it would
-    // take the open editor away. Leaving edit mode renders the saved file.
-    if (document.querySelector('[data-vyasa-block-editor]')) return;
+    // Document editing writes the file, which brings us here. The swap replaces
+    // #main-content and scrolls to the top, which would take an open editor
+    // away or lose the reader's place right after their own write; the page
+    // that wrote asks us to hold (see document_edit.js).
+    if (window.__vyasaHoldSoftRefresh?.()) return;
     console.info('[vyasa] soft reload active content', { activePath, detail });
     if (window.htmx?.ajax) {
         await window.htmx.ajax('GET', window.location.href, { target: '#main-content', swap: 'outerHTML show:window:top settle:0.1s' });

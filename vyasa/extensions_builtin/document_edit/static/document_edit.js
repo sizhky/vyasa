@@ -277,7 +277,7 @@ export function sourceBlocks(text) {
   const HEADING = 'h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]';
   // Elements that own their double-click: native controls, and the diagrams and
   // embeds that zoom or select on it.
-  const OWN_DBLCLICK = 'a, button, input, textarea, select, summary, label, svg, canvas, iframe, video, audio, [contenteditable]';
+  const OWN_DBLCLICK = 'a, button, input, textarea, select, summary, label, svg, canvas, iframe, video, audio, [contenteditable], [data-vyasa-proposal]';
   // In block mode a click edits the block, except on controls. A diagram is
   // not a control here: clicking it opens its source, as in Obsidian.
   const OWN_CLICK = 'button, input, select, summary, label, iframe, video, audio';
@@ -369,10 +369,12 @@ export function sourceBlocks(text) {
 
   // Re-split after an edit, keep the nodes of unchanged blocks at both ends,
   // and render only the blocks in between.
-  function applySource(next) {
-    const lines = next.split('\n');
-    const old = blockMode.items;
-    const fresh = sourceBlocks(next).map((block) => ({ ...block, text: lines.slice(block.start, block.end).join('\n') }));
+  // Re-split `text` into `list`, keep the nodes of unchanged blocks at both
+  // ends, and render only the blocks in between. Shared by the block editor
+  // and the proposal view, which both swap one block at a time.
+  function patchBlocks(list, old, text) {
+    const lines = text.split('\n');
+    const fresh = sourceBlocks(text).map((block) => ({ ...block, text: lines.slice(block.start, block.end).join('\n') }));
     const key = (item) => `${item.kind}\u0000${item.text}`;
     const { prefix, suffix } = reconcileBlocks(old.map(key), fresh.map(key));
     const middle = [];
@@ -386,10 +388,13 @@ export function sourceBlocks(text) {
     });
     old.slice(prefix, old.length - suffix).forEach((item) => item.node.remove());
     const before = suffix ? items[items.length - suffix].node : null;
-    middle.forEach((item) => blockMode.list.insertBefore(item.node, before));
-    blockMode.items = items;
+    middle.forEach((item) => list.insertBefore(item.node, before));
+    return { items, rendered: renderBlocks(middle) };
+  }
+
+  function applySource(next) {
+    blockMode.items = patchBlocks(blockMode.list, blockMode.items, next).items;
     blockMode.source = next;
-    renderBlocks(middle);
   }
 
   function commitActive() {
@@ -555,6 +560,7 @@ export function sourceBlocks(text) {
 
   // `event` is the double-click; the Edit button passes null and activates nothing.
   async function enterBlocks(event) {
+    clearProposalViews();
     const host = bodyHost();
     const slug = button()?.dataset.vyasaEditDocument || '';
     if (!host || !slug) return;
@@ -575,7 +581,6 @@ export function sourceBlocks(text) {
     const line = ranges && section >= 0 ? ranges[section].start : 0;
     state.slug = slug;
     state.revision = payload.revision || '';
-    const lines = source.split('\n');
     const wrap = document.createElement('div');
     wrap.className = 'w-full vyasa-block-editor';
     wrap.setAttribute('data-vyasa-block-editor', 'true');
@@ -586,15 +591,15 @@ export function sourceBlocks(text) {
       '<button type="button" class="vyasa-block-editor-done" data-vyasa-block-done>Done</button>' +
       '</div><div class="vyasa-block-list"></div>';
     Object.assign(blockMode, { root: wrap, list: wrap.querySelector('.vyasa-block-list'), source, saved: source, original: source, active: -1, input: null });
-    blockMode.items = sourceBlocks(source).map((item) => makeItem(item, lines));
-    blockMode.items.forEach((item) => blockMode.list.appendChild(item.node));
+    const first = patchBlocks(blockMode.list, [], source);
+    blockMode.items = first.items;
     wrap.addEventListener('mousedown', onBlockPointer);
     wrap.addEventListener('click', onBlockClick);
     host.parentNode.insertBefore(wrap, host);
     host.hidden = true;
     document.documentElement.classList.add('vyasa-editing');
     markButton(true);
-    await renderBlocks(blockMode.items);
+    await first.rendered;
     if (blockMode.root !== wrap || !block) return;
     // Prefer the block that renders to the same text as the one clicked, then
     // the first block of its section.
@@ -636,6 +641,7 @@ export function sourceBlocks(text) {
     if (host) host.hidden = false;
     document.documentElement.classList.remove('vyasa-editing');
     markButton(false);
+    refreshProposals();
   }
 
   // Save what is left, then show the reading view rendered from the saved file.
@@ -658,6 +664,231 @@ export function sourceBlocks(text) {
     return true;
   }
 
+  // --- proposals ---------------------------------------------------------
+  // An agent's pending edit to one section, shown in place of that section as
+  // an inline diff. The server sends the proposed section as markdown with each
+  // change wrapped in <ins>/<del>; it is split and rendered block by block like
+  // the block editor, so while the text streams in only the changed blocks
+  // redraw. Nothing reaches the file until a hunk is accepted.
+  const PROPOSALS_URL = (slug) => `/api/documents/proposals/${slug}`;
+  const RESOLVE_URL = (id, action) => `/api/document-proposals/${id}/${action}`;
+  // Our own accept writes the file, and the live-reload swap that follows
+  // would scroll to the top; for this long after a write, skip it.
+  const SELF_WRITE_MS = 3000;
+  const review = { views: new Map(), fetching: false, again: false, heldUntil: 0, pop: null };
+
+  const proposalSlug = () => button()?.dataset.vyasaEditDocument || '';
+
+  function clearProposalViews() {
+    review.views.forEach((view) => {
+      view.wrap.remove();
+      view.hidden.forEach((node) => { node.hidden = false; });
+    });
+    review.views.clear();
+    hideHunkPop();
+  }
+
+  async function refreshProposals() {
+    const slug = proposalSlug();
+    if (!slug || blockMode.root || !bodyHost()) return;
+    if (review.fetching) {
+      review.again = true;
+      return;
+    }
+    review.fetching = true;
+    state.slug = slug;
+    try {
+      const response = await fetch(PROPOSALS_URL(slug));
+      if (response.ok) await showProposals((await response.json()).proposals || []);
+    } catch (error) {
+      /* proposals are shown on the next event */
+    }
+    review.fetching = false;
+    if (review.again) {
+      review.again = false;
+      refreshProposals();
+    }
+  }
+
+  // The section a proposal replaces: the blocks after its heading up to the
+  // next heading of any level, as `sutragana doc write` counts it.
+  function sectionNodes(root, anchor) {
+    const groups = sectionGroups(root);
+    const group = anchor ? groups.find((nodes) => nodes[0] && nodes[0].id === anchor) : null;
+    return group ? { heading: group[0], body: group.slice(1) } : null;
+  }
+
+  function buildProposalView(root, proposal) {
+    const found = sectionNodes(root, proposal.anchor);
+    const wrap = document.createElement('div');
+    wrap.className = 'vyasa-proposal';
+    wrap.setAttribute('data-vyasa-proposal', proposal.id);
+    wrap.innerHTML =
+      '<div class="vyasa-proposal-bar">' +
+      '<span class="vyasa-proposal-origin"></span>' +
+      '<span class="vyasa-proposal-status" data-vyasa-proposal-status></span>' +
+      '<span class="vyasa-proposal-actions">' +
+      '<button type="button" data-vyasa-proposal-action="accept">Accept all</button>' +
+      '<button type="button" data-vyasa-proposal-action="reject">Reject all</button>' +
+      '</span></div><div class="vyasa-block-list"></div>';
+    wrap.addEventListener('click', onProposalClick);
+    wrap.addEventListener('mouseover', onHunkHover);
+    wrap.addEventListener('mouseout', onHunkHover);
+    if (found) {
+      found.heading.after(wrap);
+      found.body.forEach((node) => { node.hidden = true; });
+    } else {
+      // A section that does not exist yet arrives at the end, heading and all.
+      wrap.classList.add('vyasa-proposal-new');
+      root.appendChild(wrap);
+    }
+    return { wrap, list: wrap.querySelector('.vyasa-block-list'), items: [], hidden: found ? found.body : [] };
+  }
+
+  async function showProposals(proposals) {
+    const root = contentRoot(bodyHost());
+    const live = new Set(proposals.map((proposal) => proposal.id));
+    review.views.forEach((view, id) => {
+      // A live-reload swap replaces the article, and the view with it.
+      if (live.has(id) && view.wrap.isConnected) return;
+      view.wrap.remove();
+      view.hidden.forEach((node) => { node.hidden = false; });
+      review.views.delete(id);
+    });
+    const renders = proposals.map((proposal) => {
+      let view = review.views.get(proposal.id);
+      if (!view) {
+        view = buildProposalView(root, proposal);
+        review.views.set(proposal.id, view);
+      }
+      const text = view.wrap.classList.contains('vyasa-proposal-new')
+        ? `${proposal.heading}\n\n${proposal.marked}`
+        : proposal.marked;
+      const patched = patchBlocks(view.list, view.items, text);
+      view.items = patched.items;
+      describeProposal(view, proposal);
+      return patched.rendered;
+    });
+    await Promise.all(renders);
+  }
+
+  function describeProposal(view, proposal) {
+    const count = proposal.hunks.length;
+    view.wrap.querySelector('.vyasa-proposal-origin').textContent = proposal.origin || 'Proposed edit';
+    let status = `${count} change${count === 1 ? '' : 's'}`;
+    if (proposal.partial) status = 'Writing...';
+    if (proposal.stale_base) status += ' · section changed since';
+    view.wrap.querySelector('[data-vyasa-proposal-status]').textContent = status;
+    view.wrap.classList.toggle('vyasa-proposal-partial', proposal.partial);
+    view.wrap.querySelectorAll('[data-vyasa-proposal-action]').forEach((node) => {
+      node.disabled = proposal.partial;
+    });
+  }
+
+  const hunkIds = (node) => {
+    const many = node.getAttribute('data-vyasa-hunks');
+    if (many) return many.split(' ').map(Number);
+    return [Number(node.getAttribute('data-vyasa-hunk'))];
+  };
+
+  function onHunkHover(event) {
+    const node = event.target.closest('[data-vyasa-hunk], [data-vyasa-hunks]');
+    if (!node) return;
+    const wrap = node.closest('[data-vyasa-proposal]');
+    const on = event.type === 'mouseover';
+    hunkIds(node).forEach((id) => {
+      wrap.querySelectorAll(`[data-vyasa-hunk="${id}"]`).forEach((part) => part.classList.toggle('vyasa-hunk-hot', on));
+    });
+    node.classList.toggle('vyasa-hunk-hot', on);
+  }
+
+  function onProposalClick(event) {
+    const wrap = event.currentTarget;
+    const id = wrap.getAttribute('data-vyasa-proposal');
+    const whole = event.target.closest('[data-vyasa-proposal-action]');
+    if (whole) {
+      resolveProposal(id, whole.getAttribute('data-vyasa-proposal-action'), null);
+      return;
+    }
+    const node = event.target.closest('[data-vyasa-hunk], [data-vyasa-hunks]');
+    if (!node || wrap.classList.contains('vyasa-proposal-partial')) return;
+    event.preventDefault();
+    showHunkPop(node, id, hunkIds(node));
+  }
+
+  function showHunkPop(node, id, hunks) {
+    hideHunkPop();
+    const pop = document.createElement('div');
+    pop.className = 'vyasa-hunk-pop';
+    pop.innerHTML =
+      '<button type="button" data-hunk-action="accept" aria-label="Accept this change">Accept</button>' +
+      '<button type="button" data-hunk-action="reject" aria-label="Reject this change">Reject</button>';
+    const box = node.getBoundingClientRect();
+    pop.style.left = `${window.scrollX + box.left}px`;
+    pop.style.top = `${window.scrollY + box.bottom + 4}px`;
+    pop.addEventListener('click', (event) => {
+      const action = event.target.closest('[data-hunk-action]');
+      if (!action) return;
+      hideHunkPop();
+      resolveProposal(id, action.getAttribute('data-hunk-action'), hunks);
+    });
+    document.body.appendChild(pop);
+    review.pop = pop;
+  }
+
+  function hideHunkPop() {
+    if (review.pop) review.pop.remove();
+    review.pop = null;
+  }
+
+  async function resolveProposal(id, action, hunks) {
+    review.heldUntil = performance.now() + SELF_WRITE_MS;
+    let response;
+    try {
+      response = await fetch(RESOLVE_URL(id, action), {
+        method: 'POST',
+        body: JSON.stringify(hunks ? { hunks } : {}),
+      });
+    } catch (error) {
+      return;
+    }
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const status = review.views.get(id)?.wrap.querySelector('[data-vyasa-proposal-status]');
+      if (status) status.textContent = payload.error || `Failed (${response.status})`;
+      return;
+    }
+    if (payload.html) {
+      // The article is rendered again from the file; every view rebuilds on it.
+      clearProposalViews();
+      await applyRender(bodyHost(), payload);
+    }
+    refreshProposals();
+  }
+
+  // Live reload asks this before it swaps the article: not while the block
+  // editor is open, and not right after our own write, which the page has
+  // already rendered.
+  window.__vyasaHoldSoftRefresh = () => Boolean(blockMode.root) || performance.now() < review.heldUntil;
+
+  document.addEventListener('vyasa:proposal', (event) => {
+    if ((event.detail || {}).slug === proposalSlug()) refreshProposals();
+  });
+
+  // A new article (navigation, live reload, an accept) brings its own nodes;
+  // views on the old ones are gone, so build them again.
+  document.addEventListener('htmx:afterSwap', (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    if (target.matches('[data-vyasa-document-body]') || target.querySelector('[data-vyasa-document-body]')) {
+      refreshProposals();
+    }
+  });
+
+  document.addEventListener('mousedown', (event) => {
+    if (review.pop && !review.pop.contains(event.target)) hideHunkPop();
+  });
+
   document.addEventListener('dblclick', (event) => {
     if (blockMode.root || blockMode.busy || event.defaultPrevented) return;
     const host = bodyHost();
@@ -675,6 +906,8 @@ export function sourceBlocks(text) {
       leaveBlocks();
     }
   });
+
+  refreshProposals();
 
   window.addEventListener('beforeunload', (event) => {
     if (!state.dirty) return;

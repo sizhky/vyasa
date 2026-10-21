@@ -4,6 +4,7 @@ from ...extensions import AssetBundle, ExtensionMeta, VyasaExtensionBase
 from .api import (
     edits_enabled,
     register_document_block_routes,
+    register_document_proposal_routes,
     register_document_preview_routes,
     register_document_source_routes,
 )
@@ -14,6 +15,8 @@ class DocumentEditExtension(VyasaExtensionBase):
         app.routes.add("/api/documents/source", register_document_source_routes, methods=("GET", "POST"))
         app.routes.add("/api/documents/preview", register_document_preview_routes, methods=("POST",))
         app.routes.add("/api/documents/blocks", register_document_block_routes, methods=("POST",))
+        app.routes.add("/api/documents/proposals", register_document_proposal_routes, methods=("GET", "POST"))
+        app.routes.add("/api/document-proposals", register_document_proposal_routes, methods=("POST",))
         app.documents.action(_edit_action)
         app.assets.bundle(
             AssetBundle(
@@ -58,7 +61,13 @@ EXTENSION = DocumentEditExtension(
             "bundle:document_edit.runtime",
         ),
         requires=("slot:layout", "cap:markdown_pipeline"),
-        route_prefixes=("/api/documents/source", "/api/documents/preview", "/api/documents/blocks"),
+        route_prefixes=(
+            "/api/documents/source",
+            "/api/documents/preview",
+            "/api/documents/blocks",
+            "/api/documents/proposals",
+            "/api/document-proposals",
+        ),
         scope_disable=True,
     )
 )
