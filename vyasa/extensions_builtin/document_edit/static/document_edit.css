@@ -127,9 +127,6 @@
 
 .vyasa-live-atom:hover::before { background: var(--vyasa-border); }
 
-/* The `# Title` the reading view shows in the page header: kept, not shown twice. */
-.vyasa-live-atom[data-kind="title"] { display: none; }
-
 /* The editor holds the clicked block in place itself (holdPosition). */
 .vyasa-block-editor { overflow-anchor: none; }
 .vyasa-live-atom-selected::before,

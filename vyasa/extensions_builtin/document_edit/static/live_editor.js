@@ -927,6 +927,8 @@ function plugins(schema, deps) {
   ];
 }
 
+const hiddenAtom = (node, deps) => node.attrs.kind === 'title' || (node.attrs.kind === 'frontmatter' && !deps.frontmatter);
+
 // An atom shows the server render; a click or Enter opens its source below the
 // render, which follows the source as you type (deps.renderLive keeps the last
 // good render while the source does not render).
@@ -938,6 +940,12 @@ class AtomView {
     this.dom = document.createElement('div');
     this.dom.className = 'vyasa-live-atom';
     this.dom.dataset.kind = node.attrs.kind;
+    // Kept in the file but not shown, as in the reading view: the `# Title` the
+    // page header shows, and frontmatter when the page shows no Front Matter.
+    if (hiddenAtom(node, deps)) {
+      this.dom.hidden = true;
+      return;
+    }
     this.preview = document.createElement('div');
     this.preview.className = 'vyasa-live-atom-view';
     this.dom.appendChild(this.preview);
@@ -1047,7 +1055,11 @@ class AtomView {
 
   update(node) {
     if (node.type !== this.node.type) return false;
-    if (node.attrs.kind === 'frontmatter' && parseProperties(node.attrs.source)) return false;
+    if (node.attrs.kind === 'frontmatter' && this.deps.frontmatter && parseProperties(node.attrs.source)) return false;
+    if (this.dom.hidden) {
+      this.node = node;
+      return true;
+    }
     const changed = node.attrs.source !== this.node.attrs.source;
     this.node = node;
     // A source the live preview already drew needs no second render.
@@ -1184,7 +1196,7 @@ export function createLiveEditor(mount, source, deps) {
     state: PM.EditorState.create({ doc: built.doc, plugins: plugins(schema, deps) }),
     nodeViews: {
       vyasa_block: (node, editorView, getPos) =>
-        node.attrs.kind === 'frontmatter' && parseProperties(node.attrs.source)
+        node.attrs.kind === 'frontmatter' && deps.frontmatter && parseProperties(node.attrs.source)
           ? new PropertiesView(node, editorView, getPos, deps)
           : new AtomView(node, editorView, getPos, deps),
     },

@@ -420,7 +420,6 @@ export function sourceBlocks(text) {
   // Atoms ask for their render one at a time; collect them for one request.
   const atomQueue = [];
   function renderAtom(target, text, kind) {
-    if (kind === 'title') return; // hidden: the page header shows it
     if (kind === 'frontmatter') {
       target.innerHTML = '<div class="vyasa-block-frontmatter">Frontmatter</div>';
       return;
