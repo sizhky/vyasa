@@ -135,6 +135,16 @@
 .vyasa-live-atom-selected::before,
 .vyasa-live-atom:focus-within::before { background: var(--vyasa-accent-7); }
 
+/* The hidden copy a live preview renders into before it is shown: laid out at
+   the render's width so diagrams measure real space, never seen. */
+.vyasa-live-atom-stage {
+    position: absolute;
+    left: 0;
+    top: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
 /* Source of an atom: code in both modes, so it keeps the code face. */
 .vyasa-live-atom-input {
     display: block;

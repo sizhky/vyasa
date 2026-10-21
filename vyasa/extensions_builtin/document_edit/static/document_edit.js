@@ -447,6 +447,51 @@ export function sourceBlocks(text) {
     if (atomQueue.length === 1) queueMicrotask(flushAtoms);
   }
 
+  // Live preview of an atom's source: render into a hidden copy beside `target`,
+  // let the diagram runtimes draw it, and swap it in only when nothing in it
+  // reports `data-vyasa-render-error`. True when the new render is shown;
+  // false keeps the last good one. A later call supersedes an earlier one.
+  let liveSequence = 0;
+  async function renderLive(target, text, kind) {
+    if (kind === 'title' || kind === 'frontmatter') return false;
+    const sequence = (liveSequence += 1);
+    const payload = await fetchBlocks([text]);
+    const html = payload && payload.blocks ? payload.blocks[0] : null;
+    if (html == null || sequence !== liveSequence || !target.isConnected) return false;
+    const stage = document.createElement('div');
+    stage.className = 'vyasa-live-atom-stage';
+    stage.style.width = `${target.clientWidth}px`;
+    stage.innerHTML = html;
+    target.after(stage);
+    await loadBundles(payload);
+    announce(stage);
+    await quiet(stage);
+    const shown = sequence === liveSequence && stage.isConnected && !stage.querySelector('[data-vyasa-render-error]');
+    if (shown) target.replaceChildren(...stage.childNodes);
+    stage.remove();
+    return shown;
+  }
+
+  // Resolves once `node` has had no DOM change for 250 ms (runtimes draw
+  // asynchronously), or after 3 s.
+  function quiet(node) {
+    return new Promise((resolve) => {
+      let timer = 0;
+      const done = () => {
+        observer.disconnect();
+        window.clearTimeout(cap);
+        resolve();
+      };
+      const observer = new MutationObserver(() => {
+        window.clearTimeout(timer);
+        timer = window.setTimeout(done, 250);
+      });
+      observer.observe(node, { subtree: true, childList: true, attributes: true, characterData: true });
+      timer = window.setTimeout(done, 250);
+      const cap = window.setTimeout(done, 3000);
+    });
+  }
+
   async function flushAtoms() {
     const batch = atomQueue.splice(0);
     const payload = await fetchBlocks(batch.map((item) => item.text));
@@ -547,6 +592,7 @@ export function sourceBlocks(text) {
       frontmatter: fold ? { block: fold.className, summary: fold.querySelector('summary')?.className } : null,
       adopt: (index) => adopt(reading.elements.get(index)),
       renderAtom,
+      renderLive,
       grow: growInput,
       onChange: scheduleSave,
       onSave: () => saveNow(),

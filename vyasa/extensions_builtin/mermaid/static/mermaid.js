@@ -5,11 +5,21 @@ const mermaidStates = {};
 const peleMounts = new WeakMap();
 
 // Pele draws synchronously and themes through --pele-* CSS variables, so a theme switch needs no re-render.
+// A diagram that fails marks its wrapper `data-vyasa-render-error`, the mark the
+// live editor reads to keep the last good render while its source is mid-edit.
 function runDiagrams({ nodes }) {
     nodes.forEach((pre) => {
         if (pre.querySelector('svg')) return;
+        const wrapper = pre.closest('.mermaid-wrapper') || pre;
         peleMounts.get(pre)?.destroy();
-        peleMounts.set(pre, mount(pre, pre.textContent, { zoom: false }));
+        try {
+            peleMounts.set(pre, mount(pre, pre.textContent, { zoom: false }));
+            // Pele reports bad source as text in place of the drawing, not a throw.
+            if (pre.querySelector('svg')) wrapper.removeAttribute('data-vyasa-render-error');
+            else wrapper.setAttribute('data-vyasa-render-error', pre.textContent.trim().slice(0, 200) || 'no diagram');
+        } catch (error) {
+            wrapper.setAttribute('data-vyasa-render-error', String(error && error.message || error).slice(0, 200));
+        }
     });
     return Promise.resolve();
 }

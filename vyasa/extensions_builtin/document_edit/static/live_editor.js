@@ -927,10 +927,14 @@ function plugins(schema, deps) {
   ];
 }
 
-// An atom shows the server render; a click or Enter swaps in its source.
+// An atom shows the server render; a click or Enter opens its source below the
+// render, which follows the source as you type (deps.renderLive keeps the last
+// good render while the source does not render).
+const LIVE_RENDER_MS = 400;
+
 class AtomView {
   constructor(node, view, getPos, deps) {
-    Object.assign(this, { node, view, getPos, deps, input: null });
+    Object.assign(this, { node, view, getPos, deps, input: null, rendered: node.attrs.source, timer: 0 });
     this.dom = document.createElement('div');
     this.dom.className = 'vyasa-live-atom';
     this.dom.dataset.kind = node.attrs.kind;
@@ -959,12 +963,17 @@ class AtomView {
     input.spellcheck = false;
     input.setAttribute('aria-label', `Markdown source of this ${this.node.attrs.kind} block`);
     input.value = this.node.attrs.source;
-    this.preview.hidden = true;
+    // The render stays above; the source opens below it, so nothing above moves.
+    this.dom.classList.add('vyasa-live-atom-editing');
     this.dom.appendChild(input);
     this.input = input;
     this.deps.grow(input);
     input.focus();
-    input.addEventListener('input', () => this.deps.grow(input));
+    input.addEventListener('input', () => {
+      this.deps.grow(input);
+      window.clearTimeout(this.timer);
+      this.timer = window.setTimeout(() => this.renderSource(input.value), LIVE_RENDER_MS);
+    });
     input.addEventListener('blur', () => this.close());
     input.addEventListener('keydown', (event) => {
       const mod = event.metaKey || event.ctrlKey;
@@ -987,6 +996,12 @@ class AtomView {
     });
   }
 
+  // Render `text` into the visible render if it renders; remember what is shown.
+  async renderSource(text) {
+    if (!this.deps.renderLive || text === this.rendered) return;
+    if (await this.deps.renderLive(this.preview, text, this.node.attrs.kind)) this.rendered = text;
+  }
+
   // Close the source and put the caret next to the block, before or after.
   leave(side) {
     this.close();
@@ -1004,8 +1019,9 @@ class AtomView {
     const input = this.input;
     if (!input) return;
     this.input = null;
+    window.clearTimeout(this.timer);
     input.remove();
-    this.preview.hidden = false;
+    this.dom.classList.remove('vyasa-live-atom-editing');
     if (input.value === this.node.attrs.source) return;
     const pos = this.getPos();
     if (pos == null) return;
@@ -1020,7 +1036,11 @@ class AtomView {
     if (node.attrs.kind === 'frontmatter' && parseProperties(node.attrs.source)) return false;
     const changed = node.attrs.source !== this.node.attrs.source;
     this.node = node;
-    if (changed && !this.input) this.deps.renderAtom(this.preview, node.attrs.source, node.attrs.kind);
+    // A source the live preview already drew needs no second render.
+    if (changed && !this.input && node.attrs.source !== this.rendered) {
+      this.deps.renderAtom(this.preview, node.attrs.source, node.attrs.kind);
+      this.rendered = node.attrs.source;
+    }
     return true;
   }
 

@@ -370,6 +370,7 @@ async function renderD2Diagrams(rootElement = document) {
             activateSvgAnimations(wrapper);
             ensureD2PanzoomStage(wrapper);
             wrapper.dataset.d2Rendered = 'true';
+            wrapper.removeAttribute('data-vyasa-render-error');
             d2DebugLog('svg hydrated', { id: wrapper.id, ms: performance.now() - hydrateStart });
             const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
             d2DebugLog('rendered', {
@@ -382,6 +383,8 @@ async function renderD2Diagrams(rootElement = document) {
             });
         } catch (error) {
             console.error('Failed to render D2 diagram', error);
+            // The live editor keeps the last good render while this mark is set.
+            wrapper.setAttribute('data-vyasa-render-error', String(error && error.message || error).slice(0, 200));
             if (d2DebugEnabled()) {
                 d2DebugLog('render failure details', {
                     id: wrapper.id,
