@@ -118,7 +118,17 @@ def collect_symbols(code_root: Path) -> list[Symbol]:
         rel = path.relative_to(code_root).as_posix()
         for node in tree.body:
             found.extend(_symbols_in(node, rel, lines, prefix=""))
+            found.extend(_variable_in(node, rel, lines))
     return found
+
+
+def _variable_in(node: ast.AST, rel: str, lines: dict[int, str]) -> list[Symbol]:
+    """A module-level `NAME = ...` binds to the leaf whose number opens the comment line above it."""
+    if not (isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name)):
+        return []
+    above = lines.get(node.lineno - 1, "").strip()
+    number = ORDER.match(above[1:].strip()) if above.startswith("#") else None
+    return [Symbol(number.group(1), node.targets[0].id, "variable", rel, node, lines)] if number else []
 
 
 def _symbols_in(node: ast.AST, rel: str, lines: dict[int, str], prefix: str) -> list[Symbol]:
@@ -216,6 +226,8 @@ def collect_defs(code_root: Path) -> list[tuple[str, str, str, int, int]]:
 
 
 def link(label: str, symbol: Symbol, depth: str, focus: str | None) -> str:
+    if symbol.kind == "variable":
+        return f'[{label}]({depth}{symbol.path}){{show=file focus="match[{symbol.name} = ]"}}'
     tail = f" {focus}" if focus else ""
     return f"[{label}]({depth}{symbol.path}){{show=symbol symbol={symbol.name} kind={symbol.kind}{tail}}}"
 
