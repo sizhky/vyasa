@@ -778,6 +778,18 @@ async def _live_reload_events():
         hub.unsubscribe(queue)
 
 
+@rt("/_vyasa/stylesheets/{index}")
+def configured_stylesheet(index: int):
+    """One CSS file of the `stylesheets` setting, by its place in the list.
+
+    Only configured files are served, so the index can name nothing else.
+    """
+    sheets = get_config().get_stylesheets()
+    if not 0 <= index < len(sheets):
+        return Response(status_code=404)
+    return Response(sheets[index].read_text(encoding="utf-8"), media_type="text/css", headers={"Cache-Control": "no-cache"})
+
+
 @rt("/_vyasa/reload")
 async def live_reload():
     if not get_config().get_browser_reload_enabled():

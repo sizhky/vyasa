@@ -4,6 +4,7 @@ from typing import Any
 
 from fasthtml.common import *
 from monsterui.all import *
+from .config import get_config
 from .helpers import content_root_and_relative, content_slug_for_path, content_url_for_slug
 from .extensions import translate_markdown_source
 from .sections import markdown_headings
@@ -143,7 +144,11 @@ def get_custom_css_links(root, current_path=None, section_class=None):
         href = content_url_for_slug(slug) if slug else content_url_for_slug(path.relative_to(root))
         return f"{href}?v={path.stat().st_mtime_ns}"
 
-    css_elements = []
+    # Configured stylesheets come first, so the root's own CSS can override them.
+    css_elements = [
+        Link(rel="stylesheet", href=f"/_vyasa/stylesheets/{index}?v={sheet.stat().st_mtime_ns}")
+        for index, sheet in enumerate(get_config().get_stylesheets())
+    ]
     for filename in ["global.css", "custom.css", "style.css"]:
         css_file = root / filename
         if css_file.exists():

@@ -34,8 +34,8 @@ def load_theme_toml(theme_name: str, base_dir: Path | None = None) -> dict[str, 
     return {}
 
 
-def theme_from_toml(theme_name: str) -> ThemeExtension:
-    return ThemeExtension(id=theme_name, theme=load_theme_toml(theme_name))
+def theme_from_toml(theme_name: str, base_dir: Path | None = None) -> ThemeExtension:
+    return ThemeExtension(id=theme_name, theme=load_theme_toml(theme_name, base_dir))
 
 
 def resolve_theme_extension(theme_id: str, registry: dict[str, ThemeExtension], *, rng: random.Random | None = None, _seen: set[str] | None = None) -> tuple[dict[str, str], str]:
