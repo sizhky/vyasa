@@ -8,7 +8,7 @@
   --vyasa-zen-title-line-height: 1.05;
   --vyasa-zen-title-weight: 700;
 }
-.vyasa-zen-present .vyasa-fold-all-button { display: none !important; }
+.vyasa-zen-present [data-vyasa-fold-all] { display: none !important; }
 .vyasa-zen-content .vyasa-heading-action,
 .vyasa-zen-content .vyasa-heading-action-children,
 .vyasa-zen-content .vyasa-heading-launch,

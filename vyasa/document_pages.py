@@ -154,6 +154,14 @@ def meta_line(source_text: str, file_path=None, meta_extra=None):
     return P(*items, cls="vyasa-read-time text-sm text-vyasa-muted mt-2 flex flex-wrap items-center gap-2")
 
 
+PAGE_ACTION_CLS = "vyasa-page-action-button vyasa-page-action-tooltip"
+
+
+def page_action_label(text: str):
+    """Visible label of a page action; header.css hides it in a narrow document header."""
+    return Span(text, cls="vyasa-page-action-label")
+
+
 def _encoded_copy_payload(text: str) -> str:
     return base64.b64encode(text.encode("utf-8")).decode("ascii")
 
@@ -162,10 +170,10 @@ def copy_raw_button(label: str, raw_content: str, toast_id: str):
     tooltip = f"Copy raw {label.removeprefix('Copy ').lower()}"
     return Button(
         action_icon("clipboard"),
-        Span(label, cls="text-sm font-medium"),
+        page_action_label(label),
         type="button",
         onclick=COPY_RAW_PAYLOAD_JS % toast_id,
-        cls="vyasa-page-action-button vyasa-page-action-tooltip inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm",
+        cls=PAGE_ACTION_CLS,
         data_tooltip=tooltip,
         aria_label=tooltip,
         data_copy_payload=_encoded_copy_payload(raw_content),
@@ -176,13 +184,11 @@ def copy_text_button(label: str, text: str, target_id: str, toast_id: str, *, al
     return (
         Button(
             action_icon("file-edit"),
-            Span(label, cls="sr-only" if icon_only else "text-sm font-medium"),
+            Span(label, cls="sr-only") if icon_only else page_action_label(label),
             Span(". Shift-click copies absolute path.", cls="sr-only") if alternate_text is not None else None,
             type="button",
             onclick=COPY_TEXT_PAYLOAD_JS % toast_id,
-            cls="vyasa-page-action-button inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm"
-            + (" vyasa-page-action-tooltip" if alternate_text is not None else "")
-            + (f" {extra_cls}" if extra_cls else ""),
+            cls=PAGE_ACTION_CLS + (f" {extra_cls}" if extra_cls else ""),
             aria_label=f"{label}. Shift-click copies absolute path." if alternate_text is not None else None,
             data_copy_payload=_encoded_copy_payload(text),
             data_copy_alternate_payload=_encoded_copy_payload(alternate_text) if alternate_text is not None else None,
@@ -197,7 +203,7 @@ def edit_document_button(slug: str, editor_url: str = "", bundle_url: str = ""):
     """Toggle live editing in place; the editor module and its ProseMirror bundle load from these URLs on first use."""
     return Button(
         action_icon("file-edit"),
-        Span("Edit", cls="text-sm font-medium"),
+        page_action_label("Edit"),
         type="button",
         data_vyasa_edit_document=str(slug or "").strip("/"),
         data_vyasa_live_editor=editor_url or None,
@@ -205,33 +211,33 @@ def edit_document_button(slug: str, editor_url: str = "", bundle_url: str = ""):
         aria_pressed="false",
         data_tooltip="Edit this document (E)",
         aria_label="Edit this document",
-        cls="vyasa-page-action-button vyasa-page-action-tooltip inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm",
+        cls=PAGE_ACTION_CLS,
     )
 
 
 def fold_all_button():
     return Button(
         action_icon("fold"),
-        Span("Fold all", cls="text-sm font-medium"),
+        page_action_label("Fold all"),
         type="button",
         hidden=True,
         data_vyasa_fold_all="open",
         data_tooltip="Fold all sections (C)",
         aria_label="Fold all sections (C)",
-        cls="vyasa-fold-all-button vyasa-page-action-tooltip inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm",
+        cls=PAGE_ACTION_CLS,
     )
 
 
 def present_button(slug: str):
     return A(
         action_icon("monitor"),
-        "Present",
+        page_action_label("Present"),
         href=content_url_for_slug(slug, prefix="/slides", suffix="/slide-1"),
         hx_boost="false",
         data_vyasa_present_document="true",
         data_tooltip="Present document",
         aria_label="Present document",
-        cls="vyasa-page-action-button vyasa-page-action-tooltip inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm",
+        cls=PAGE_ACTION_CLS,
     )
 
 
@@ -240,14 +246,14 @@ def diff_button(slug: str, *, active: bool = False):
     label, tooltip = ("Close diff", "Back to the document (D)") if active else ("Diff", "Show unstaged changes (D)")
     return A(
         action_icon("git-compare"),
-        label,
+        page_action_label(label),
         href=content_url_for_slug(slug, prefix="/posts" if active else "/diff"),
         hx_boost="false",
         data_vyasa_diff_document="true",
         aria_pressed="true" if active else "false",
         data_tooltip=tooltip,
         aria_label=tooltip,
-        cls="vyasa-page-action-button vyasa-page-action-tooltip inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm"
+        cls=PAGE_ACTION_CLS
         + (" vyasa-page-action-button-active" if active else ""),
     )
 
@@ -256,14 +262,14 @@ def external_action_link(label: str, href: str, tooltip: str):
     """Page action that opens an outside URL, styled like the other page actions."""
     return A(
         action_icon("external-link"),
-        label,
+        page_action_label(label),
         href=href,
         target="_blank",
         rel="noopener",
         hx_boost="false",
         data_tooltip=tooltip,
         aria_label=tooltip,
-        cls="vyasa-page-action-button vyasa-page-action-tooltip inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm",
+        cls=PAGE_ACTION_CLS,
     )
 
 
@@ -276,7 +282,7 @@ def document_header(title: str, source_text: str, *, actions=(), breadcrumbs=Non
         breadcrumbs,
         Div(H1(title, cls=PAGE_TITLE_CLS), action_row(*actions), cls="flex items-start justify-between gap-4 flex-wrap"),
         meta_line(source_text, file_path, meta_extra),
-        cls="mb-8",
+        cls="vyasa-doc-header mb-8",
     )
 
 

@@ -23,7 +23,7 @@
   padding-top: var(--vyasa-zen-chrome-gap) !important;
   overflow-x: clip;
 }
-.vyasa-zen-present .vyasa-fold-all-button { display: none !important; }
+.vyasa-zen-present [data-vyasa-fold-all] { display: none !important; }
 .vyasa-zen-content .vyasa-heading-action,
 .vyasa-zen-content .vyasa-heading-action-children,
 .vyasa-zen-content .vyasa-heading-launch,

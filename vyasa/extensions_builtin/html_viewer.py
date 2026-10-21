@@ -1,9 +1,9 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-from fasthtml.common import A, Div, H1, Iframe, Span, to_xml
+from fasthtml.common import A, Div, H1, Iframe, to_xml
 
-from ..document_pages import PAGE_TITLE_CLS, DocumentPage, action_icon
+from ..document_pages import PAGE_ACTION_CLS, PAGE_TITLE_CLS, DocumentPage, action_icon, page_action_label
 from ..extensions import DocumentType, ExtensionMeta, VyasaExtensionBase
 from ..helpers import content_url_for_slug
 
@@ -31,14 +31,14 @@ def _frame(**attrs):
 def _popout(src):
     return A(
         action_icon("external-link"),
-        Span("Open standalone", cls="text-sm font-medium"),
+        page_action_label("Open standalone"),
         href=src,
         target="_blank",
         rel="noopener",
         hx_boost="false",
         data_tooltip="Open raw HTML in a new tab",
         aria_label="Open raw HTML in a new tab",
-        cls="vyasa-page-action-button vyasa-page-action-tooltip inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm",
+        cls=PAGE_ACTION_CLS,
     )
 
 
