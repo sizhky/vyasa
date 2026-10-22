@@ -437,3 +437,6 @@ html.vyasa-editing .vyasa-frontmatter-block:not(.vyasa-live-properties) { displa
 .vyasa-live-menu button:focus { background: var(--vyasa-hover); outline: none; }
 .vyasa-live-menu button:disabled { color: var(--vyasa-text-faint); cursor: default; background: transparent; }
 .vyasa-live-menu-rule { height: 1px; margin: var(--vyasa-space-1) var(--vyasa-space-2); background: var(--vyasa-border); }
+/* The header title is editable while editing; the ring shows where typing goes. */
+.vyasa-doc-header .vyasa-page-title[contenteditable] { cursor: text; border-radius: var(--vyasa-radius-sm); outline: none; }
+.vyasa-doc-header .vyasa-page-title[contenteditable]:focus { box-shadow: 0 0 0 3px var(--vyasa-ring); }

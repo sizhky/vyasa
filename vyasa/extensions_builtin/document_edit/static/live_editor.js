@@ -209,6 +209,20 @@ export function formatProperties(parsed) {
   return ['---', ...parsed.rows.map(propertyLine), parsed.close].join('\n');
 }
 
+// The page title is saved as frontmatter `title:`, which the server prefers
+// over a `# Title` line and over the file name.
+//   withTitle('---\nb: 1\n---', 'New') === '---\nb: 1\ntitle: New\n---'
+//   withTitle('---\ntitle: Old\n---', 'New') === '---\ntitle: New\n---'
+export function withTitle(frontmatter, title) {
+  const line = propertyLine({ key: 'title', value: title, quote: '' });
+  if (!frontmatter) return ['---', line, '---'].join('\n');
+  const lines = frontmatter.split('\n');
+  const at = lines.findIndex((text, index) => index > 0 && index < lines.length - 1 && /^title:/.test(text));
+  if (at > 0) lines[at] = line;
+  else lines.splice(lines.length - 1, 0, line);
+  return lines.join('\n');
+}
+
 // Every top-level block of `source` becomes one node. `origin` maps each node
 // to its text, its place, and the blank lines that followed it, which is all
 // `serializeDoc` needs to put the file back together unchanged.
@@ -1221,8 +1235,23 @@ export function createLiveEditor(mount, source, deps) {
     const { selection } = view.state;
     if (selection instanceof PM.NodeSelection) view.nodeDOM(selection.from)?.dispatchEvent(new CustomEvent('vyasa:open'));
   };
+  // A hidden `# Title` block takes the same text, so the reading view keeps
+  // dropping it into the header instead of showing it a second time.
+  const setTitle = (title) => {
+    const tr = view.state.tr;
+    let front = null;
+    view.state.doc.forEach((node, pos) => {
+      if (node.type !== schema.nodes.vyasa_block) return;
+      if (node.attrs.kind === 'title') tr.setNodeMarkup(pos, null, { ...node.attrs, source: `# ${title}` });
+      if (node.attrs.kind === 'frontmatter' && !front) front = { node, pos };
+    });
+    if (front) tr.setNodeMarkup(front.pos, null, { ...front.node.attrs, source: withTitle(front.node.attrs.source, title) });
+    else tr.insert(0, schema.nodes.vyasa_block.create({ source: withTitle('', title), kind: 'frontmatter' }));
+    view.dispatch(tr);
+  };
   return {
     view,
+    setTitle,
     serialize: () => serializeDoc(view.state.doc, built, serializer),
     destroy: () => {
       closeMenu();

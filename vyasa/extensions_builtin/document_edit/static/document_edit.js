@@ -572,6 +572,32 @@ export function sourceBlocks(text) {
       onExit: () => exitBlocks(),
     });
     blockMode.live.view.focus();
+    editTitle(blockMode.live);
+  }
+
+  // The header title edits in place while editing; Enter or leaving it saves,
+  // Escape puts the old text back.
+  function editTitle(live) {
+    const heading = document.querySelector('#main-content .vyasa-doc-header .vyasa-page-title');
+    if (!heading) return;
+    const listen = new AbortController();
+    blockMode.titleListen = listen;
+    let saved = heading.textContent.trim();
+    heading.contentEditable = 'plaintext-only';
+    heading.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== 'Escape') return;
+      event.preventDefault();
+      if (event.key === 'Escape') heading.textContent = saved;
+      heading.blur();
+    }, { signal: listen.signal });
+    heading.addEventListener('blur', () => {
+      const title = heading.textContent.replace(/\s+/g, ' ').trim();
+      if (!title) heading.textContent = saved;
+      if (!title || title === saved) return;
+      saved = title;
+      heading.textContent = title;
+      live.setTitle(title);
+    }, { signal: listen.signal });
   }
 
   // Move a reading-view element into the editor, remembering where it lived.
@@ -609,10 +635,14 @@ export function sourceBlocks(text) {
   function leaveBlocks() {
     const wrap = blockMode.root;
     window.clearTimeout(blockMode.saveTimer);
+    if (blockMode.titleListen) {
+      blockMode.titleListen.abort();
+      document.querySelector('#main-content .vyasa-doc-header .vyasa-page-title')?.removeAttribute('contenteditable');
+    }
     if (blockMode.live) blockMode.live.destroy();
     // Put adopted reading-view elements back, last first, so each `next` is home.
     (blockMode.moved || []).reverse().forEach(({ element, parent, next }) => parent.insertBefore(element, next));
-    Object.assign(blockMode, { root: null, live: null, saved: '', moved: [] });
+    Object.assign(blockMode, { root: null, live: null, saved: '', moved: [], titleListen: null });
     state.dirty = false;
     if (wrap) wrap.remove();
     if (blockMode.pill) blockMode.pill.remove();
@@ -629,6 +659,8 @@ export function sourceBlocks(text) {
   // The render runs after the view is visible, so diagrams measure real space.
   async function exitBlocks() {
     if (!blockMode.root) return true;
+    // A title still being typed commits on blur; the Done pill keeps focus where it was.
+    if (document.activeElement?.matches?.('.vyasa-page-title')) document.activeElement.blur();
     if (!(await saveNow())) return false;
     const source = blockMode.saved;
     const changed = source !== blockMode.original;
