@@ -738,8 +738,6 @@ function initAnnotations(root = document) {
         const actions = document.createElement('div');
         actions.id = 'vyasa-selection-actions';
         actions.className = 'fixed z-[1400] flex gap-1.5';
-        actions.style.top = `${Math.max(12, pending.rect.top - 6)}px`;
-        actions.style.left = `${Math.min(window.innerWidth - 262, pending.rect.right + 10)}px`;
         const bubbleClass = 'flex h-9 w-9 items-center justify-center rounded-full border border-vyasa-border bg-vyasa-surface text-vyasa-text shadow-lg backdrop-blur';
         const makeBubble = (id, label, icon) => {
             const button = document.createElement('button');
@@ -797,6 +795,15 @@ function initAnnotations(root = document) {
             }).catch(() => window.__vyasaToast?.('Copy failed', 'error'));
         });
         document.body.appendChild(actions);
+        // Above the selection, from its left edge; below it when the top has no room.
+        // The bar is not measured: its Tailwind sizes may not apply until after this
+        // runs. Its bottom edge is anchored instead, and its width is 36px bubbles
+        // with 6px gaps.
+        const gap = 20, bubble = 36, width = actions.children.length * (bubble + 6) - 6;
+        const fitsAbove = pending.rect.top - gap - bubble >= 12;
+        actions.style.top = `${fitsAbove ? pending.rect.top - gap : pending.rect.bottom + 8}px`;
+        actions.style.transform = fitsAbove ? 'translateY(-100%)' : '';
+        actions.style.left = `${Math.max(12, Math.min(window.innerWidth - width - 12, pending.rect.left))}px`;
         trigger.addEventListener('click', () => {
             if (!pending) return;
             document.getElementById('vyasa-annotation-composer')?.remove();
