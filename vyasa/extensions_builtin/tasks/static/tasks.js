@@ -4783,7 +4783,8 @@ async function renderTasksGraphs(rootElement = document) {
                     row('Shift + drag', 'box select'),
                     row('Cmd + drag', 'lasso select'),
                     row('Alt + Shift + drag', 'append lasso selection'),
-                    row('Wheel / pinch', 'zoom'),
+                    row('Two-finger scroll', 'pan'),
+                    row('Pinch / Cmd + wheel', 'zoom'),
                     row('Drag canvas', 'pan'),
                     sep(),
                     heading('Keys'),
@@ -5017,6 +5018,9 @@ async function renderTasksGraphs(rootElement = document) {
                     suppressNextGraphClickRef.current = false;
                 }, 0);
             };
+            // Trackpad gestures as on macOS: two-finger scroll pans, pinch zooms.
+            // A mouse wheel pans too; Cmd + wheel zooms (React Flow's zoom key).
+            const flowViewportGestures = { panOnScroll: true, zoomOnPinch: true };
             const flowPointerHandlers = {
                 onClickCapture: focusNodeReferenceFromEvent,
                 onPointerDown: (event) => {
@@ -5103,7 +5107,7 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement(EdgeLiveStatus),
                     SlideShow(),
                     window.React.createElement('div', { ref: flowWrapperRef, 'data-tasks-canvas': 'true', 'data-vyasa-review-surface': 'knowledge-graph', className: flowWrapperClassName, tabIndex: 0, style: flowWrapperStyle, ...flowPointerHandlers },
-                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: nodeConnectionExperiment, onNodesChange: moveExperimentNodes, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onEdgeClick: selectGraphEdge, onNodeDoubleClick: doubleClickGraphNode, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
+                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, ...flowViewportGestures, nodesDraggable: nodeConnectionExperiment, onNodesChange: moveExperimentNodes, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onEdgeClick: selectGraphEdge, onNodeDoubleClick: doubleClickGraphNode, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background, backgroundProps),
                     window.React.createElement(TasksNodeHighlightBorders),
                     window.React.createElement(TasksPinnedHeaders),
@@ -5123,7 +5127,7 @@ async function renderTasksGraphs(rootElement = document) {
                 filterPanelElement,
                 window.React.createElement(EdgeLiveStatus),
                 window.React.createElement('div', { ref: flowWrapperRef, 'data-tasks-canvas': 'true', 'data-vyasa-review-surface': 'knowledge-graph', className: flowWrapperClassName, tabIndex: 0, style: flowWrapperStyle, ...flowPointerHandlers },
-                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: nodeConnectionExperiment, onNodesChange: moveExperimentNodes, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onEdgeClick: selectGraphEdge, onNodeDoubleClick: doubleClickGraphNode, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
+                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, ...flowViewportGestures, nodesDraggable: nodeConnectionExperiment, onNodesChange: moveExperimentNodes, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onEdgeClick: selectGraphEdge, onNodeDoubleClick: doubleClickGraphNode, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background, backgroundProps),
                         window.React.createElement(TasksNodeHighlightBorders),
                         window.React.createElement(TasksPinnedHeaders),
