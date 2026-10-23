@@ -1538,7 +1538,7 @@ def test_tasks_g_shortcuts_open_ego_views():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
     assert "if (key === 'g' && !egoMode)" in source
-    assert "openEgo?.(event.shiftKey)" in source
+    assert "const includeNeighbors = !event.shiftKey;" in source
     assert "const selectedNodeIdRef = React.useRef(null);" in source
     assert "selectedNodeIdRef.current = sourceNodeId;" in source
     assert "selectedNodeIdsRef.current = new Set();" in source
@@ -1546,8 +1546,8 @@ def test_tasks_g_shortcuts_open_ego_views():
     assert "window.__vyasaTasksActiveWidgetId = widgetId;" in source
     assert "window.__vyasaTasksActiveWidgetId === widgetId" in source
     assert "markWidgetActive();" in source
-    assert "row('G', 'open EG')" in source
-    assert "row('Shift + G', 'open EG+')" in source
+    assert "row('G', 'open EG+ for hovered or selected node')" in source
+    assert "row('Shift + G', 'open EG for hovered or selected node')" in source
     assert "const [egoState, setEgoState] = React.useState(null);" in source
     assert "const projectionState = egoState || baseProjectionState;" in source
     assert "setEgoState(nextEgoState);" in source

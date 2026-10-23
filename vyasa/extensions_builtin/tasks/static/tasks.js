@@ -3761,9 +3761,9 @@ async function renderTasksGraphs(rootElement = document) {
                             // The node under the cursor is the EG target, so G works on
                             // hover alone. Selection carries it only when nothing is hovered.
                             const hoveredEgoId = hoveredNodeIdRef.current;
-                            // Plain G opens EG, the node on its own; Shift+G adds the
-                            // neighbours for EG+. Matches the EG and EG+ header buttons.
-                            const includeNeighbors = event.shiftKey;
+                            // Plain G adds the neighbours for EG+; Shift+G opens EG, the
+                            // node on its own. Matches the EG and EG+ header buttons.
+                            const includeNeighbors = !event.shiftKey;
                             logTasksDebug('shortcutOpenEgo', {
                                 widgetId,
                                 includeNeighbors,
@@ -4806,8 +4806,8 @@ async function renderTasksGraphs(rootElement = document) {
                     row('A + Enter', 'pin the code preview'),
                     row('A + ← / →', 'previous / next marked code block'),
                     row('Shift + F', 'toggle fullscreen'),
-                    row('G', 'open EG for hovered or selected node'),
-                    row('Shift + G', 'open EG+ for hovered or selected node'),
+                    row('G', 'open EG+ for hovered or selected node'),
+                    row('Shift + G', 'open EG for hovered or selected node'),
                     row('S', 'toggle filters'),
                     row('E', 'toggle edges'),
                     row('Shift + E', 'toggle edge labels'),
