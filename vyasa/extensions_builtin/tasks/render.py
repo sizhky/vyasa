@@ -6,6 +6,8 @@ import re
 from itertools import count
 from pathlib import Path
 
+from loguru import logger
+
 from ...markdown_fence import (
     content_url_for_slug,
     items_code_source,
@@ -254,6 +256,8 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
         _attach_rendered_prose_attrs(model, link_path, code_source)
         graph = build_collapsed_graph(model)
     except Exception:
+        # The block renders empty; the log says why (a missing pack is the usual cause).
+        logger.exception("KG block in {} did not render", current_path)
         model = {
             "graph_id": f"tasks-{next(_diagram_uid_counter)}",
             "persistence_id": (re.sub(r"[^a-z0-9]+", "-", str(config.get("id") or config.get("title") or "").lower()).strip("-") or ""),
