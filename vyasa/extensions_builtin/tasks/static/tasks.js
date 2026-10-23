@@ -5100,49 +5100,31 @@ async function renderTasksGraphs(rootElement = document) {
                 touchAction: 'none',
                 ...tasksCanvasStyle(graphCanvas),
             };
-            return rf.ReactFlowProvider ? window.React.createElement(rf.ReactFlowProvider, null,
-                window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', flex: '1 1 auto', minHeight: 0, display: 'flex', alignItems: 'stretch', position: 'relative' } },
-                    gitHistoryRailElement,
-                    filterPanelElement,
-                    window.React.createElement(EdgeLiveStatus),
-                    SlideShow(),
-                    window.React.createElement('div', { ref: flowWrapperRef, 'data-tasks-canvas': 'true', 'data-vyasa-review-surface': 'knowledge-graph', className: flowWrapperClassName, tabIndex: 0, style: flowWrapperStyle, ...flowPointerHandlers },
-                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, ...flowViewportGestures, nodesDraggable: nodeConnectionExperiment, onNodesChange: moveExperimentNodes, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onEdgeClick: selectGraphEdge, onNodeDoubleClick: doubleClickGraphNode, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
-                    window.React.createElement(rf.Background, backgroundProps),
-                    window.React.createElement(TasksNodeHighlightBorders),
-                    window.React.createElement(TasksPinnedHeaders),
-                    window.React.createElement(EgoCloseControl),
-                    window.React.createElement(SlideLauncher),
-                    window.React.createElement(FitViewHotkey),
-                    window.React.createElement(ActionBridge),
-                    window.React.createElement(RestoreEgoViewport)
-                    ),
-                    GitReviewBar(),
-                    RightRail(),
-                    window.React.createElement(HelpPopup),
-                    window.React.createElement(DragSelectionOverlay)
-                ))
-            ) : window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', flex: '1 1 auto', minHeight: 0, display: 'flex', alignItems: 'stretch', position: 'relative' } },
+            const canvasTree = window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', flex: '1 1 auto', minHeight: 0, display: 'flex', alignItems: 'stretch', position: 'relative' } },
                 gitHistoryRailElement,
                 filterPanelElement,
                 window.React.createElement(EdgeLiveStatus),
+                rf.ReactFlowProvider ? SlideShow() : null,
                 window.React.createElement('div', { ref: flowWrapperRef, 'data-tasks-canvas': 'true', 'data-vyasa-review-surface': 'knowledge-graph', className: flowWrapperClassName, tabIndex: 0, style: flowWrapperStyle, ...flowPointerHandlers },
-                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, ...flowViewportGestures, nodesDraggable: nodeConnectionExperiment, onNodesChange: moveExperimentNodes, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onEdgeClick: selectGraphEdge, onNodeDoubleClick: doubleClickGraphNode, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
-                    window.React.createElement(rf.Background, backgroundProps),
-                        window.React.createElement(TasksNodeHighlightBorders),
-                        window.React.createElement(TasksPinnedHeaders),
-                    window.React.createElement(EgoCloseControl),
-                    window.React.createElement(SlideLauncher),
-                        window.React.createElement(FitViewHotkey),
-                        window.React.createElement(ActionBridge),
-                        window.React.createElement(RestoreEgoViewport)
-                    ),
-                    GitReviewBar(),
-                    RightRail(),
-                    window.React.createElement(HelpPopup),
-                    window.React.createElement(DragSelectionOverlay)
+                window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, ...flowViewportGestures, nodesDraggable: nodeConnectionExperiment, onNodesChange: moveExperimentNodes, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onEdgeClick: selectGraphEdge, onNodeDoubleClick: doubleClickGraphNode, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
+                window.React.createElement(rf.Background, backgroundProps),
+                window.React.createElement(TasksNodeHighlightBorders),
+                window.React.createElement(TasksPinnedHeaders),
+                window.React.createElement(EgoCloseControl),
+                window.React.createElement(SlideLauncher),
+                window.React.createElement(FitViewHotkey),
+                window.React.createElement(ActionBridge),
+                window.React.createElement(RestoreEgoViewport)
+                ),
+                GitReviewBar(),
+                RightRail(),
+                window.React.createElement(HelpPopup),
+                window.React.createElement(DragSelectionOverlay)
                 )
             );
+            return rf.ReactFlowProvider
+                ? window.React.createElement(rf.ReactFlowProvider, null, canvasTree)
+                : canvasTree;
         };
         // The root stays on the mount so an internals panel can unmount its widget.
         if (window.ReactDOM.createRoot) {

@@ -2149,9 +2149,9 @@ def test_slide_description_markdown_has_list_styling_contract():
 
 def test_slide_notes_panel_uses_stable_render_helper():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
-    render_source = source.split("return rf.ReactFlowProvider ?", 1)[1].split("if (window.ReactDOM.createRoot)", 1)[0]
+    render_source = source.split("const canvasTree =", 1)[1].split("if (window.ReactDOM.createRoot)", 1)[0]
 
-    assert "SlideShow()," in render_source
+    assert "SlideShow()" in render_source
     assert "window.React.createElement(SlideShow)" not in render_source
 
 
@@ -2177,7 +2177,7 @@ def test_kg_palette_colors_are_contrast_adjusted_in_dark_mode():
 
 def test_react_flow_component_fills_flow_wrapper():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
-    render_source = source.split("return rf.ReactFlowProvider ?", 1)[1].split("if (window.ReactDOM.createRoot)", 1)[0]
+    render_source = source.split("const canvasTree =", 1)[1].split("if (window.ReactDOM.createRoot)", 1)[0]
 
     assert "function applyTasksStandaloneHeight(wrapper)" in source
     assert "wrapper.closest('.vyasa-kg-internals-body, .vyasa-main-shell')" in source
@@ -2192,7 +2192,7 @@ def test_react_flow_component_fills_flow_wrapper():
 
 def test_filter_and_slide_panels_touch_the_graph_canvas():
     source = tasks_static_source("tasks_panels.js", "tasks.js")
-    render_source = source.split("return rf.ReactFlowProvider ?", 1)[1].split("if (window.ReactDOM.createRoot)", 1)[0]
+    render_source = source.split("const canvasTree =", 1)[1].split("if (window.ReactDOM.createRoot)", 1)[0]
     filter_source = source.split("const FilterPanel = () => {", 1)[1].split("const SlideShow = () => {", 1)[0]
     slide_source = source.split("const SlideShow = () => {", 1)[1].split("const DragSelectionOverlay = () => {", 1)[0]
 
