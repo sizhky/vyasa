@@ -215,6 +215,53 @@ function initHeadingLevelCopy(root = document) {
     });
 }
 
+/** The rendered section under a heading, without its controls, for rich-text paste targets. */
+function sectionClipboardHtml(heading) {
+    const fold = heading?.closest('.vyasa-heading-fold');
+    const nodes = fold ? [fold] : [heading];
+    if (!fold && heading) {
+        const level = Number(heading.tagName.slice(1));
+        for (let node = heading.nextElementSibling; node; node = node.nextElementSibling) {
+            const match = node.tagName.match(/^H([1-6])$/);
+            if (match && Number(match[1]) <= level) break;
+            nodes.push(node);
+        }
+    }
+    const wrapper = document.createElement('div');
+    nodes.filter(Boolean).forEach((node) => wrapper.appendChild(node.cloneNode(true)));
+    wrapper.querySelectorAll('button, uk-icon, script, style, .vyasa-heading-action, .vyasa-heading-fold-chevron').forEach((node) => node.remove());
+    return wrapper.innerHTML;
+}
+
+function initHeadingSectionCopy(root = document) {
+    root.querySelectorAll('[data-heading-copy-section]').forEach((button) => {
+        if (button.dataset.copyBound === 'true') return;
+        button.dataset.copyBound = 'true';
+        button.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const url = new URL(button.dataset.sectionSrc || '', window.location.href);
+            url.searchParams.set('section', button.dataset.headingCopySection || '');
+            const markdown = fetch(url, { cache: 'no-store' }).then((res) => {
+                if (!res.ok) throw new Error(`Status ${res.status}`);
+                return res.text();
+            });
+            const copied = () => showVyasaToast('Section copied as Markdown', 'success');
+            const failed = () => showVyasaToast('Section was not copied', 'error');
+            // WebKit drops the click's user activation across an await, so the fetch goes into the ClipboardItem as a promise.
+            // Rich-text targets such as Slack read the rendered text/html; editors read the Markdown text/plain.
+            if (window.ClipboardItem && navigator.clipboard?.write && window.isSecureContext) {
+                const blob = markdown.then((text) => new Blob([text], { type: 'text/plain' }));
+                const html = new Blob([sectionClipboardHtml(button.closest('.vyasa-doc-heading'))], { type: 'text/html' });
+                navigator.clipboard.write([new ClipboardItem({ 'text/plain': blob, 'text/html': html })]).then(copied)
+                    .catch(() => markdown.then((text) => copyText(text, copied)).catch(failed));
+                return;
+            }
+            markdown.then((text) => copyText(text, copied)).catch(failed);
+        });
+    });
+}
+
 function initUnknownTagMarkers(root = document) {
     const elements = root instanceof Element && root.matches('*') ? [root, ...root.querySelectorAll('*')] : root.querySelectorAll('*');
     elements.forEach((element) => {
@@ -2452,6 +2499,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.__vyasaInitPostsSearchPersistence?.(document);
     initHeadingPermalinkCopy(document);
     initHeadingLevelCopy(document);
+    initHeadingSectionCopy(document);
     initUnknownTagMarkers(document);
     window.__vyasaInitCodeTools?.(document);
     window.__vyasaInitSearchClearButtons?.(document);
@@ -2488,6 +2536,7 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
     syncPostsHoverToggleButtons(event.target || document);
     initHeadingPermalinkCopy(event.target);
     initHeadingLevelCopy(event.target);
+    initHeadingSectionCopy(event.target);
     initUnknownTagMarkers(event.target);
     window.__vyasaInitCodeTools?.(event.target);
     window.__vyasaInitSearchClearButtons?.(event.target);

@@ -36,17 +36,38 @@ def _ref_blob_response(path: str, suffix: str, *, ref_override="", media_type=No
     return Response(data, media_type=guessed, headers=headers)
 
 
+def _markdown_section_response(text: str, anchor: str):
+    """`?section=<anchor>` on a raw Markdown URL: the heading and its body, 404 when no heading has that anchor.
+
+    >>> _markdown_section_response("# A\\nx\\n## B\\ny\\n", "b").body
+    b'## B\\ny\\n'
+    >>> _markdown_section_response("# A\\n", "missing").status_code
+    404
+    """
+    from starlette.responses import Response
+
+    from ..sections import extract_markdown_section_by_anchor
+
+    section = extract_markdown_section_by_anchor(text, anchor)
+    if section is None:
+        return Response(status_code=404)
+    return Response(section + "\n", media_type="text/markdown; charset=utf-8")
+
+
 def _register_filesystem_routes(rt, runtime) -> None:
     from starlette.responses import FileResponse, Response
 
     @rt("/posts/{path:path}.md")
     def serve_post_markdown(path: str, request):
+        section = request.query_params.get("section", "")
         ref = _ref_blob_response(path, ".md", ref_override=_ref_of(request), media_type="text/markdown; charset=utf-8")
         if ref is not None:
-            return ref
+            return _markdown_section_response(bytes(ref.body).decode("utf-8"), section) if section else ref
         services = get_runtime_services()
         file_path = services.content_path_for_slug(path, ".md")
         if file_path and file_path.exists():
+            if section:
+                return _markdown_section_response(file_path.read_text(encoding="utf-8"), section)
             return FileResponse(file_path, media_type="text/markdown; charset=utf-8")
         return Response(status_code=404)
 

@@ -817,6 +817,15 @@ class ContentRenderer(FrankenRenderer):
                 if md_path and md_path.exists():
                     present_href = present_href_for_anchor(md_path.read_text(encoding="utf-8"), self.current_path, anchor)
                     present_here = f'<a href="{present_href}" class="vyasa-heading-action vyasa-heading-launch" aria-label="Present from here" hx-boost="false">{to_xml(UkIcon("play-circle"))}</a>'
+        copy_section = ""
+        if self.current_path and not self.slide_mode:
+            section_src = content_url_for_slug(str(self.current_path).removesuffix(".md"), suffix=".md")
+            copy_section = (
+                f'<button type="button" class="vyasa-heading-action vyasa-heading-copy-section" '
+                f'data-heading-copy-section="{anchor}" data-section-src="{html.escape(section_src)}" '
+                f'aria-label="Copy {html.escape(heading_text)} section as Markdown">'
+                f'{to_xml(UkIcon("clipboard"))}</button>'
+            )
         permalink = (
             f'<a href="#{anchor}" class="vyasa-heading-action vyasa-heading-permalink" '
             f'aria-label="Link to {html.escape(heading_text)}">'
@@ -832,7 +841,7 @@ class ContentRenderer(FrankenRenderer):
             f'aria-label="Copy heading; Shift+click copies heading path; Shift+Option+click adds the absolute file path" '
             f'>H{level}</button>'
             f'<span class="vyasa-heading-text">{html.escape(heading_text)}</span>'
-            f"{fold_children}{present_here}{permalink}</h{level}>"
+            f"{fold_children}{present_here}{copy_section}{permalink}</h{level}>"
         )
 
     def render_superscript(self, token):
