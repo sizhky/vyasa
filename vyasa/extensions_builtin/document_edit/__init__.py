@@ -1,3 +1,5 @@
+from functools import partial
+
 from ...assets import asset_url
 from ...document_pages import DocumentActionItem, edit_document_button
 from ...extensions import AssetBundle, ExtensionMeta, VyasaExtensionBase
@@ -16,8 +18,9 @@ class DocumentEditExtension(VyasaExtensionBase):
         app.routes.add("/api/documents/source", register_document_source_routes, methods=("GET", "POST"))
         app.routes.add("/api/documents/preview", register_document_preview_routes, methods=("POST",))
         app.routes.add("/api/documents/blocks", register_document_block_routes, methods=("POST",))
-        app.routes.add("/api/documents/proposals", register_document_proposal_routes, methods=("GET", "POST"))
-        app.routes.add("/api/document-proposals", register_document_proposal_routes, methods=("POST",))
+        proposals = partial(register_document_proposal_routes, storage=app.storage.namespace("document_edit"))
+        app.routes.add("/api/documents/proposals", proposals, methods=("GET", "POST"))
+        app.routes.add("/api/document-proposals", proposals, methods=("POST",))
         app.documents.action(_edit_action)
         app.assets.bundle(
             AssetBundle(
@@ -74,6 +77,7 @@ EXTENSION = DocumentEditExtension(
             "/api/documents/proposals",
             "/api/document-proposals",
         ),
+        storage_namespaces=("document_edit",),
         scope_disable=True,
     )
 )

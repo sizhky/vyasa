@@ -15,10 +15,12 @@ flash as removed before the agent reaches it.
 from __future__ import annotations
 
 import itertools
+import json
 import re
 import time
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from difflib import SequenceMatcher
+from pathlib import Path
 
 _TOKEN = re.compile(r"\s+|\w+|[^\w\s]")
 # Block markup that must stay at the start of its line, outside any diff tag,
@@ -239,17 +241,55 @@ class Proposal:
 
 
 class ProposalStore:
-    """Proposals in memory, per server process; a restart drops them, and agents propose again."""
+    """Proposals per server process; ``open`` a JSON file and every change is saved there, so a restart keeps them.
+
+    >>> import tempfile, pathlib
+    >>> path = pathlib.Path(tempfile.mkdtemp()) / "proposals.json"
+    >>> store = ProposalStore()
+    >>> store.open(path)
+    >>> made = store.add(Proposal(store.new_id(), "notes", "## Now", "now", "a", "r1", "b"))
+    >>> made.proposed = "c"
+    >>> store.save()
+    >>> again = ProposalStore()
+    >>> again.open(path)
+    >>> [(p.id, p.proposed) for p in again.for_slug("notes")], again.new_id()
+    ([('p1', 'c')], 'p2')
+    >>> again.drop("p1")
+    >>> json.loads(path.read_text())
+    []
+    """
 
     def __init__(self):
         self._items: dict[str, Proposal] = {}
         self._ids = itertools.count(1)
+        self.path: Path | None = None
+
+    def open(self, path: Path | None) -> None:
+        """Load the proposals saved at ``path`` and save there from now on; ``None`` keeps them in memory only."""
+        self.path = path
+        rows = []
+        if path is not None and path.is_file():
+            try:
+                rows = json.loads(path.read_text(encoding="utf-8"))
+            except ValueError:
+                rows = []
+        names = {f.name for f in fields(Proposal)}
+        self._items = {row["id"]: Proposal(**{k: v for k, v in row.items() if k in names}) for row in rows}
+        numbers = [int(pid[1:]) for pid in self._items if pid[1:].isdigit()]
+        self._ids = itertools.count(max(numbers, default=0) + 1)
+
+    def save(self) -> None:
+        if self.path is not None:
+            from ...helpers import atomic_write_bytes
+
+            atomic_write_bytes(self.path, json.dumps([asdict(p) for p in self._items.values()]).encode("utf-8"))
 
     def new_id(self) -> str:
         return f"p{next(self._ids)}"
 
     def add(self, proposal: Proposal) -> Proposal:
         self._items[proposal.id] = proposal
+        self.save()
         return proposal
 
     def get(self, proposal_id: str) -> Proposal | None:
@@ -260,6 +300,7 @@ class ProposalStore:
 
     def drop(self, proposal_id: str) -> None:
         self._items.pop(proposal_id, None)
+        self.save()
 
 
 STORE = ProposalStore()

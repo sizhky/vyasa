@@ -287,11 +287,10 @@ def test_blocks_reject_a_body_that_is_not_a_list_of_strings(tmp_path, monkeypatc
     assert asyncio.run(blocks("notes", _request(body=b"not json"))).status_code == 400
 
 
-def _proposal_routes():
+def _proposal_routes(storage=None):
+    import vyasa.core  # noqa: F401  importing core registers every route and reopens STORE; do it before the test's own registration
     from vyasa.extensions_builtin.document_edit.api import register_document_proposal_routes
-    from vyasa.extensions_builtin.document_edit.proposals import STORE
 
-    STORE._items.clear()
     handlers = {}
 
     def rt(pattern, **kwargs):
@@ -301,7 +300,7 @@ def _proposal_routes():
 
         return keep
 
-    register_document_proposal_routes(rt, None)
+    register_document_proposal_routes(rt, None, storage=storage)
     write = handlers[("/api/documents/proposals/{path:path}", ("POST",))]
     listing = handlers[("/api/documents/proposals/{path:path}", ("GET",))]
     resolve = handlers[("/api/document-proposals/{proposal_id}/{action}", ("POST",))]
@@ -376,6 +375,28 @@ def test_a_write_to_the_section_elsewhere_rebases_and_flags_the_proposal(tmp_pat
 
     assert listed["stale_base"] is True
     assert "gamma" in listed["marked"] and "beta" in listed["marked"]
+
+
+def test_pending_proposals_survive_a_restart(tmp_path, monkeypatch):
+    from vyasa.extensions import StorageNamespace
+
+    set_extension_runtime(build_extension_runtime({}))
+    _with_content_root(tmp_path, monkeypatch)
+    target = tmp_path / "notes.md"
+    target.write_text("## Now\nthe quick brown fox\n", encoding="utf-8")
+    storage = StorageNamespace("document_edit", tmp_path / ".vyasa-storage" / "document_edit", tmp_path)
+    write, _listing, _resolve = _proposal_routes(storage)
+    made = _post(write, "notes", body={"heading": "## Now", "text": "the slow", "partial": True})
+    _post(write, "notes", body={"id": made["id"], "text": "the slow brown fox jumps"})
+
+    write, listing, resolve = _proposal_routes(storage)  # a new server process reads the same file
+
+    assert [p["id"] for p in _payload(listing("notes", _request()))["proposals"]] == [made["id"]]
+    _post(resolve, made["id"], "accept", body={"hunks": [0]})
+    assert target.read_text(encoding="utf-8") == "## Now\nthe slow brown fox\n"
+    write, listing, _resolve = _proposal_routes(storage)
+    assert [h["kind"] for h in _payload(listing("notes", _request()))["proposals"][0]["hunks"]] == ["insert"]
+    assert _post(write, "notes", body={"heading": "## Now", "text": "x"})["id"] != made["id"]
 
 
 def test_proposals_refuse_a_remote_client(tmp_path, monkeypatch):

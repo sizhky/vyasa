@@ -224,8 +224,10 @@ def _announce(slug: str, proposal_id: str) -> None:
     publish_live_event("proposal", {"slug": slug, "id": proposal_id})
 
 
-def register_document_proposal_routes(rt, runtime) -> None:
+def register_document_proposal_routes(rt, runtime, *, storage=None) -> None:
     from .proposals import STORE, Proposal
+
+    STORE.open(storage.file("proposals.json") if storage is not None else None)
 
     @publish_api(
         rt,
@@ -280,6 +282,7 @@ def register_document_proposal_routes(rt, runtime) -> None:
             if proposal.slug != slug:
                 return _json({"error": "proposal belongs to another document"}, 409)
             proposal.proposed, proposal.partial = text, partial
+            STORE.save()
         else:
             heading = str(body.get("heading") or "").strip()
             if not heading.startswith("#"):
@@ -367,5 +370,7 @@ def register_document_proposal_routes(rt, runtime) -> None:
         done = proposal.base == proposal.proposed
         if done:
             STORE.drop(proposal.id)
+        else:
+            STORE.save()
         _announce(proposal.slug, proposal.id)
         return _json({"proposal": None if done else proposal.to_json(), **rendered})
