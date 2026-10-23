@@ -114,6 +114,10 @@
     outline-offset: 2px;
 }
 /* React Flow runtime overrides. */
+/* A widget stays hidden until renderTasksGraphs mounts it, so its buttons do not paint before the fullscreen restore. */
+.tasks-container[data-tasks-widget="true"]:not([data-tasks-mounted="true"]) {
+    visibility: hidden;
+}
 .tasks-container[data-tasks-maximized="true"] {
     position: fixed !important;
     inset: 0 !important;
