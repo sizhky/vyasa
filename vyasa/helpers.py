@@ -338,6 +338,17 @@ def relative_content_directory(current_file):
     return current_file.parent
 
 
+def document_bases(path: Path) -> list[Path]:
+    """The folders a document's relative sources resolve against: its own, then its symlink target's.
+
+    A page linked into another folder (a Sutragana brief tab) keeps finding the pack beside its real file.
+    """
+    bases = [path.parent]
+    if path.is_symlink():
+        bases.append(path.resolve().parent)
+    return bases
+
+
 def content_slug_for_path(path: Path, strip_suffix: bool = True) -> str | None:
     from .content_backend import VirtualPath
 

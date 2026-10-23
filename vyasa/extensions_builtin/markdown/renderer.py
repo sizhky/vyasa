@@ -28,6 +28,7 @@ from ...helpers import (
     content_root_and_relative,
     parse_frontmatter,
     content_slug_for_path,
+    document_bases,
     relative_content_directory,
     resolve_heading_anchor,
 )
@@ -479,8 +480,22 @@ def _slug_for_resolved_path(resolved, current_path, strip_suffix=True):
     try:
         rel = resolved.relative_to(get_root_folder().resolve())
     except ValueError:
-        return None
+        return content_slug_for_path(resolved, strip_suffix=strip_suffix)
     return rel.with_suffix("").as_posix() if strip_suffix else rel.as_posix()
+
+
+def _resolve_document_relative(current_file, relative_path):
+    """The path a document-relative link names: beside the document, else beside its symlink target.
+
+    A `.md` link arrives without its suffix, so a candidate counts as found when either form exists.
+    """
+    current_dir = relative_content_directory(current_file)
+    if current_dir is None:
+        return None
+    document = current_file if current_file.suffix else current_file.with_suffix(".md")
+    bases = document_bases(document) if current_dir == current_file.parent else [current_dir]
+    candidates = [(base / relative_path).resolve() for base in bases]
+    return next((path for path in candidates if path.exists() or path.with_name(f"{path.name}.md").exists()), candidates[0])
 
 
 def _code_root_settings(current_file):
@@ -546,8 +561,7 @@ def _resolve_raw_html_url(url, current_path):
     current_file = _current_content_path(current_path)
     if not current_file:
         return url
-    current_dir = relative_content_directory(current_file)
-    resolved = (current_dir / base).resolve()
+    resolved = _resolve_document_relative(current_file, base)
     rel = _slug_for_resolved_path(resolved, current_path, strip_suffix=False)
     if not rel:
         return url
@@ -740,8 +754,7 @@ class ContentRenderer(FrankenRenderer):
         label = getattr(token, "label", None)
         if self.current_path:
             current_file_full = _current_content_path(self.current_path)
-            current_dir = relative_content_directory(current_file_full)
-            resolved = (current_dir / raw_path).resolve() if current_dir else None
+            resolved = _resolve_document_relative(current_file_full, raw_path)
             rel_path = _slug_for_resolved_path(resolved, self.current_path, strip_suffix=False) if resolved else None
             if rel_path:
                 download_path = content_url_for_slug(rel_path, prefix="/download")
@@ -954,7 +967,7 @@ class ContentRenderer(FrankenRenderer):
             if self.current_path:
                 current_file = _current_content_path(self.current_path)
                 current_dir = relative_content_directory(current_file)
-                resolved = (current_dir / relative_path).resolve() if current_dir else None
+                resolved = _resolve_document_relative(current_file, relative_path)
                 if resolved is not None and not resolved.exists():
                     resolved = _code_root_resolved(current_file, current_dir, relative_path) or resolved
                 logger.debug(f"DEBUG: original_href={original_href}, current_path={self.current_path}, current_dir={current_dir}, resolved={resolved}")
