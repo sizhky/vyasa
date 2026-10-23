@@ -148,12 +148,26 @@ function trackPositionAnchor(popover) {
     positionStack.push(popover);
 }
 
-function positionPopover(popover, point) {
-    const height = linkPreviewPreferredHeight(
+// The remembered height is the ceiling. Content shorter than it ends the popup
+// at the content, so no empty space hangs below it. The remembered height is
+// kept as it is, so a taller preview still opens at the full size.
+// Loading and external pages keep the remembered height: they have no
+// content height to measure yet.
+function fitPopoverHeight(popover) {
+    const remembered = linkPreviewPreferredHeight(
         Math.min(420, Math.max(220, window.innerHeight - 24)),
         window.innerHeight,
     );
+    popover.style.height = `${remembered}px`;
+    if (popover.querySelector('.vyasa-link-preview-loading, .vyasa-link-preview-external')) return remembered;
+    popover.style.height = '';
+    const height = Math.min(remembered, popover.getBoundingClientRect().height);
     popover.style.height = `${height}px`;
+    return height;
+}
+
+function positionPopover(popover, point) {
+    const height = fitPopoverHeight(popover);
     const width = popover.getBoundingClientRect().width;
     const anchor = positionAnchorRect();
     const place = linkPreviewPreferredPosition(
@@ -577,6 +591,7 @@ function createPreviewView({ point, link, onClose }) {
                     || `/posts/${relativePath.split('/').map(encodeURIComponent).join('/')}`;
             }
             requestAnimationFrame(() => scrollLinkPreviewToTarget(content, activeLink.getAttribute('href') || ''));
+            fitPopoverHeight(popover);
             schedulePointerRefresh();
         },
     };

@@ -1789,3 +1789,14 @@ def test_small_plain_file_preview_has_no_clip_notice(tmp_path, monkeypatch):
 
     assert result is not None
     assert "vyasa-link-preview-clip-notice" not in result
+
+
+def test_link_preview_popup_takes_the_smaller_of_remembered_and_content_height():
+    source = Path("vyasa/extensions_builtin/link_preview/static/link_preview.js").read_text()
+    fit = source.split("function fitPopoverHeight(popover) {", 1)[1].split("\n}\n", 1)[0]
+    set_content = source.split("setContent: (html) => {", 1)[1].split("\n        },", 1)[0]
+
+    assert "popover.style.height = \x27\x27;" in fit
+    assert "Math.min(remembered, popover.getBoundingClientRect().height)" in fit
+    assert ".vyasa-link-preview-loading, .vyasa-link-preview-external" in fit
+    assert "fitPopoverHeight(popover);" in set_content
