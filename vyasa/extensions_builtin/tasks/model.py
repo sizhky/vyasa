@@ -494,6 +494,17 @@ def _clean_edge_kinds(value) -> dict[str, dict]:
     return out
 
 
+def _document_bases(path: Path) -> list[Path]:
+    """The folders a document's relative sources resolve against: its own, then its symlink target's.
+
+    A page linked into another folder (a Sutragana brief tab) keeps finding the pack beside its real file.
+    """
+    bases = [path.parent]
+    if path.is_symlink():
+        bases.append(path.resolve().parent)
+    return bases
+
+
 def _resolve_tasks_source_path(current_path: str | Path | None, source: str) -> PathLike | None:
     source_text = str(source or "").strip()
     if not source_text:
@@ -531,13 +542,11 @@ def _resolve_tasks_source_path(current_path: str | Path | None, source: str) -> 
     if current_path:
         current_path = Path(str(current_path))
         if current_path.exists():
-            candidate_bases.append(current_path.parent if current_path.is_file() else current_path)
+            candidate_bases.extend(_document_bases(current_path) if current_path.is_file() else [current_path])
         else:
             resolved = current_content_path(str(current_path))
             if resolved:
-                candidate_bases.append(resolved.parent)
-                if not resolved.suffix:
-                    candidate_bases.append(resolved.with_suffix(".md").parent)
+                candidate_bases.extend(_document_bases(resolved if resolved.suffix else resolved.with_suffix(".md")))
             root = get_root_folder().resolve()
             relative = Path(str(current_path).strip("/"))
             candidate_bases.append((root / relative).parent)

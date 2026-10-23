@@ -1171,9 +1171,14 @@ def is_local_request(request) -> bool:
 
 
 def atomic_write_bytes(path: Path, payload: bytes) -> None:
-    """Replace a file in one step, so a reader never sees a half-written file."""
+    """Replace a file in one step, so a reader never sees a half-written file.
+
+    A symlink is written through: its target gets the new bytes and the link stays a link.
+    """
     import tempfile
 
+    if path.is_symlink():
+        path = path.resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
     try:
