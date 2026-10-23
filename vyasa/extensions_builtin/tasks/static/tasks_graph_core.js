@@ -890,9 +890,11 @@ export function tasksNodeSubtitle(node, view) {
  * 'line'
  * >>> tasksEdgePathOf({}, {}, 'line')
  * 'line'
+ * >>> tasksEdgePathOf({}, {})
+ * 'orthogonal'
  */
-export function tasksEdgePathOf(edge, model, layoutDefault = 'ribbon') {
-    return tasksCascade(TASKS_EDGE_PATHS, edge?.edge_path, model?.edge_path, layoutDefault) || 'ribbon';
+export function tasksEdgePathOf(edge, model, layoutDefault = 'orthogonal') {
+    return tasksCascade(TASKS_EDGE_PATHS, edge?.edge_path, model?.edge_path, layoutDefault) || 'orthogonal';
 }
 
 /**
