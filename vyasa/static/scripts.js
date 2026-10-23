@@ -1857,6 +1857,18 @@ function initKeyboardShortcuts() {
     window.addEventListener('blur', stopDocumentScroll);
 }
 
+// An embedded page, such as a Sutragana brief, passes the keys it does not edit to its host window.
+// The host replays each key, so its own shortcuts also work while the pointer is over this page.
+// Backspace and Delete stay here, so a host card is not deleted from inside the page.
+function forwardKeysToHost() {
+    if (window.parent === window) return;
+    ['keydown', 'keyup'].forEach((eventType) => document.addEventListener(eventType, (e) => {
+        if (isEditableShortcutEvent(e) || e.key === 'Backspace' || e.key === 'Delete') return;
+        const { key, code, altKey, ctrlKey, metaKey, shiftKey, repeat } = e;
+        window.parent.postMessage({ type: 'vyasa:key', eventType, key, code, altKey, ctrlKey, metaKey, shiftKey, repeat }, '*');
+    }));
+}
+
 function syncPdfFocusButtons(root = document) {
     const isFocused = document.body.classList.contains('pdf-focus');
     root.querySelectorAll('[data-pdf-focus-toggle]').forEach((button) => {
@@ -2490,6 +2502,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initFolderChevronState();
     window.__vyasaInitCommandPalette?.();
     initKeyboardShortcuts();
+    forwardKeysToHost();
     initDocumentShortcutHelp();
     initPdfFocusToggle();
     initIframeFullscreenToggle();
