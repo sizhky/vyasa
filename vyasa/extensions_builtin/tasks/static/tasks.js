@@ -1390,6 +1390,7 @@ async function renderTasksGraphs(rootElement = document) {
                 let pointerAt = null;
                 const trackPointer = (event) => {
                     pointerAt = { clientX: event.clientX, clientY: event.clientY };
+                    if (cmdHeld) armCmdPreview();
                 };
                 const edgeIdUnderPointer = () => {
                     if (!pointerAt) return '';
@@ -1524,7 +1525,56 @@ async function renderTasksGraphs(rootElement = document) {
                     const current = group?.links.indexOf(links[index]) ?? -1;
                     return current >= 0 && switchCodeLink(links.indexOf(group.links[(current + delta + group.links.length) % group.links.length]));
                 };
+                // Cmd held alone over a node or edge opens the same preview as A, the
+                // way Cmd-hover previews a link. Cmd+Enter pins it, and so does a press
+                // on the preview itself (a drag or resize keeps it). Another chord
+                // (Cmd+C) or a press elsewhere (Cmd+drag lasso) closes it.
+                // Over a link inside the node, the link's own Cmd-hover preview wins.
+                let cmdHeld = false;
+                let cmdOpened = false;
+                const cmdRecord = () => {
+                    if (!pointerAt || codeModeEntryRef.current) return null;
+                    const under = document.elementFromPoint(pointerAt.clientX, pointerAt.clientY);
+                    if (!flowWrapperRef.current?.contains(under) || under.closest('a[href]')) return null;
+                    return under.closest('.react-flow__node, .react-flow__edge') ? codeModeRecord() : null;
+                };
+                const armCmdPreview = () => {
+                    if (cmdOpened) return;
+                    const links = tasksAttributeLinks(cmdRecord());
+                    if (!links.length) return;
+                    cmdOpened = Boolean(openCodePreviewAt(links, 0));
+                    if (cmdOpened) setEdgeStatus('Attribute preview open. Hold Cmd and scroll to read it, Cmd+Enter to pin it.');
+                };
+                const cancelCmdPreview = (reason) => {
+                    logTasksDebug('cmdPreviewCancel', { widgetId, reason, opened: cmdOpened });
+                    cmdHeld = false;
+                    if (cmdOpened) closeCodePreview();
+                    cmdOpened = false;
+                };
+                const pinCmdPreview = () => {
+                    if (!cmdOpened || !pinCodePreview()) return false;
+                    cmdHeld = false;
+                    cmdOpened = false;
+                    return true;
+                };
+                const onBlur = () => cancelCmdPreview('blur');
+                const onPointerDown = (event) => {
+                    if (cmdOpened && event.target?.closest?.('.vyasa-link-preview-popover')) pinCmdPreview();
+                    else cancelCmdPreview('pointerdown');
+                };
                 const onKeyDown = (event) => {
+                    if (event.key === 'Meta') {
+                        if (event.repeat) return;
+                        cmdHeld = !event.altKey && !event.ctrlKey && !event.shiftKey;
+                        if (cmdHeld) armCmdPreview();
+                        return;
+                    }
+                    if (event.metaKey && event.key === 'Enter' && pinCmdPreview()) {
+                        event.preventDefault();
+                        event.stopImmediatePropagation();
+                        return;
+                    }
+                    if (event.metaKey) cancelCmdPreview('chord');
                     if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
                     const activeEntry = codeModeEntryRef.current || activePinnedCodePreview()?.entry;
                     if (!tasksHeldKeyApplies(event, flowWrapperRef.current, activeEntry)) return;
@@ -1552,6 +1602,7 @@ async function renderTasksGraphs(rootElement = document) {
                 };
                 const onKeyUp = (event) => {
                     if (event.code === 'KeyA') closeCodePreview();
+                    if (event.key === 'Meta') cancelCmdPreview('cmd-up');
                 };
                 // Capture beats the graph's own wheel gesture, so the wheel scrolls
                 // the code the reader is looking at instead of zooming underneath it.
@@ -1566,13 +1617,18 @@ async function renderTasksGraphs(rootElement = document) {
                     event.stopPropagation();
                 };
                 window.addEventListener('pointermove', trackPointer, true);
+                window.addEventListener('pointerdown', onPointerDown, true);
                 window.addEventListener('keydown', onKeyDown, true);
                 window.addEventListener('keyup', onKeyUp, true);
                 window.addEventListener('wheel', onWheel, { capture: true, passive: false });
+                window.addEventListener('blur', onBlur);
                 window.addEventListener('blur', closeCodePreview);
                 return () => {
+                    cancelCmdPreview('unmount');
                     closeCodePreview();
                     window.removeEventListener('pointermove', trackPointer, true);
+                    window.removeEventListener('pointerdown', onPointerDown, true);
+                    window.removeEventListener('blur', onBlur);
                     window.removeEventListener('keydown', onKeyDown, true);
                     window.removeEventListener('keyup', onKeyUp, true);
                     window.removeEventListener('wheel', onWheel, { capture: true });
@@ -4744,6 +4800,7 @@ async function renderTasksGraphs(rootElement = document) {
                     row('W / Q', 'hold edge preview / opposite node card'),
                     row('W + Enter', 'pin edge details'),
                     row('A', 'hold attribute link preview; wheel scrolls it'),
+                    row('Cmd + hover node', 'same preview as A; Cmd + Enter pins it'),
                     row('W + A', 'hold code preview of the held edge'),
                     row('A + Enter', 'pin the code preview'),
                     row('A + ← / →', 'previous / next marked code block'),
