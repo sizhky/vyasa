@@ -154,10 +154,13 @@ export function linkPreviewSymbolMatch(href, chunks) {
     return fallback || { chunkIndex: -1, start: -1, end: -1, symbol, kind };
 }
 
-// A target code line takes the shared code line highlight, so a pointed-at
-// line and a focus range read the same. Other targets keep the outline style.
+// A target code line takes only the shared code line highlight, so a pointed-at
+// line and a focus range read the same. Other targets take the outline style.
 export function markLinkPreviewTarget(element) {
-    element.classList.add('vyasa-link-preview-target-line');
-    if (!element.matches('.code-block .vyasa-code-line:not(.vyasa-code-line-highlight)')) return;
+    if (!element.matches('.code-block .vyasa-code-line')) {
+        element.classList.add('vyasa-link-preview-target-line');
+        return;
+    }
+    if (element.classList.contains('vyasa-code-line-highlight')) return;
     element.classList.add('vyasa-code-line-highlight', 'vyasa-code-line-highlight-start', 'vyasa-code-line-highlight-end');
 }
