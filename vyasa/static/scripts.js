@@ -1342,18 +1342,6 @@ function initSidebarResizers(root = document) {
     bind('#toc-sidebar', 'toc', -1);
 }
 
-function normalizeCriticalTextColors(root = document) {
-    const ink = getComputedStyle(document.documentElement).getPropertyValue('--vyasa-ink').trim() || '#2d3434';
-    root.querySelectorAll('#main-content h1, #main-content h2, #main-content h3, #main-content h4, #main-content h5, #main-content h6').forEach((el) => {
-        el.style.color = ink;
-        el.style.opacity = '1';
-    });
-    root.querySelectorAll('.vyasa-sidebar-toggle, .vyasa-sidebar-toggle *, .vyasa-sidebar-body, .vyasa-sidebar-body a, .vyasa-sidebar-body span, .vyasa-sidebar-body div, .vyasa-sidebar-body li, .toc-link').forEach((el) => {
-        el.style.color = ink;
-        el.style.opacity = '1';
-    });
-}
-
 function recordStyleProbe(label) {
     const html = document.documentElement;
     const page = document.getElementById('page-container');
@@ -1520,7 +1508,6 @@ document.body.addEventListener('htmx:afterSwap', async function(event) {
     window.__vyasaRenderD2?.(swapScope);
     window.__vyasaRenderTasksGraphs?.(swapScope);
     initHeadingFolds(swapScope);
-    normalizeCriticalTextColors(swapScope);
     scheduleHashAlignment();
     updateActivePostLink();
     updateActiveTocLink();
@@ -2431,7 +2418,6 @@ document.addEventListener('DOMContentLoaded', () => {
     window.__vyasaInitCodeTools?.(document);
     window.__vyasaInitSearchClearButtons?.(document);
     ensurePdfFocusState();
-    normalizeCriticalTextColors(document);
     recordStyleProbe('domcontentloaded');
     [100, 500, 1500].forEach((ms) => setTimeout(() => recordStyleProbe(`t+${ms}`), ms));
     scheduleHashAlignment();
@@ -2474,7 +2460,6 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
 
 window.addEventListener('load', () => {
     syncThemePresetDebug(document);
-    normalizeCriticalTextColors(document);
     recordStyleProbe('load');
     scheduleHashAlignment();
     initFolderHoverExpand(document);
