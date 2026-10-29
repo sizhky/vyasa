@@ -1262,7 +1262,8 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
         "hover_attrs": graph.get("hover_attrs", []),
         "node_attr_order": graph.get("node_attr_order", []),
         "edge_attr_order": graph.get("edge_attr_order", []),
-        "node_hidden_attrs": graph.get("node_hidden_attrs", []),
+        # The image_by attr is drawn as the node image, so detail cards skip it.
+        "node_hidden_attrs": list(dict.fromkeys([*graph.get("node_hidden_attrs", []), *([graph["image_by"]] if graph.get("image_by") else [])])),
         "edge_hidden_attrs": graph.get("edge_hidden_attrs", []),
         "card_states": graph.get("card_states", []),
         "aggregate_edges": graph.get("aggregate_edges", {}),

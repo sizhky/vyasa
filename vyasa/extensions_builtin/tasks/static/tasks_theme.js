@@ -25,15 +25,38 @@ const TASKS_LABEL_TITLE_FONT_SIZE = 12;
  * { width: 220, height: 44 }
  * >>> tasksOutlineNodeSize('1 · Gate', 'anchored? judged? generic? duplicate?', 220).height
  * 73
+ * >>> tasksOutlineNodeSize('Member web app (onboard, chat, secure link)', '', 220, 38).height
+ * 77
  */
-export function tasksOutlineNodeSize(title, subtitle, width) {
-    const textWidth = Math.max(40, width - TASKS_OUTLINE_PAD.x);
+export function tasksOutlineNodeSize(title, subtitle, width, inset = 0) {
+    const textWidth = Math.max(40, width - TASKS_OUTLINE_PAD.x - inset);
     const lines = (text, size) => String(text || '').split(/\r?\n/).filter(Boolean)
-        .reduce((count, part) => count + Math.max(1, Math.ceil((part.length * size * TASKS_OUTLINE_CHAR_EM) / textWidth)), 0);
+        .reduce((count, part) => count + tasksWrappedLineCount(part, Math.max(1, Math.floor(textWidth / (size * TASKS_OUTLINE_CHAR_EM)))), 0);
     const titleHeight = Math.max(1, lines(title, TASKS_OUTLINE_TITLE_FONT_SIZE)) * TASKS_OUTLINE_TITLE_FONT_SIZE * 1.3;
     const subtitleLines = lines(subtitle, TASKS_OUTLINE_SUBTITLE_FONT_SIZE);
     const subtitleHeight = subtitleLines ? 3 + subtitleLines * TASKS_OUTLINE_SUBTITLE_FONT_SIZE * 1.35 : 0;
     return { width, height: Math.max(44, Math.ceil(titleHeight + subtitleHeight + TASKS_OUTLINE_PAD.y)) };
+}
+
+/**
+ * Lines a mono string takes when wrapped at spaces, as the browser wraps it.
+ *
+ * >>> tasksWrappedLineCount('Member web app (onboard, chat, secure link)', 17)
+ * 3
+ * >>> tasksWrappedLineCount('abcdefghij', 4)
+ * 3
+ */
+function tasksWrappedLineCount(text, perLine) {
+    let lines = 1;
+    let used = 0;
+    for (const word of String(text).split(/\s+/).filter(Boolean)) {
+        const need = used ? used + 1 + word.length : word.length;
+        if (need <= perLine) { used = need; continue; }
+        if (used) lines += 1;
+        lines += Math.ceil(word.length / perLine) - 1;
+        used = word.length % perLine || perLine;
+    }
+    return lines;
 }
 
 // An outline node carries its role colour in the border and the title, not in
@@ -58,7 +81,7 @@ function ensureTasksSketchFilter() {
 }
 
 const glyphCharWidth = TASKS_OUTLINE_TITLE_FONT_SIZE * TASKS_OUTLINE_CHAR_EM;
-const figureSize = (label, subtitle, width) => tasksOutlineNodeSize(label, subtitle, width);
+const figureSize = (label, subtitle, width, inset) => tasksOutlineNodeSize(label, subtitle, width, inset);
 const plainTitle = (title) => title;
 const cardBody = () => ({ body: {}, title: plainTitle, after: [] });
 
@@ -174,7 +197,7 @@ const TASKS_LOOKS = {
         frame: ({ tint, line }) => ({ background: 'var(--vyasa-paper)', border: `1px ${line} color-mix(in srgb, ${tint} 70%, transparent)`, color: tint, borderRadius: 4 }),
         lit: { paint: 'rings', fill: () => 'var(--vyasa-paper)' },
         // A header tab adds its band and its [kind] line above the subtitle.
-        size: (label, subtitle, width) => ({ width, height: figureSize(label, subtitle, width).height + 22 }),
+        size: (label, subtitle, width, inset) => ({ width, height: figureSize(label, subtitle, width, inset).height + 22 }),
         body: (h, { subtitle, kind }) => {
             const { mono, subtitleLine } = figureParts(h, subtitle);
             return {
@@ -306,8 +329,8 @@ export function tasksLookLitFill(look, nodeColor) {
  * >>> tasksLookSize('card', 'Gate', '', 220)
  * null
  */
-export function tasksLookSize(look, label, subtitle, width) {
-    return tasksLook(look).size(label, subtitle, width);
+export function tasksLookSize(look, label, subtitle, width, inset = 0) {
+    return tasksLook(look).size(label, subtitle, width, inset);
 }
 
 // The body parts a look owns. `dashed` and `kind` come from the node.
