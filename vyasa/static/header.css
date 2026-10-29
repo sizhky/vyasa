@@ -1122,6 +1122,13 @@ details[data-folder-pinned-child="true"] > summary > .vyasa-folder-pin {
     pointer-events: auto;
 }
 .vyasa-folder-pin[aria-pressed="true"] { color: var(--vyasa-primary) !important; }
+.vyasa-folder-zip {
+    opacity: 0;
+    transition: opacity var(--vyasa-duration-fast) var(--vyasa-ease);
+}
+.vyasa-tree-row:hover > .vyasa-folder-zip,
+.vyasa-folder-zip:focus-visible { opacity: 1; }
+.vyasa-folder-pin:not([hidden]) ~ .vyasa-folder-zip { margin-left: 0; }
 details { border: none !important; box-shadow: none !important; }
 h1, h2, h3, h4, h5, h6 { scroll-margin-top: 7rem; }
 

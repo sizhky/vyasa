@@ -1,5 +1,7 @@
+import os
 from pathlib import Path
 import shutil
+import zipfile
 
 from ..extensions import ExtensionMeta, VyasaExtensionBase
 from ..runtime_services import get_runtime_services
@@ -10,6 +12,7 @@ class FilesystemRoutesExtension(VyasaExtensionBase):
         app.routes.add("/posts/raw-markdown", _register_filesystem_routes)
         app.routes.add("/posts/static-attachment", _register_filesystem_routes)
         app.routes.add("/download", _register_filesystem_routes)
+        app.routes.add("/download-folder", _register_filesystem_routes)
         app.routes.static_build("cap:static_copy:filesystem_routes", copy_static_filesystem_routes)
 
 
@@ -52,6 +55,62 @@ def _markdown_section_response(text: str, anchor: str):
     if section is None:
         return Response(status_code=404)
     return Response(section + "\n", media_type="text/markdown; charset=utf-8")
+
+
+# Already-compressed formats gain nothing from deflate, so the zip stores them as they are.
+_STORED_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".pdf", ".zip", ".gz", ".mp3", ".mp4", ".mov", ".webm", ".woff2"})
+
+
+class _ZipSink:
+    """A write-only stream the zip writer fills and the response drains."""
+
+    def __init__(self):
+        self.chunks: list[bytes] = []
+
+    def write(self, data: bytes, /) -> int:
+        self.chunks.append(bytes(data))
+        return len(data)
+
+    def flush(self) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
+
+    def drain(self) -> bytes:
+        out = b"".join(self.chunks)
+        self.chunks.clear()
+        return out
+
+
+def folder_zip_chunks(folder: Path, keep_dir, keep_file):
+    """Zip bytes for the files under `folder`, streamed a chunk at a time so memory stays flat.
+
+    `keep_dir(name)` prunes a folder before it is walked; `keep_file(path)` drops one file.
+
+    >>> import io, tempfile
+    >>> root = Path(tempfile.mkdtemp()) / "docs"
+    >>> (root / "skip").mkdir(parents=True)
+    >>> _ = (root / "a.md").write_text("x"), (root / "skip" / "b.md").write_text("y"), (root / "c.png").write_bytes(b"p")
+    >>> data = b"".join(folder_zip_chunks(root, lambda name: name != "skip", lambda path: True))
+    >>> [(i.filename, i.compress_type) for i in zipfile.ZipFile(io.BytesIO(data)).infolist()]
+    [('docs/a.md', 8), ('docs/c.png', 0)]
+    """
+    sink = _ZipSink()
+    with zipfile.ZipFile(sink, "w") as archive:
+        for current, dirs, files in os.walk(folder):
+            dirs[:] = sorted(name for name in dirs if keep_dir(name))
+            for name in sorted(files):
+                path = Path(current) / name
+                if not path.is_file() or not keep_file(path):
+                    continue
+                info = zipfile.ZipInfo.from_file(path, f"{folder.name}/{path.relative_to(folder).as_posix()}")
+                info.compress_type = zipfile.ZIP_STORED if path.suffix.lower() in _STORED_SUFFIXES else zipfile.ZIP_DEFLATED
+                with path.open("rb") as source, archive.open(info, "w") as target:
+                    while chunk := source.read(1 << 20):
+                        target.write(chunk)
+                        yield sink.drain()
+    yield sink.drain()
 
 
 def _register_filesystem_routes(rt, runtime) -> None:
@@ -125,6 +184,36 @@ def _register_filesystem_routes(rt, runtime) -> None:
             )
         return Response(status_code=404)
 
+    @rt("/download-folder/{path:path}")
+    def download_folder(path: str, request):
+        from starlette.responses import StreamingResponse
+
+        from ..auth.policy import is_allowed
+        from ..helpers import content_root_and_relative, content_slug_for_path, folder_zip_allowed, should_exclude_dir
+
+        config = runtime.config
+        folder = get_runtime_services().content_path_for_slug(path)
+        root = content_root_and_relative(path)[0]
+        if not config.get_folder_zip() or not folder or not root or not folder.is_dir() or not folder_zip_allowed(root, folder):
+            return Response(status_code=404)
+        roles, rules = runtime.roles_for_request(request), runtime.current_rbac_rules()
+        show_hidden, excluded = config.get_show_hidden(), set(config.get_reload_excludes())
+
+        # The zip holds what the sidebar would list: no excluded or hidden folders, no unreadable files.
+        def keep_dir(name):
+            return not should_exclude_dir(name, excluded) and (show_hidden or not name.startswith("."))
+
+        def keep_file(file):
+            if not show_hidden and file.name.startswith("."):
+                return False
+            return roles is None or is_allowed(f"/posts/{content_slug_for_path(file) or ''}", roles or [], rules)
+
+        return StreamingResponse(
+            folder_zip_chunks(folder, keep_dir, keep_file),
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="{folder.name}.zip"'},
+        )
+
 
 def copy_static_filesystem_routes(context) -> None:
     root = Path(context.root_folder).resolve()
@@ -156,7 +245,7 @@ EXTENSION = FilesystemRoutesExtension(
         "filesystem_routes",
         "route",
         ("cap:route:filesystem_routes", "cap:static_copy:filesystem_routes"),
-        route_prefixes=("/posts/raw-markdown", "/posts/static-attachment", "/download"),
+        route_prefixes=("/posts/raw-markdown", "/posts/static-attachment", "/download", "/download-folder"),
         scope_disable=True,
     )
 )

@@ -23,6 +23,7 @@ from .helpers import (
     resolve_markdown_title,
     _effective_abbreviations,
     get_vyasa_config,
+    folder_zip_allowed,
     find_folder_note_file,
     content_path_for_slug,
     content_slug_for_path,
@@ -1445,6 +1446,7 @@ def build_post_tree(folder, roles=None, max_depth=None, active_parts=()):
         slug_to_title_fn=slug_to_title, find_folder_note_file_fn=find_folder_note_file,
         is_allowed_fn=is_allowed, parse_frontmatter_fn=parse_frontmatter,
         rbac_rules=_rbac_rules, logger=logger, row_decorators=_sidebar_row_decorators(),
+        folder_zip_fn=(lambda item: folder_zip_allowed(get_root_folder(), item)) if get_config().get_folder_zip() else None,
     )
 
 

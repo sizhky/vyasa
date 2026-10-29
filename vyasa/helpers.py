@@ -876,6 +876,7 @@ def _normalize_vyasa_config(parsed):
         "abbreviations": None,
         "ignore": [],
         "include": [],
+        "zip_folders": [],
     }
     if not isinstance(parsed, dict):
         return config
@@ -922,19 +923,12 @@ def _normalize_vyasa_config(parsed):
         parts = [part.strip() for part in abbreviations.split(",")]
         config["abbreviations"] = [part for part in parts if part]
 
-    ignore = parsed.get("ignore")
-    if isinstance(ignore, (list, tuple, set)):
-        config["ignore"] = [str(item).strip() for item in ignore if str(item).strip()]
-    elif isinstance(ignore, str):
-        parts = [part.strip() for part in ignore.split(",")]
-        config["ignore"] = [part for part in parts if part]
-
-    include = parsed.get("include")
-    if isinstance(include, (list, tuple, set)):
-        config["include"] = [str(item).strip() for item in include if str(item).strip()]
-    elif isinstance(include, str):
-        parts = [part.strip() for part in include.split(",")]
-        config["include"] = [part for part in parts if part]
+    for key in ("ignore", "include", "zip_folders"):
+        value = parsed.get(key)
+        if isinstance(value, (list, tuple, set)):
+            config[key] = [str(item).strip() for item in value if str(item).strip()]
+        elif isinstance(value, str):
+            config[key] = [part.strip() for part in value.split(",") if part.strip()]
 
     return config
 
@@ -975,6 +969,33 @@ def _effective_include_list(root: Path, folder: Path | None = None):
     folder_config = get_vyasa_config(folder)
     folder_include = folder_config.get("include")
     return folder_include if folder_include is not None else root_include
+
+def folder_zip_allowed(root: Path, folder: Path) -> bool:
+    """Whether a `.vyasa` at or above `folder` lists it, or a folder above it, in `zip_folders`.
+
+    Each `.vyasa` lists paths relative to its own folder; "." names that folder itself.
+
+    >>> import tempfile
+    >>> root = Path(tempfile.mkdtemp())
+    >>> (root / "docs" / "api" / "v1").mkdir(parents=True)
+    >>> _ = (root / ".vyasa").write_text('zip_folders = ["docs/api"]'), (root / "notes").mkdir()
+    >>> [folder_zip_allowed(root, root / p) for p in ("docs", "docs/api", "docs/api/v1", "notes")]
+    [False, True, True, False]
+    >>> _ = (root / "notes" / ".vyasa").write_text('zip_folders = "."')
+    >>> folder_zip_allowed(root, root / "notes")
+    True
+    """
+    if not isinstance(folder, Path) or (folder != root and root not in folder.parents):
+        return False
+    current = folder
+    while True:
+        for entry in get_vyasa_config(current)["zip_folders"]:
+            listed = Path(os.path.normpath(current / entry))
+            if folder == listed or listed in folder.parents:
+                return True
+        if current == root:
+            return False
+        current = current.parent
 
 def _should_include_folder(folder_name: str, include_list: list, ignore_list: list) -> bool:
     """Check if a folder should be included based on include/ignore lists.

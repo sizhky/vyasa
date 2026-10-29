@@ -598,6 +598,18 @@ class VyasaConfig:
             return value.lower() in ('true', '1', 'yes', 'on')
         return bool(value)
 
+    def get_folder_zip(self) -> bool:
+        """Get whether sidebar folders offer a zip download on the live server.
+
+        Off unless asked for: the `folder_zip` flag in `.vyasa`, the
+        `VYASA_FOLDER_ZIP` environment variable, or `--folder-zip` on the
+        command line. Any one of the three turns it on.
+        """
+        value = self.get('folder_zip', 'VYASA_FOLDER_ZIP', False)
+        if isinstance(value, str):
+            return value.lower() in ('true', '1', 'yes', 'on')
+        return bool(value)
+
     def get_table_col_max_width(self) -> str | None:
         """Get the default maximum width for rendered table cells."""
         value = self.get('table_col_max_width', 'VYASA_TABLE_COL_MAX_WIDTH', '45vw')

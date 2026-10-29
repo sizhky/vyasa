@@ -8,7 +8,7 @@ from .nav_views import FOLDER_ROW_CLASSES, FILE_ROW_CLASSES, NavigationRow, navi
 from .runtime_context import traced
 
 
-def _folder_summary(title_node, branch_href=None):
+def _folder_summary(title_node, branch_href=None, zip_path=None):
     kwargs = {}
     if branch_href:
         kwargs = {"hx_get": branch_href, "hx_trigger": "click once", "hx_target": "next ul", "hx_swap": "innerHTML"}
@@ -22,6 +22,11 @@ def _folder_summary(title_node, branch_href=None):
             aria_label="Pin folder open", aria_pressed="false",
             onclick="event.preventDefault(); event.stopPropagation(); window.toggleFolderPin && window.toggleFolderPin(this); return false;",
         ),
+        A(
+            UkIcon("download", cls="w-3.5 h-3.5"), href=f"/download-folder/{quote(zip_path, safe='/')}", download="",
+            cls="vyasa-folder-zip vyasa-sidebar-tree-action vyasa-row-action ml-auto shrink-0",
+            title="Download folder as zip", aria_label="Download folder as zip", onclick="event.stopPropagation();",
+        ) if zip_path else None,
         cls=FOLDER_ROW_CLASSES,
         **kwargs,
     )
@@ -52,7 +57,7 @@ def folder_has_visible_descendant(folder, roles, depth, *, root, show_hidden, ex
 
 
 @traced("tree")
-def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), *, root, show_hidden, excluded_dirs, get_nav_entries, effective_abbreviations, should_exclude_dir_fn, slug_to_title_fn, find_folder_note_file_fn, is_allowed_fn, parse_frontmatter_fn, rbac_rules, logger, suppress_note_file=False, row_decorators=()):
+def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), *, root, show_hidden, excluded_dirs, get_nav_entries, effective_abbreviations, should_exclude_dir_fn, slug_to_title_fn, find_folder_note_file_fn, is_allowed_fn, parse_frontmatter_fn, rbac_rules, logger, suppress_note_file=False, row_decorators=(), folder_zip_fn=None):
     items, start_time = [], time.time()
     try:
         entries = get_nav_entries(folder, root, show_hidden, excluded_dirs)
@@ -68,6 +73,7 @@ def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), 
             rel_folder = content_slug_for_path(item, strip_suffix=False)
             if not rel_folder:
                 continue
+            zip_path = rel_folder if folder_zip_fn and folder_zip_fn(item) else None
             child_active = tuple(active_parts[1:]) if active_parts and active_parts[0] == item.name else ()
             should_expand = bool(active_parts and active_parts[0] == item.name)
             if max_depth == 0:
@@ -83,15 +89,15 @@ def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), 
                 ) if note_allowed else Span(folder_title, cls="vyasa-tree-link whitespace-nowrap", title=folder_title)
                 title_node = _decorate_row(note_link, note_slug, folder_title, row_decorators, context="tree-inline") if note_allowed else note_link
                 if should_expand:
-                    sub_items = build_post_tree_render(item, roles=roles, max_depth=0, active_parts=child_active, root=root, show_hidden=show_hidden, excluded_dirs=excluded_dirs, get_nav_entries=get_nav_entries, effective_abbreviations=effective_abbreviations, should_exclude_dir_fn=should_exclude_dir_fn, slug_to_title_fn=slug_to_title_fn, find_folder_note_file_fn=find_folder_note_file_fn, is_allowed_fn=is_allowed_fn, parse_frontmatter_fn=parse_frontmatter_fn, rbac_rules=rbac_rules, logger=logger, suppress_note_file=True, row_decorators=row_decorators)
-                    items.append(Li(Details(_folder_summary(title_node), Ul(*sub_items, cls="ml-4 pl-2 space-y-1 border-l border-vyasa-border"), data_folder="true", data_folder_path=rel_folder, open=True), cls="my-1"))
+                    sub_items = build_post_tree_render(item, roles=roles, max_depth=0, active_parts=child_active, root=root, show_hidden=show_hidden, excluded_dirs=excluded_dirs, get_nav_entries=get_nav_entries, effective_abbreviations=effective_abbreviations, should_exclude_dir_fn=should_exclude_dir_fn, slug_to_title_fn=slug_to_title_fn, find_folder_note_file_fn=find_folder_note_file_fn, is_allowed_fn=is_allowed_fn, parse_frontmatter_fn=parse_frontmatter_fn, rbac_rules=rbac_rules, logger=logger, suppress_note_file=True, row_decorators=row_decorators, folder_zip_fn=folder_zip_fn)
+                    items.append(Li(Details(_folder_summary(title_node, zip_path=zip_path), Ul(*sub_items, cls="ml-4 pl-2 space-y-1 border-l border-vyasa-border"), data_folder="true", data_folder_path=rel_folder, open=True), cls="my-1"))
                     continue
                 if not folder_has_visible_descendant(item, roles, 3, root=root, show_hidden=show_hidden, excluded_dirs=excluded_dirs, get_nav_entries=get_nav_entries, is_allowed_fn=is_allowed_fn, rbac_rules=rbac_rules):
                     continue
                 branch_href = f"/_sidebar/posts/branch?path={quote(rel_folder, safe='')}"
-                items.append(Li(Details(_folder_summary(title_node, branch_href=branch_href), Ul(cls="ml-4 pl-2 space-y-1 border-l border-vyasa-border"), data_folder="true", data_folder_path=rel_folder), cls="my-1"))
+                items.append(Li(Details(_folder_summary(title_node, branch_href=branch_href, zip_path=zip_path), Ul(cls="ml-4 pl-2 space-y-1 border-l border-vyasa-border"), data_folder="true", data_folder_path=rel_folder), cls="my-1"))
                 continue
-            sub_items = build_post_tree_render(item, roles=roles, max_depth=0 if should_expand else (None if max_depth is None else max_depth - 1), active_parts=child_active, root=root, show_hidden=show_hidden, excluded_dirs=excluded_dirs, get_nav_entries=get_nav_entries, effective_abbreviations=effective_abbreviations, should_exclude_dir_fn=should_exclude_dir_fn, slug_to_title_fn=slug_to_title_fn, find_folder_note_file_fn=find_folder_note_file_fn, is_allowed_fn=is_allowed_fn, parse_frontmatter_fn=parse_frontmatter_fn, rbac_rules=rbac_rules, logger=logger, suppress_note_file=True, row_decorators=row_decorators)
+            sub_items = build_post_tree_render(item, roles=roles, max_depth=0 if should_expand else (None if max_depth is None else max_depth - 1), active_parts=child_active, root=root, show_hidden=show_hidden, excluded_dirs=excluded_dirs, get_nav_entries=get_nav_entries, effective_abbreviations=effective_abbreviations, should_exclude_dir_fn=should_exclude_dir_fn, slug_to_title_fn=slug_to_title_fn, find_folder_note_file_fn=find_folder_note_file_fn, is_allowed_fn=is_allowed_fn, parse_frontmatter_fn=parse_frontmatter_fn, rbac_rules=rbac_rules, logger=logger, suppress_note_file=True, row_decorators=row_decorators, folder_zip_fn=folder_zip_fn)
             note_file = find_folder_note_file_fn(item)
             note_slug = content_slug_for_path(note_file) if note_file else None
             note_allowed = bool(note_slug and is_allowed_fn(f"/posts/{note_slug}", roles or [], rbac_rules))
@@ -108,7 +114,7 @@ def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), 
             title_slug = note_slug if note_allowed else rel_folder
             title_node = _decorate_row(title_base, title_slug, folder_title, row_decorators, context="tree-inline")
             if sub_items:
-                items.append(Li(Details(_folder_summary(title_node), Ul(*sub_items, cls="ml-4 pl-2 space-y-1 border-l border-vyasa-border"), data_folder="true", data_folder_path=rel_folder, open=should_expand), cls="my-1"))
+                items.append(Li(Details(_folder_summary(title_node, zip_path=zip_path), Ul(*sub_items, cls="ml-4 pl-2 space-y-1 border-l border-vyasa-border"), data_folder="true", data_folder_path=rel_folder, open=should_expand), cls="my-1"))
             elif note_slug:
                 folder_link = navigation_row_view(
                     NavigationRow(slug=note_slug, title=folder_title, label=folder_title, href=note_href, icon="folder", kind="folder", folder_note=True),
