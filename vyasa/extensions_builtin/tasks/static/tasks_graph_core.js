@@ -81,11 +81,11 @@ export function tasksInlineLinkPlainText(value, nodeLabels = {}) {
 export function sizeTaskNode(label, kind = 'task', widthOverride = null, options = {}) {
     const spec = TASK_NODE_SPECS[kind] || TASK_NODE_SPECS.task;
     const width = Math.max(32, Number(widthOverride || spec.width));
-    // A look other than card sizes a task with the metrics it is drawn with.
-    const looked = kind === 'task' ? tasksLookSize(options?.look, label, options?.subtitle, width) : null;
-    if (looked) return withHeroImage(looked, options?.heroImage);
     const imageSpec = options?.hasImage && !options?.heroImage ? (TASK_NODE_IMAGE_SPECS[kind] || TASK_NODE_IMAGE_SPECS.task) : null;
     const imageReserve = imageSpec ? imageSpec.size + imageSpec.gap : 0;
+    // A look other than card sizes a task with the metrics it is drawn with.
+    const looked = kind === 'task' ? tasksLookSize(options?.look, label, options?.subtitle, width, imageReserve) : null;
+    if (looked) return withHeroImage(looked, options?.heroImage);
     const maxTextWidth = Math.max(32, width - spec.padX - spec.reserveX - imageReserve - 8);
     const widthBias = options?.hasImage ? 1.18 : 1.12;
     const lines = tasksInlineLinkPlainText(label, options?.nodeLabels)

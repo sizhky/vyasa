@@ -429,6 +429,7 @@ default_color_by: type
 
     assert model["default_design_palette"] == "architecture"
     assert model["image_by"] == "type"
+    assert model["node_hidden_attrs"] == ["type"]
     assert model["node_color_palettes"]["status"] == {"todo": "#f59e0b"}
     assert model["node_color_palettes"]["type"]["database"] == "#16a34a"
     assert model["node_image_palettes"]["type"]["service"] == "iconify:mdi:cube-outline"
@@ -731,6 +732,7 @@ def test_kg_schema_sets_node_and_edge_card_attr_config(tmp_path):
     assert model["edge_attr_order"] == ["evidence", "summary"]
     assert model["node_hidden_attrs"] == ["owner"]
     assert model["edge_hidden_attrs"] == ["confidence", "source_url"]
+
 
 
 def test_context_kg_pack_can_load_explicit_context(tmp_path):
