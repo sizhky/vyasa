@@ -83,7 +83,9 @@
             const root = document.documentElement;
             const hiddenAttr = `data-vyasa-hide-${kind}-sidebar`;
             const stored = localStorage.getItem(`vyasa-${kind}-sidebar-hidden`);
-            if (stored === '1' || (kind === 'toc' && stored !== '0')) {
+            // An embedded page, such as a Sutragana brief, has no posts tree; its sidebar would reserve blank width.
+            const embeddedPosts = kind === 'posts' && window.parent !== window;
+            if (embeddedPosts || stored === '1' || (kind === 'toc' && stored !== '0')) {
                 root.setAttribute(hiddenAttr, '');
             }
         });

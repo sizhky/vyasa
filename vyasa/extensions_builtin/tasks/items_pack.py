@@ -608,7 +608,12 @@ def _read_views(raw_lines: list[str], start: int = 0) -> tuple[list[KgView], int
                 index += _read_slide_attr(raw_lines, index - 1, current_slide)
         else:
             slides_indent, slide_indent, current_slide = None, None, None
-            _update_view(current_view, _view_assignment(line))
+            payload = _view_assignment(line)
+            for key, value in payload.items():
+                if value == "|":
+                    payload[key], consumed = _read_indented_multiline(raw_lines, index, indent)
+                    index += consumed
+            _update_view(current_view, payload)
     return views, index - start
 
 

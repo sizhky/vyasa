@@ -564,7 +564,8 @@ const { setTasksMaximized } = createTasksFullscreenController({
 function restoreTasksPageFullscreen(wrapper) {
     if (wrapper.__tasksFullscreenRestored || !isTasksPageGraph(wrapper)) return;
     wrapper.__tasksFullscreenRestored = true;
-    if (readTasksStoredFlag(TASKS_FULLSCREEN_KEY)) setTasksMaximized(wrapper, true);
+    // The site flag (config.get_kg_page_fullscreen) opens the page maximized; otherwise the reader's last choice applies.
+    if (wrapper.dataset.tasksPageFullscreen === 'true' || readTasksStoredFlag(TASKS_FULLSCREEN_KEY)) setTasksMaximized(wrapper, true);
 }
 
 function applyTasksStandaloneHeight(wrapper) {

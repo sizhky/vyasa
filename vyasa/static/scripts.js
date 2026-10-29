@@ -1869,6 +1869,17 @@ function forwardKeysToHost() {
     }));
 }
 
+// The host sets the text size of an embedded page. The page scales its root font size, so every rem-based token follows.
+// Only the parent window may set it.
+function followHostTextScale() {
+    if (window.parent === window) return;
+    window.addEventListener('message', (e) => {
+        const scale = Number(e.data?.scale);
+        if (e.source !== window.parent || e.data?.type !== 'vyasa:text-scale' || !Number.isFinite(scale)) return;
+        document.documentElement.style.setProperty('--vyasa-text-scale', String(scale));
+    });
+}
+
 function syncPdfFocusButtons(root = document) {
     const isFocused = document.body.classList.contains('pdf-focus');
     root.querySelectorAll('[data-pdf-focus-toggle]').forEach((button) => {
@@ -2503,6 +2514,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.__vyasaInitCommandPalette?.();
     initKeyboardShortcuts();
     forwardKeysToHost();
+    followHostTextScale();
     initDocumentShortcutHelp();
     initPdfFocusToggle();
     initIframeFullscreenToggle();

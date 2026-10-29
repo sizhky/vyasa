@@ -307,6 +307,17 @@ def test_views_parse_ordered_nested_slides_and_resolve_contexts(tmp_path):
     assert day2["fixed_story"]["resolved_context"] == "day1"
 
 
+def test_view_caption_reads_indented_markdown_block(tmp_path):
+    (tmp_path / "kg.schema").write_text(
+        "@views\nstory:\n\tsource=base\n\tcaption=|\n\t\t**Lead**\n\n\t\t- First point\n\tedge_label_from=relation\n",
+        encoding="utf-8",
+    )
+    view = read_schema(tmp_path / "kg.schema").views[0]
+
+    assert view.caption == "**Lead**\n\n- First point"
+    assert view.edge_label_from == "relation"
+
+
 def test_projection_models_own_slides_and_allow_views_without_grouping(tmp_path):
     schema_path = _write_view_context_pack(tmp_path)
     model = parse_tasks_text(

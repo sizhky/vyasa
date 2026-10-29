@@ -178,8 +178,8 @@ button[data-vyasa-tasks-action="toggleReferenceEdges"][data-vyasa-reference-edge
     pointer-events: none;
 }
 @keyframes vyasa-tasks-edge-pin-bloom {
-    0% { stroke-width: 8; stroke-opacity: 0.82; filter: blur(1px); }
-    100% { stroke-width: 180; stroke-opacity: 0; filter: blur(28px); }
+    0% { stroke-width: 8; stroke-opacity: 0.82; }
+    100% { stroke-width: 180; stroke-opacity: 0; }
 }
 .vyasa-tasks-edge-pin-bloom {
     animation: vyasa-tasks-edge-pin-bloom 1720ms cubic-bezier(0.16, 1, 0.3, 1) both;

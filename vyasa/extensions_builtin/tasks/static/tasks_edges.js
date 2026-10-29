@@ -9,6 +9,8 @@ import {
 
 // Corner radius of a routed edge drawn with edge_corner=round.
 const TASKS_ROUND_CORNER = 8;
+// Room around an edge's endpoints for its glow filter, so the blur is not clipped.
+const TASKS_EDGE_GLOW_PAD = 200;
 
 export function createTasksEdgeRenderer(React, rf) {
     const TasksProminentEdgeLabel = ({ labelX, labelY, labelZIndex, labelBgPadding, labelBgBorderRadius, labelMaxWidth, labelStyle, labelBgStyle, fullLabel, displayLabel }) => {
@@ -136,6 +138,14 @@ export function createTasksEdgeRenderer(React, rf) {
                 // frame's bottom border already marks where it leaves.
                 const lineOff = props.data?.__line_off__ === true;
                 const reviewBloom = tasksReviewBloomColor(props.data?.__kg_review_change__);
+                // WebKit ignores CSS `filter: blur()` on SVG paths, so each glow blurs through an SVG filter.
+                const glowKey = String(props.id || '').replace(/[^\w-]/g, '_');
+                const glowRegion = {
+                    x: Math.min(props.sourceX, props.targetX) - TASKS_EDGE_GLOW_PAD,
+                    y: Math.min(props.sourceY, props.targetY) - TASKS_EDGE_GLOW_PAD,
+                    width: Math.abs(props.targetX - props.sourceX) + 2 * TASKS_EDGE_GLOW_PAD,
+                    height: Math.abs(props.targetY - props.sourceY) + 2 * TASKS_EDGE_GLOW_PAD,
+                };
                 const strokeWidth = Number(props.style?.strokeWidth) || 1.25;
                 const fullArrow = Math.max(10, strokeWidth * 3.0);
                 const chord = Math.hypot(props.targetX - props.sourceX, props.targetY - props.sourceY);
@@ -328,6 +338,9 @@ export function createTasksEdgeRenderer(React, rf) {
                         strokeLinejoin: 'round',
                         pointerEvents: 'none',
                     }),
+                    !lineOff && (props.data?.edgeCardActive || reviewBloom) && React.createElement('filter', {
+                        id: `vyasa-tasks-edge-halo-${glowKey}`, filterUnits: 'userSpaceOnUse', ...glowRegion,
+                    }, React.createElement('feGaussianBlur', { stdDeviation: 14 })),
                     !lineOff && (props.data?.edgeCardActive || reviewBloom) && React.createElement('path', {
                         d: path,
                         fill: 'none',
@@ -338,12 +351,21 @@ export function createTasksEdgeRenderer(React, rf) {
                         strokeLinejoin: 'round',
                         vectorEffect: 'non-scaling-stroke',
                         pointerEvents: 'none',
-                        style: { filter: 'blur(14px)' },
+                        filter: `url(#vyasa-tasks-edge-halo-${glowKey})`,
                     }),
                     !lineOff && props.data?.pinBloomKey && React.createElement('g', { key: props.data.pinBloomKey, pointerEvents: 'none' },
+                        React.createElement('filter', {
+                            id: `vyasa-tasks-edge-pin-${glowKey}`, filterUnits: 'userSpaceOnUse', ...glowRegion,
+                        }, React.createElement('feGaussianBlur', { stdDeviation: 1 },
+                            // The pin bloom widens its blur from 1 to 28 over the same 1720ms as its stroke.
+                            React.createElement('animate', {
+                                attributeName: 'stdDeviation', values: '1;28', keyTimes: '0;1', dur: '1720ms',
+                                calcMode: 'spline', keySplines: '0.16 1 0.3 1', fill: 'freeze',
+                            }))),
                         React.createElement('path', {
                             className: 'vyasa-tasks-edge-pin-bloom', d: path, pathLength: 1, fill: 'none',
                             stroke: props.style?.stroke || 'currentColor', strokeLinecap: 'round', vectorEffect: 'non-scaling-stroke',
+                            filter: `url(#vyasa-tasks-edge-pin-${glowKey})`,
                         })
                     ),
                     !lineOff && React.createElement(rf.BaseEdge, {

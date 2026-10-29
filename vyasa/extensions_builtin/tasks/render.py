@@ -8,6 +8,7 @@ from pathlib import Path
 
 from loguru import logger
 
+from ...config import get_config
 from ...markdown_fence import (
     content_url_for_slug,
     items_code_source,
@@ -298,6 +299,7 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
     default_view = "gantt" if gantt_enabled and default_view == "gantt" else "graph"
     width = config.get("width") or "95vw"
     standalone = str(config.get("standalone") or "").strip().lower() in {"1", "true", "yes", "on"}
+    page_fullscreen = get_config().get_kg_page_fullscreen()
     open_filters_by_default = _should_open_filters_by_default(width)
     min_height = config.get("min_height") or ("420px" if fence_name != "tasks" else "")
     flow_height = html.escape(str(config.get("height") or "70vh"))
@@ -352,7 +354,7 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
     return (
         f'<div class="tasks-container relative {"overflow-hidden" if standalone else "my-6 rounded-xl border-4 border-vyasa-border"}" '
         f'style="{container_style}" '
-        f'data-tasks-widget="true" id="{widget_id}" data-tasks-title="{title}" data-tasks-standalone="{str(standalone).lower()}" data-tasks-default-open-depth="{default_open_depth}" data-tasks-gantt="{str(gantt_enabled).lower()}" data-tasks-default-view="{html.escape(default_view)}" data-tasks-open-filters-default="{str(open_filters_by_default).lower()}" data-tasks-node-card-width="{node_card_width}" data-tasks-filter-panel-width="{filter_panel_width}" data-tasks-node-card-content-scale="{node_card_content_scale}" data-tasks-hover-font-size="{hover_font_size}" data-tasks-color-mix="{color_mix}" data-tasks-color-mix-intensity="{color_mix_intensity}" data-tasks-projection-group-opacity="{projection_group_opacity}" data-tasks-projection-unspecified-group-opacity="{projection_unspecified_group_opacity}" data-tasks-jitter="{jitter}" data-tasks-jitter-y="{jitter_y}" data-tasks-spacing="{spacing}"{optional_layout_attrs_str} data-tasks-payload="{payload}" data-tasks-graph="{graph_payload}">'
+        f'data-tasks-widget="true" id="{widget_id}" data-tasks-title="{title}" data-tasks-standalone="{str(standalone).lower()}" data-tasks-page-fullscreen="{str(page_fullscreen).lower()}" data-tasks-default-open-depth="{default_open_depth}" data-tasks-gantt="{str(gantt_enabled).lower()}" data-tasks-default-view="{html.escape(default_view)}" data-tasks-open-filters-default="{str(open_filters_by_default).lower()}" data-tasks-node-card-width="{node_card_width}" data-tasks-filter-panel-width="{filter_panel_width}" data-tasks-node-card-content-scale="{node_card_content_scale}" data-tasks-hover-font-size="{hover_font_size}" data-tasks-color-mix="{color_mix}" data-tasks-color-mix-intensity="{color_mix_intensity}" data-tasks-projection-group-opacity="{projection_group_opacity}" data-tasks-projection-unspecified-group-opacity="{projection_unspecified_group_opacity}" data-tasks-jitter="{jitter}" data-tasks-jitter-y="{jitter_y}" data-tasks-spacing="{spacing}"{optional_layout_attrs_str} data-tasks-payload="{payload}" data-tasks-graph="{graph_payload}">'
         f'<div class="absolute top-2 right-2 z-10 flex items-center gap-1">'
         f'<button onclick="openTasksFullscreen(\'{widget_id}\')" data-vyasa-tasks-fullscreen-toggle="{widget_id}" class="vyasa-tasks-fullscreen-toggle px-1.5 py-1 text-xs border rounded inline-flex items-center justify-center text-vyasa-text hover:bg-vyasa-hover" title="Fullscreen (Shift+F)" aria-label="Fullscreen (Shift+F)">{_FULLSCREEN_EXPAND_ICON}</button>'
         f'<div class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-vyasa-muted whitespace-nowrap">'

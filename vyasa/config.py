@@ -412,6 +412,13 @@ class VyasaConfig:
             return value.lower() in ('true', '1', 'yes', 'on')
         return bool(value)
 
+    def get_kg_page_fullscreen(self) -> bool:
+        """Open every standalone KG page in fullscreen, even when the reader has left fullscreen off."""
+        value = self.get('kg_page_fullscreen', 'VYASA_KG_PAGE_FULLSCREEN', False)
+        if isinstance(value, str):
+            return value.lower() in ('true', '1', 'yes', 'on')
+        return bool(value)
+
     def list_theme_presets(self) -> list[str]:
         base_dir = self._loaded_config_path.parent if self._loaded_config_path else None
         return list_theme_presets(base_dir)
